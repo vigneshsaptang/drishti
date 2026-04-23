@@ -79,3 +79,11 @@ if DIST_DIR.exists():
 
     if (DIST_DIR / "assets").exists():
         app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="assets")
+
+    # Serve root-level static files (logo, favicon, etc.)
+    @app.get("/{filename:path}", include_in_schema=False)
+    def serve_static_or_spa(filename: str):
+        file = DIST_DIR / filename
+        if file.exists() and file.is_file():
+            return FileResponse(str(file))
+        return FileResponse(str(DIST_DIR / "index.html"))

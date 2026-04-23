@@ -1,0 +1,31 @@
+# ═══════════════════════════════════════════════════════
+# VPS Deployment — Backend with built frontend
+# Uses your existing system Caddy for HTTPS
+#
+# Usage:
+#   docker compose -f docker-compose.vps.yml up --build -d
+#
+# Then point your system Caddy at localhost:8888
+# ═══════════════════════════════════════════════════════
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: saptang-backend
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${BACKEND_PORT:-8888}:${BACKEND_PORT:-8888}"
+    depends_on:
+      tor:
+        condition: service_started
+
+  tor:
+    image: dperson/torproxy:latest
+    container_name: saptang-tor
+    restart: unless-stopped
+    ports:
+      - "${TOR_SOCKS_PORT:-9050}:9050"
+      - "${TOR_HTTP_PORT:-8118}:8118"

@@ -43,7 +43,7 @@ def verify_token(authorization: str | None) -> bool:
 @router.get("/auth/status")
 def auth_status():
     return {
-        "app_name": "Saptang Intelligence",
+        "app_name": "Auracle by Saptang Labs",
         "auth_required": _auth_enabled(),
     }
 

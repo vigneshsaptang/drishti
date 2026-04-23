@@ -1,11 +1,11 @@
 const TABS = [
-  { id: 'overview', label: 'Overview', sub: 'Summary' },
-  { id: 'breaches', label: 'Breaches', sub: 'CREDMON' },
-  { id: 'darkweb', label: 'Dark web', sub: 'DARKMON' },
-  { id: 'drugs', label: 'Drugs', sub: 'Markets' },
-  { id: 'telegram', label: 'Telegram', sub: 'TELEMON' },
-  { id: 'financial', label: 'Financial', sub: 'UPI & banks' },
-  { id: 'graph', label: 'Graph', sub: 'Entity web' },
+  { id: 'overview', label: 'Overview', sub: 'Dashboard' },
+  { id: 'breaches', label: 'Exposed Data', sub: 'Breach intelligence' },
+  { id: 'darkweb', label: 'Dark Web', sub: 'Forums & vendors' },
+  { id: 'drugs', label: 'Drug Markets', sub: 'Listings & routes' },
+  { id: 'telegram', label: 'Telegram', sub: 'Channels & messages' },
+  { id: 'financial', label: 'Financial', sub: 'UPI, banks & crypto' },
+  { id: 'graph', label: 'Graph', sub: 'Entity connections' },
 ];
 
 const icons = {
@@ -24,8 +24,8 @@ export default function SidebarNav({ activeTab, onTabChange }) {
   return (
     <aside className="w-60 shrink-0 border-r border-sap-border bg-sap-surface flex flex-col">
       <div className="p-4 border-b border-sap-border">
-        <p className="text-[10px] font-mono text-sap-accent uppercase tracking-[0.25em] font-semibold">Workspace</p>
-        <p className="text-sm font-bold text-sap-text mt-0.5 truncate">Saptang</p>
+        <p className="text-[10px] font-mono text-sap-accent uppercase tracking-[0.25em] font-semibold">Investigation</p>
+        <p className="text-sm font-bold text-sap-text mt-0.5 truncate">Auracle</p>
       </div>
       <nav className="flex-1 p-2.5 space-y-1 overflow-y-auto" aria-label="Module navigation">
         {TABS.map(tab => {
@@ -60,7 +60,7 @@ export default function SidebarNav({ activeTab, onTabChange }) {
           <span className="text-emerald-600 font-medium">3 online</span>
         </div>
         <div className="h-px bg-sap-border" />
-        <p className="text-sap-dim">Saptang API · v1</p>
+        <p className="text-sap-dim">Auracle · v1.0</p>
       </div>
     </aside>
   );

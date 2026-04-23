@@ -35,8 +35,8 @@ async def lifespan(app: FastAPI):
 from app.serializer import MongoJSONResponse
 
 app = FastAPI(
-    title="Saptang Intelligence",
-    description="Saptang Intelligence & Graph Investigation Platform",
+    title="Auracle",
+    description="Auracle Intelligence Platform by Saptang Labs",
     version="1.0.0",
     lifespan=lifespan,
     default_response_class=MongoJSONResponse,
@@ -66,7 +66,7 @@ app.include_router(dashboard.router, prefix="/api")
 
 @app.get("/api/health")
 def health():
-    return {"status": "operational", "platform": "Saptang Intelligence"}
+    return {"status": "operational", "platform": "Auracle by Saptang Labs"}
 
 
 # Serve frontend build output (prod mode — Caddy also handles this in prod)

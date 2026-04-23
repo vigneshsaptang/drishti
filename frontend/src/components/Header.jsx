@@ -19,7 +19,7 @@ export default function Header({ data }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `saptang-report-${data.seed?.value || 'export'}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `auracle-report-${data.seed?.value || 'export'}-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -38,8 +38,8 @@ export default function Header({ data }) {
             </svg>
           </div>
           <div>
-            <h1 className="text-base font-bold tracking-tight text-sap-text font-sans">Saptang Intelligence</h1>
-            <p className="text-[10px] font-mono text-sap-dim uppercase tracking-[0.18em]">Investigation Nexus</p>
+            <h1 className="text-base font-bold tracking-tight text-sap-text font-sans">Auracle</h1>
+            <p className="text-[10px] font-mono text-sap-dim uppercase tracking-[0.18em]">by Saptang Labs</p>
           </div>
         </div>
         <div className="hidden sm:block h-8 w-px bg-sap-border" />

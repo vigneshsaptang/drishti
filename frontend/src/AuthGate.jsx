@@ -38,8 +38,8 @@ export default function AuthGate({ children }) {
 
   if (!ready) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#04070f] text-sap-dim text-sm font-mono">
-        Loading…
+      <div className="min-h-screen flex items-center justify-center bg-sap-bg text-sap-dim text-sm">
+        Loading Auracle…
       </div>
     );
   }

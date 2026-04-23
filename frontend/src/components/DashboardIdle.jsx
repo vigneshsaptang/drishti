@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getDashboardIntel } from '../lib/api';
 import DrugRouteMap from './DrugRouteMap';
+import { EvidenceImage } from './Lightbox';
 
 export default function DashboardIdle() {
   const [intel, setIntel] = useState(null);
@@ -15,21 +16,17 @@ export default function DashboardIdle() {
 
   if (loading) {
     return (
-      <div className="space-y-3 animate-fade-in max-w-7xl">
-        <div className="tactical-surface rounded-lg border border-sap-accent/25 p-6">
-          <div className="flex items-center gap-3">
-            <div className="h-2 w-2 rounded-full bg-sap-accent shadow-[0_0_8px_#3b82f6] animate-pulse" />
-            <p className="text-sm font-mono text-sap-accent animate-scan">Loading intelligence feeds...</p>
-          </div>
-        </div>
+      <div className="flex items-center gap-3 bg-sap-surface rounded-xl border border-sap-border p-6 shadow-sm">
+        <div className="h-2.5 w-2.5 rounded-full bg-sap-accent animate-pulse shadow-[0_0_8px_#2563eb]" />
+        <p className="text-sm font-mono text-sap-accent animate-scan">Loading intelligence feeds...</p>
       </div>
     );
   }
 
   if (!intel) {
     return (
-      <div className="tactical-surface rounded-lg border border-sap-border p-6 max-w-xl">
-        <p className="text-sm text-sap-dim">Intelligence feed unavailable. Use the command bar above to search directly.</p>
+      <div className="bg-sap-surface rounded-xl border border-sap-border p-6 shadow-sm">
+        <p className="text-sm text-sap-dim">Intelligence feed unavailable. Use the search bar above to investigate directly.</p>
       </div>
     );
   }
@@ -42,34 +39,36 @@ export default function DashboardIdle() {
   const topWallets = intel.top_wallets || [];
 
   return (
-    <div className="space-y-4 animate-fade-in max-w-7xl">
-      {/* Top row: Drug route map + Threat actors */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {/* Drug route map */}
+    <div className="space-y-5 animate-fade-in max-w-full">
+
+      {/* ── Row 1: Map + Threat Actors ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {indiaDrugs.length > 0 && (
-          <div className="lg:col-span-2 tactical-surface rounded-lg border border-sap-border p-3">
-            <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-entity-drug mb-2">Drug shipping routes — India origin</h3>
-            <div className="h-[280px] rounded overflow-hidden border border-sap-border/50">
+          <div className="lg:col-span-2 bg-sap-surface rounded-xl border border-sap-border p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-sap-text mb-3">Drug Shipping Routes — India Origin</h3>
+            <div className="h-[300px] rounded-lg overflow-hidden border border-sap-border">
               <DrugRouteMap listings={indiaDrugs} />
             </div>
           </div>
         )}
 
-        {/* Threat actors targeting India */}
         {threatActors.length > 0 && (
-          <div className="tactical-surface rounded-lg border border-sap-border p-3">
-            <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-entity-darkweb mb-2">Threat actors — India targeted</h3>
-            <div className="space-y-1.5 max-h-[280px] overflow-y-auto">
+          <div className="bg-sap-surface rounded-xl border border-sap-border p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-sap-text mb-3">Threat Actors Targeting India</h3>
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
               {threatActors.map((a, i) => (
-                <div key={i} className="rounded border border-sap-border/60 bg-sap-bg/50 px-2.5 py-2 text-xs font-mono">
+                <div key={i} className="rounded-lg border border-sap-border bg-sap-panel px-4 py-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-entity-darkweb font-semibold truncate">{a.username || '?'}</span>
-                    <span className="text-sap-muted text-[10px]">{a.no_of_posts} posts</span>
+                    <span className="text-sm font-semibold text-entity-darkweb">{a.username || '?'}</span>
+                    <span className="text-xs text-sap-muted font-mono">{a.no_of_posts} posts</span>
                   </div>
-                  <div className="flex items-center justify-between mt-1 text-[10px] text-sap-dim">
-                    <span>{a.forum_name}</span>
-                    <span>{a.no_of_active_days}d active</span>
+                  <div className="flex items-center justify-between mt-1 text-xs text-sap-dim">
+                    <span>Forum: {a.forum_name}</span>
+                    <span>{a.no_of_active_days} days active</span>
                   </div>
+                  {a.target_countries?.length > 0 && (
+                    <p className="text-[11px] text-sap-muted mt-1 truncate">Targets: {a.target_countries.slice(0, 5).join(', ')}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -77,85 +76,122 @@ export default function DashboardIdle() {
         )}
       </div>
 
-      {/* Second row: Fraud UPIs + Drug categories + Crypto wallets */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {/* Fraud UPI handles */}
-        {fraudUpis.length > 0 && (
-          <div className="tactical-surface rounded-lg border border-entity-drug/20 p-3">
-            <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-entity-drug mb-2">Fraud UPI handles — betting sites</h3>
-            <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
-              {fraudUpis.map((u, i) => (
-                <div key={i} className="rounded border border-sap-border/60 bg-sap-bg/50 px-2.5 py-1.5 text-xs font-mono">
-                  <div className="flex items-center gap-2">
-                    <span className="px-1 py-0 bg-entity-drug/20 text-entity-drug text-[8px] font-bold rounded">{u.clasification}</span>
-                    <span className="text-sap-text truncate">{u.upi_details?.pa || '?'}</span>
-                  </div>
-                  {u.site && <p className="text-[10px] text-sap-dim truncate mt-0.5">{u.site}</p>}
-                  {u.payment_gateway && <p className="text-[10px] text-entity-crypto truncate">{u.payment_gateway}</p>}
-                </div>
-              ))}
+      {/* ── Row 2: Fraud UPI Table (full width) ── */}
+      {fraudUpis.length > 0 && (
+        <div className="bg-sap-surface rounded-xl border border-entity-drug/20 p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-entity-drug mb-4">Fraud UPI Handles — Betting & Gambling Sites</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b-2 border-sap-border text-left">
+                  <th className="px-3 py-2.5 text-xs font-semibold text-sap-dim uppercase tracking-wider">UPI ID</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold text-sap-dim uppercase tracking-wider">Classification</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold text-sap-dim uppercase tracking-wider">Linked Site</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold text-sap-dim uppercase tracking-wider">Payment Gateway</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold text-sap-dim uppercase tracking-wider">Evidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fraudUpis.map((u, i) => (
+                  <tr key={i} className="border-b border-sap-border/50 hover:bg-sap-panel/50">
+                    <td className="px-3 py-3 font-mono text-sm font-medium text-sap-text">{u.upi_details?.pa || '—'}</td>
+                    <td className="px-3 py-3">
+                      <span className="px-2 py-1 rounded-md text-xs font-semibold bg-entity-drug/10 text-entity-drug border border-entity-drug/20">
+                        {u.clasification || 'UNKNOWN'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-sm">
+                      {u.site ? (
+                        <a href={u.site} target="_blank" rel="noopener" className="text-sap-accent hover:underline truncate block max-w-[200px]">{u.site}</a>
+                      ) : '—'}
+                    </td>
+                    <td className="px-3 py-3 font-mono text-xs text-entity-crypto">{u.payment_gateway || '—'}</td>
+                    <td className="px-3 py-3">
+                      <div className="flex gap-1.5">
+                        <EvidenceImage src={u.home_page_screenshot} alt="Site" className="h-8 w-auto rounded" />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Row 3: Drug Markets + Categories + Crypto ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        {/* Drug Market Listings */}
+        {indiaDrugs.length > 0 && (
+          <div className="lg:col-span-2 bg-sap-surface rounded-xl border border-sap-border p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-entity-drug mb-4">India-Origin Dark Web Drug Listings</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b-2 border-sap-border text-left">
+                    <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Product</th>
+                    <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Vendor</th>
+                    <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Market</th>
+                    <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Category</th>
+                    <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Ships</th>
+                    <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Price</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {indiaDrugs.map((d, i) => (
+                    <tr key={i} className="border-b border-sap-border/50 hover:bg-sap-panel/50">
+                      <td className="px-3 py-2.5 font-medium text-sap-text max-w-[200px] truncate" title={d.listing_title}>{d.listing_title}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-entity-drug">{d.vendor_name || '—'}</td>
+                      <td className="px-3 py-2.5 text-xs text-sap-dim">{d.marketplace}</td>
+                      <td className="px-3 py-2.5 text-xs text-sap-dim max-w-[120px] truncate">{d.listing_category}</td>
+                      <td className="px-3 py-2.5 text-xs text-sap-dim">{d.shipping_from} → {d.shipping_to}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-entity-crypto">{JSON.stringify(d.listing_price)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
 
-        {/* Drug categories */}
+        {/* Drug Categories */}
         {drugStats.categories?.length > 0 && (
-          <div className="tactical-surface rounded-lg border border-sap-border p-3">
-            <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-entity-drug mb-2">Dark web drug categories</h3>
-            <div className="space-y-1">
-              {drugStats.categories.slice(0, 10).map(c => {
+          <div className="bg-sap-surface rounded-xl border border-sap-border p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-sap-text mb-4">Drug Categories</h3>
+            <div className="space-y-2">
+              {drugStats.categories.slice(0, 12).map(c => {
                 const pct = Math.round((c.count / (drugStats.categories[0]?.count || 1)) * 100);
                 const label = (c.name || '').includes(',') ? c.name.split(',').pop().trim() : c.name;
                 return (
-                  <div key={c.name} className="flex items-center gap-2 text-[11px] font-mono">
-                    <span className="w-28 truncate text-sap-dim" title={c.name}>{label}</span>
-                    <div className="flex-1 h-1 bg-sap-panel rounded-full overflow-hidden">
+                  <div key={c.name} className="flex items-center gap-2 text-sm">
+                    <span className="w-28 truncate text-sap-dim text-xs" title={c.name}>{label}</span>
+                    <div className="flex-1 h-2 bg-sap-panel rounded-full overflow-hidden">
                       <div className="h-full bg-entity-drug/50 rounded-full" style={{ width: `${pct}%` }} />
                     </div>
-                    <span className="w-10 text-right text-sap-muted text-[10px]">{c.count.toLocaleString()}</span>
+                    <span className="w-12 text-right text-sap-muted text-xs font-mono">{c.count.toLocaleString()}</span>
                   </div>
                 );
               })}
-            </div>
-          </div>
-        )}
-
-        {/* Crypto wallets */}
-        {topWallets.length > 0 && (
-          <div className="tactical-surface rounded-lg border border-entity-crypto/20 p-3">
-            <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-entity-crypto mb-2">Dark web crypto wallets</h3>
-            <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
-              {topWallets.map((w, i) => (
-                <div key={i} className="rounded border border-sap-border/60 bg-sap-bg/50 px-2.5 py-1.5 text-xs font-mono">
-                  <div className="flex items-center gap-2">
-                    <span className="px-1 py-0 bg-entity-crypto/20 text-entity-crypto text-[8px] font-bold rounded">{w.blockchain_type || 'BTC'}</span>
-                    <span className="text-sap-text truncate text-[10px]">{w.wallet_address?.slice(0, 16)}...</span>
-                  </div>
-                  <div className="flex justify-between mt-1 text-[10px]">
-                    <span className="text-sap-dim">Vol: <span className="text-entity-crypto">{w.total_volume?.fiat?.amount || '?'} {w.total_volume?.fiat?.currency_type || ''}</span></span>
-                    <span className="text-sap-dim">Tx: {w.transactions_count?.total || '?'}</span>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         )}
       </div>
 
-      {/* Third row: Telegram groups + Marketplaces + India drug vendors */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {/* Telegram groups with most phone sharing */}
+      {/* ── Row 4: Telegram + Marketplaces + Crypto ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+        {/* Telegram Groups */}
         {telegramGroups.length > 0 && (
-          <div className="tactical-surface rounded-lg border border-entity-telegram/20 p-3">
-            <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-entity-telegram mb-2">Telegram — phone distribution groups</h3>
-            <div className="space-y-1.5">
+          <div className="bg-sap-surface rounded-xl border border-entity-telegram/20 p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-entity-telegram mb-3">Telegram — Phone Distribution Groups</h3>
+            <div className="space-y-2">
               {telegramGroups.map((g, i) => (
-                <div key={i} className="flex items-center justify-between text-xs font-mono rounded border border-sap-border/40 bg-sap-bg/50 px-2.5 py-1.5">
-                  <span className="text-entity-telegram">{g._id}</span>
-                  <div className="text-right text-[10px]">
-                    <span className="text-sap-text">{g.total_phones?.toLocaleString()}</span>
-                    <span className="text-sap-dim ml-1">mentions</span>
-                    <span className="text-sap-muted ml-2">{g.unique_phone_count} phones</span>
+                <div key={i} className="flex items-center justify-between rounded-lg border border-sap-border bg-sap-panel px-3 py-2.5">
+                  <span className="font-mono text-sm text-entity-telegram">{g._id}</span>
+                  <div className="text-right">
+                    <span className="text-sm font-semibold text-sap-text">{g.total_phones?.toLocaleString()}</span>
+                    <span className="text-xs text-sap-dim ml-1">mentions</span>
                   </div>
                 </div>
               ))}
@@ -163,20 +199,20 @@ export default function DashboardIdle() {
           </div>
         )}
 
-        {/* Dark web marketplaces */}
+        {/* Dark Web Marketplaces */}
         {drugStats.marketplaces?.length > 0 && (
-          <div className="tactical-surface rounded-lg border border-sap-border p-3">
-            <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-entity-darkweb mb-2">Dark web marketplaces</h3>
-            <div className="space-y-1">
+          <div className="bg-sap-surface rounded-xl border border-entity-darkweb/20 p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-entity-darkweb mb-3">Active Dark Web Markets</h3>
+            <div className="space-y-2">
               {drugStats.marketplaces.slice(0, 10).map(m => {
                 const pct = Math.round((m.count / (drugStats.marketplaces[0]?.count || 1)) * 100);
                 return (
-                  <div key={m.name} className="flex items-center gap-2 text-[11px] font-mono">
-                    <span className="w-24 truncate text-sap-dim">{m.name}</span>
-                    <div className="flex-1 h-1 bg-sap-panel rounded-full overflow-hidden">
+                  <div key={m.name} className="flex items-center gap-2 text-sm">
+                    <span className="w-24 truncate text-sap-dim text-xs">{m.name}</span>
+                    <div className="flex-1 h-2 bg-sap-panel rounded-full overflow-hidden">
                       <div className="h-full bg-entity-darkweb/50 rounded-full" style={{ width: `${pct}%` }} />
                     </div>
-                    <span className="w-10 text-right text-sap-muted text-[10px]">{m.count.toLocaleString()}</span>
+                    <span className="w-12 text-right text-sap-muted text-xs font-mono">{m.count.toLocaleString()}</span>
                   </div>
                 );
               })}
@@ -184,18 +220,20 @@ export default function DashboardIdle() {
           </div>
         )}
 
-        {/* India drug vendors */}
-        {indiaDrugs.length > 0 && (
-          <div className="tactical-surface rounded-lg border border-entity-drug/20 p-3">
-            <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-entity-drug mb-2">India-origin dark web vendors</h3>
-            <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
-              {indiaDrugs.map((d, i) => (
-                <div key={i} className="rounded border border-sap-border/60 bg-sap-bg/50 px-2.5 py-1.5 text-xs font-mono">
-                  <p className="text-sap-text truncate text-[11px]">{d.listing_title}</p>
-                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-sap-dim">
-                    <span className="text-entity-drug">{d.vendor_name}</span>
-                    <span>{d.marketplace}</span>
-                    <span>{d.shipping_from} → {d.shipping_to}</span>
+        {/* Top Crypto Wallets */}
+        {topWallets.length > 0 && (
+          <div className="bg-sap-surface rounded-xl border border-entity-crypto/20 p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-entity-crypto mb-3">Dark Web Crypto Wallets</h3>
+            <div className="space-y-2">
+              {topWallets.map((w, i) => (
+                <div key={i} className="rounded-lg border border-sap-border bg-sap-panel px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="px-1.5 py-0.5 bg-entity-crypto/10 text-entity-crypto text-[10px] font-bold rounded">{w.blockchain_type || 'BTC'}</span>
+                    <span className="font-mono text-xs text-sap-text truncate">{w.wallet_address?.slice(0, 20)}...</span>
+                  </div>
+                  <div className="flex justify-between mt-1.5 text-xs">
+                    <span className="text-sap-dim">Volume: <span className="text-entity-crypto font-medium">{w.total_volume?.fiat?.amount || '?'} {w.total_volume?.fiat?.currency_type || ''}</span></span>
+                    <span className="text-sap-dim font-mono">{w.transactions_count?.total || '?'} tx</span>
                   </div>
                 </div>
               ))}

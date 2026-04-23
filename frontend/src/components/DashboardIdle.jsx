@@ -45,7 +45,7 @@ export default function DashboardIdle() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {indiaDrugs.length > 0 && (
           <div className="lg:col-span-2 bg-sap-surface rounded-xl border border-sap-border p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-sap-text mb-3">Drug Shipping Routes — India Origin</h3>
+            <h3 className="text-sm font-semibold text-sap-text mb-3">Location Intelligence — Drug Shipping Routes</h3>
             <div className="h-[300px] rounded-lg overflow-hidden border border-sap-border">
               <DrugRouteMap listings={indiaDrugs} />
             </div>
@@ -54,7 +54,7 @@ export default function DashboardIdle() {
 
         {threatActors.length > 0 && (
           <div className="bg-sap-surface rounded-xl border border-sap-border p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-sap-text mb-3">Threat Actors Targeting India</h3>
+            <h3 className="text-sm font-semibold text-sap-text mb-3">Threat Actor Profiling — India Targeted</h3>
             <div className="space-y-2 max-h-[300px] overflow-y-auto">
               {threatActors.map((a, i) => (
                 <div key={i} className="rounded-lg border border-sap-border bg-sap-panel px-4 py-3">
@@ -79,7 +79,7 @@ export default function DashboardIdle() {
       {/* ── Row 2: Fraud UPI Table (full width) ── */}
       {fraudUpis.length > 0 && (
         <div className="bg-sap-surface rounded-xl border border-entity-drug/20 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-entity-drug mb-4">Fraud UPI Handles — Betting & Gambling Sites</h3>
+          <h3 className="text-sm font-semibold text-entity-drug mb-4">Linked Financial Accounts — Fraud UPI Identifiers</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -125,7 +125,7 @@ export default function DashboardIdle() {
         {/* Drug Market Listings */}
         {indiaDrugs.length > 0 && (
           <div className="lg:col-span-2 bg-sap-surface rounded-xl border border-sap-border p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-entity-drug mb-4">India-Origin Dark Web Drug Listings</h3>
+            <h3 className="text-sm font-semibold text-entity-drug mb-4">Dark Web Marketplace Monitoring — India Origin</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -184,7 +184,7 @@ export default function DashboardIdle() {
         {/* Telegram Groups */}
         {telegramGroups.length > 0 && (
           <div className="bg-sap-surface rounded-xl border border-entity-telegram/20 p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-entity-telegram mb-3">Telegram — Phone Distribution Groups</h3>
+            <h3 className="text-sm font-semibold text-entity-telegram mb-3">Social Media Intelligence — Channel Monitoring</h3>
             <div className="space-y-2">
               {telegramGroups.map((g, i) => (
                 <div key={i} className="flex items-center justify-between rounded-lg border border-sap-border bg-sap-panel px-3 py-2.5">
@@ -202,7 +202,7 @@ export default function DashboardIdle() {
         {/* Dark Web Marketplaces */}
         {drugStats.marketplaces?.length > 0 && (
           <div className="bg-sap-surface rounded-xl border border-entity-darkweb/20 p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-entity-darkweb mb-3">Active Dark Web Markets</h3>
+            <h3 className="text-sm font-semibold text-entity-darkweb mb-3">Dark Web OSINT — Active Marketplaces</h3>
             <div className="space-y-2">
               {drugStats.marketplaces.slice(0, 10).map(m => {
                 const pct = Math.round((m.count / (drugStats.marketplaces[0]?.count || 1)) * 100);
@@ -223,7 +223,7 @@ export default function DashboardIdle() {
         {/* Top Crypto Wallets */}
         {topWallets.length > 0 && (
           <div className="bg-sap-surface rounded-xl border border-entity-crypto/20 p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-entity-crypto mb-3">Dark Web Crypto Wallets</h3>
+            <h3 className="text-sm font-semibold text-entity-crypto mb-3">Crypto Trail — Wallet Intelligence</h3>
             <div className="space-y-2">
               {topWallets.map((w, i) => (
                 <div key={i} className="rounded-lg border border-sap-border bg-sap-panel px-3 py-2.5">

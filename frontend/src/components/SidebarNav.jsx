@@ -1,11 +1,11 @@
 const TABS = [
-  { id: 'overview', label: 'Overview', sub: 'Dashboard' },
-  { id: 'breaches', label: 'Exposed Data', sub: 'Breach intelligence' },
-  { id: 'darkweb', label: 'Dark Web', sub: 'Forums & vendors' },
+  { id: 'overview', label: 'Overview', sub: 'Subject profiling' },
+  { id: 'breaches', label: 'Exposed Data', sub: 'Digital footprint' },
+  { id: 'darkweb', label: 'Dark Web', sub: 'Monitoring & OSINT' },
   { id: 'drugs', label: 'Drug Markets', sub: 'Listings & routes' },
-  { id: 'telegram', label: 'Telegram', sub: 'Channels & messages' },
-  { id: 'financial', label: 'Financial', sub: 'UPI, banks & crypto' },
-  { id: 'graph', label: 'Graph', sub: 'Entity connections' },
+  { id: 'telegram', label: 'Social Intel', sub: 'Telegram & channels' },
+  { id: 'financial', label: 'Financial Trail', sub: 'UPI, banks & crypto' },
+  { id: 'graph', label: 'Network Map', sub: 'Linked entities' },
 ];
 
 const icons = {

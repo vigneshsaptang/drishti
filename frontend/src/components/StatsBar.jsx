@@ -9,11 +9,11 @@ export default function StatsBar({ data }) {
   (b.results || []).forEach(r => { if (r.sources) breachCount += r.sources.length; });
 
   const items = [
-    { label: 'Entities searched', value: b.total_searched || 0, sub: 'Depth scan' },
+    { label: 'Identifiers traced', value: b.total_searched || 0, sub: 'Linked accounts' },
     { label: 'Records found', value: b.total_found || 0, sub: 'Matches' },
-    { label: 'Breach sources', value: breachCount, sub: 'Databases' },
-    { label: 'Telegram mentions', value: (tg.total_mentions || 0).toLocaleString(), sub: 'Channels' },
-    { label: 'Run time', value: `${data.total_time_ms || 0}ms`, sub: 'Total' },
+    { label: 'Data sources', value: breachCount, sub: 'Exposed data' },
+    { label: 'Social mentions', value: (tg.total_mentions || 0).toLocaleString(), sub: 'Channels' },
+    { label: 'Analysis time', value: `${data.total_time_ms || 0}ms`, sub: 'Total' },
   ];
 
   return (

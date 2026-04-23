@@ -22,32 +22,32 @@ export default function CommandBar({ onSearch, loading }) {
         <div className="flex-1 min-w-0 p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
             <div>
-              <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-sap-accent font-semibold">Investigation Query</h2>
-              <p className="text-sm text-sap-dim mt-0.5">Enter an identifier to search breach, threat intel, and dark web engines</p>
+              <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-sap-accent font-semibold">Identity Profiling</h2>
+              <p className="text-sm text-sap-dim mt-0.5">Enter a phone number or email to profile the subject — trace linked accounts, digital footprint, and exposed data automatically</p>
             </div>
           </div>
           <form onSubmit={handleSubmit} className="flex flex-col lg:flex-row lg:items-end gap-3">
             <div className="space-y-1.5 shrink-0">
-              <label htmlFor="cmd-type" className="block text-[10px] font-mono text-sap-dim uppercase tracking-wider font-medium">Type</label>
+              <label htmlFor="cmd-type" className="block text-[10px] font-mono text-sap-dim uppercase tracking-wider font-medium">Identifier</label>
               <select
                 id="cmd-type"
                 value={type}
                 onChange={e => setType(e.target.value)}
                 className="w-full lg:w-40 bg-sap-panel border border-sap-border rounded-lg px-3 py-3 text-sm font-mono text-sap-text outline-none focus:border-sap-accent focus:ring-2 focus:ring-sap-accent/20"
               >
-                <option value="phone">Phone</option>
-                <option value="email">Email</option>
+                <option value="phone">Phone Number</option>
+                <option value="email">Email Address</option>
               </select>
             </div>
             <div className="space-y-1.5 flex-1 min-w-0 max-w-2xl">
-              <label htmlFor="cmd-value" className="block text-[10px] font-mono text-sap-dim uppercase tracking-wider font-medium">Value</label>
+              <label htmlFor="cmd-value" className="block text-[10px] font-mono text-sap-dim uppercase tracking-wider font-medium">Contact / Account</label>
               <div className="relative">
                 <input
                   id="cmd-value"
                   type="text"
                   value={value}
                   onChange={e => setValue(e.target.value)}
-                  placeholder="+91… or user@domain"
+                  placeholder="Enter contact number or email to trace linked identifiers..."
                   autoFocus
                   className="w-full bg-sap-panel border border-sap-border rounded-lg pl-4 pr-10 py-3 text-base font-mono text-sap-text outline-none focus:border-sap-accent focus:ring-2 focus:ring-sap-accent/20 placeholder:text-sap-muted"
                 />

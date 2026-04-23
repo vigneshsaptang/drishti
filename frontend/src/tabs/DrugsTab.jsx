@@ -99,12 +99,13 @@ export default function DrugsTab() {
             <div className="bg-sap-surface border border-sap-border rounded-lg p-4">
               <h4 className="text-xs font-mono tracking-widest text-entity-drug mb-3 uppercase">Drug Categories</h4>
               <div className="space-y-1.5">
-                {stats.categories.slice(0, 15).map(c => {
+                {stats.categories.slice(0, 15).map((c, ci) => {
                   const pct = Math.round((c.count / (stats.categories[0]?.count || 1)) * 100);
-                  const label = (c.name || '').split(',').pop().trim();
+                  const nameStr = Array.isArray(c.name) ? c.name.join(', ') : String(c.name || '');
+                  const label = nameStr.includes(',') ? nameStr.split(',').pop().trim() : nameStr;
                   return (
-                    <div key={c.name} className="flex items-center gap-2 text-xs font-mono">
-                      <span className="w-40 truncate text-sap-dim" title={c.name}>{label}</span>
+                    <div key={ci} className="flex items-center gap-2 text-xs font-mono">
+                      <span className="w-40 truncate text-sap-dim" title={nameStr}>{label}</span>
                       <div className="flex-1 h-1.5 bg-sap-panel rounded-full overflow-hidden">
                         <div className="h-full bg-entity-drug/60 rounded-full" style={{ width: `${pct}%` }} />
                       </div>

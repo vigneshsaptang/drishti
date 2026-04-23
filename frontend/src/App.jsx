@@ -38,7 +38,7 @@ function ScannerWait() {
 }
 
 export default function App() {
-  const { data, loading, error, status, doSearch } = useSearch();
+  const { data, loading, error, status, doSearch, cancelSearch, clearResults } = useSearch();
   const [activeTab, setActiveTab] = useState('overview');
 
   const handleSearch = useCallback((type, value, depth) => {
@@ -63,6 +63,12 @@ export default function App() {
     if (activeTab === 'drugs') {
       return <DrugsTab />;
     }
+    if (activeTab === 'financial') {
+      return <FinancialTab data={data} />;
+    }
+    if (activeTab === 'darkweb') {
+      return <DarkwebTab data={data} onPivot={handlePivot} />;
+    }
     if (loading && !data) {
       return <ScannerWait />;
     }
@@ -83,7 +89,7 @@ export default function App() {
         <div className="flex-1 flex flex-col min-w-0 min-h-0">
           <Header data={data} />
           <div className="shrink-0 px-4 sm:px-5 pt-4 space-y-3">
-            <CommandBar onSearch={handleSearch} loading={loading} />
+            <CommandBar onSearch={handleSearch} loading={loading} onCancel={cancelSearch} onClear={clearResults} />
             <StatusLine visible={loading} message={status} />
             {data && <StatsBar data={data} />}
           </div>

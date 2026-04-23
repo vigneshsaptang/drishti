@@ -104,18 +104,8 @@ def search(req: SearchRequest):
         nonlocal darkweb_results
         r = {"entity_matches": {"threads": [], "posts": []}, "username_matches": []}
 
-        # Search by entity (email/phone in extracted_info)
-        for email in list(all_emails)[:3]:
-            hits = darkmon.search_by_entity("email", email)
-            r["entity_matches"]["threads"].extend(hits.get("threads", []))
-            r["entity_matches"]["posts"].extend(hits.get("posts", []))
-
-        for phone in list(all_phones)[:3]:
-            hits = darkmon.search_by_entity("phone", phone)
-            r["entity_matches"]["threads"].extend(hits.get("threads", []))
-            r["entity_matches"]["posts"].extend(hits.get("posts", []))
-
-        # Search by discovered usernames
+        # SKIP extracted_info entity search — too slow without indexes (50s+)
+        # Only do username-based searches (uses author_username index)
         for uname in list(all_usernames)[:5]:
             uh = darkmon.search_by_username(uname)
             if uh.get("threads") or uh.get("posts") or uh.get("author_profile"):

@@ -126,15 +126,8 @@ async def stream_search(req: StreamSearchRequest):
 
         def run_darkmon():
             r = {"entity_matches": {"threads": [], "posts": []}, "username_matches": []}
-            # Limit to 1 entity each to keep dark web phase fast
-            for email in list(all_emails)[:1]:
-                hits = darkmon.search_by_entity("email", email)
-                r["entity_matches"]["threads"].extend(hits.get("threads", []))
-                r["entity_matches"]["posts"].extend(hits.get("posts", []))
-            for phone in list(all_phones)[:1]:
-                hits = darkmon.search_by_entity("phone", phone)
-                r["entity_matches"]["threads"].extend(hits.get("threads", []))
-                r["entity_matches"]["posts"].extend(hits.get("posts", []))
+            # SKIP extracted_info entity search — too slow without indexes (50s+ on 9M docs)
+            # Only do username-based searches (uses author_username index — instant)
             for uname in list(all_usernames)[:3]:
                 uh = darkmon.search_by_username(uname)
                 if uh.get("threads") or uh.get("posts") or uh.get("author_profile"):

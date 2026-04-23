@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function CommandBar({ onSearch, loading }) {
+export default function CommandBar({ onSearch, loading, onCancel, onClear }) {
   const [type, setType] = useState('phone');
   const [value, setValue] = useState('');
   const [depth, setDepth] = useState(2);
@@ -16,7 +16,7 @@ export default function CommandBar({ onSearch, loading }) {
   };
 
   return (
-    <div className="rounded-xl border border-sap-border bg-sap-surface shadow-sm overflow-hidden">
+    <div className="rounded-lg border border-sap-border bg-sap-surface shadow-sm overflow-hidden">
       <div className="flex items-stretch">
         <div className="w-1.5 bg-gradient-to-b from-sap-accent to-blue-700 shrink-0" aria-hidden />
         <div className="flex-1 min-w-0 p-4 sm:p-5">
@@ -28,7 +28,7 @@ export default function CommandBar({ onSearch, loading }) {
           </div>
           <form onSubmit={handleSubmit} className="flex flex-col lg:flex-row lg:items-end gap-3">
             <div className="space-y-1.5 shrink-0">
-              <label htmlFor="cmd-type" className="block text-[10px] font-mono text-sap-dim uppercase tracking-wider font-medium">Identifier</label>
+              <label htmlFor="cmd-type" className="block text-xs font-mono text-sap-dim uppercase tracking-wider font-medium">Identifier</label>
               <select
                 id="cmd-type"
                 value={type}
@@ -40,7 +40,7 @@ export default function CommandBar({ onSearch, loading }) {
               </select>
             </div>
             <div className="space-y-1.5 flex-1 min-w-0 max-w-2xl">
-              <label htmlFor="cmd-value" className="block text-[10px] font-mono text-sap-dim uppercase tracking-wider font-medium">Contact / Account</label>
+              <label htmlFor="cmd-value" className="block text-xs font-mono text-sap-dim uppercase tracking-wider font-medium">Contact / Account</label>
               <div className="relative">
                 <input
                   id="cmd-value"
@@ -63,7 +63,7 @@ export default function CommandBar({ onSearch, loading }) {
             </div>
             <div className="flex flex-wrap items-end gap-3">
               <div className="space-y-1.5 w-20">
-                <label htmlFor="cmd-depth" className="block text-[10px] font-mono text-sap-dim uppercase tracking-wider font-medium">Depth</label>
+                <label htmlFor="cmd-depth" className="block text-xs font-mono text-sap-dim uppercase tracking-wider font-medium">Depth</label>
                 <input
                   id="cmd-depth"
                   type="number"
@@ -74,13 +74,32 @@ export default function CommandBar({ onSearch, loading }) {
                   className="w-full bg-sap-panel border border-sap-border rounded-lg px-2 py-3 text-base font-mono text-sap-text text-center outline-none focus:border-sap-accent"
                 />
               </div>
-              <button
-                type="submit"
-                disabled={loading || !value.trim()}
-                className="h-[48px] px-6 rounded-lg bg-sap-accent hover:bg-sap-accent-glow disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold tracking-wider font-mono uppercase shadow-md transition-colors"
-              >
-                {loading ? 'Running...' : 'Execute'}
-              </button>
+              {!loading ? (
+                <button
+                  type="submit"
+                  disabled={!value.trim()}
+                  className="h-[48px] px-6 rounded-lg bg-sap-accent hover:bg-sap-accent-glow disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold tracking-wider font-mono uppercase shadow-md transition-colors"
+                >
+                  Execute
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="h-[48px] px-6 rounded-lg bg-entity-drug hover:bg-entity-drug/80 text-white text-sm font-semibold tracking-wider font-mono uppercase shadow-md transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
+              {onClear && (
+                <button
+                  type="button"
+                  onClick={() => { setValue(''); onClear(); }}
+                  className="h-[48px] px-4 rounded-lg border border-sap-border text-sap-dim hover:text-sap-text text-sm font-medium transition-colors"
+                >
+                  Clear
+                </button>
+              )}
             </div>
           </form>
         </div>

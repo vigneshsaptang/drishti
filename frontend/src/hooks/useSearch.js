@@ -139,5 +139,20 @@ export function useSearch() {
     }
   }, []);
 
-  return { data, loading, error, status, doSearch };
+  const cancelSearch = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    setLoading(false);
+    setStatus('');
+    setError(null);
+  }, []);
+
+  const clearResults = useCallback(() => {
+    cancelSearch();
+    setData(null);
+  }, [cancelSearch]);
+
+  return { data, loading, error, status, doSearch, cancelSearch, clearResults };
 }

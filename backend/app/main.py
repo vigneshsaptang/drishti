@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 
 from app.auth_middleware import SaptangAuthMiddleware
 from app.db import get_credmon, get_darkmon, get_fti, close_all
-from app.routes import search, stream, darkweb, drugs, telegram, financial, graph, report, tor, auth, dashboard
+from app.routes import search, stream, darkweb, drugs, telegram, financial, graph, report, tor, auth, dashboard, stats
 
 # In dev: sigint/frontend/dist (built by Vite)
 # In Docker: /app/frontend/dist (copied by Dockerfile)
@@ -62,6 +62,7 @@ app.include_router(graph.router, prefix="/api")
 app.include_router(report.router, prefix="/api")
 app.include_router(tor.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(stats.router, prefix="/api")
 
 
 @app.get("/api/health")

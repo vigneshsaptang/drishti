@@ -24,7 +24,7 @@ export default function SidebarNav({ activeTab, onTabChange }) {
   return (
     <aside className="w-60 shrink-0 border-r border-sap-border bg-sap-surface flex flex-col">
       <div className="p-4 border-b border-sap-border">
-        <p className="text-[10px] font-mono text-sap-accent uppercase tracking-[0.25em] font-semibold">Investigation</p>
+        <p className="text-xs font-mono text-sap-accent uppercase tracking-[0.25em] font-semibold">Investigation</p>
         <p className="text-sm font-bold text-sap-text mt-0.5 truncate">Auracle</p>
       </div>
       <nav className="flex-1 p-2.5 space-y-1 overflow-y-auto" aria-label="Module navigation">
@@ -48,19 +48,14 @@ export default function SidebarNav({ activeTab, onTabChange }) {
               </span>
               <span className="min-w-0">
                 <span className="block text-sm font-medium leading-tight">{tab.label}</span>
-                <span className="block text-[10px] font-mono text-sap-muted leading-tight">{tab.sub}</span>
+                <span className="block text-xs font-mono text-sap-muted leading-tight">{tab.sub}</span>
               </span>
             </button>
           );
         })}
       </nav>
-      <div className="p-3.5 border-t border-sap-border text-[10px] font-mono text-sap-muted space-y-1.5">
-        <div className="flex justify-between">
-          <span>Engines</span>
-          <span className="text-emerald-600 font-medium">3 online</span>
-        </div>
-        <div className="h-px bg-sap-border" />
-        <p className="text-sap-dim">Auracle · v1.0</p>
+      <div className="p-3.5 border-t border-sap-border text-xs font-mono text-sap-muted space-y-1.5">
+        <p className="text-sap-dim">Auracle</p>
       </div>
     </aside>
   );

@@ -1,33 +1,33 @@
 @import "tailwindcss";
 
-/* ═══ Saptang Intelligence — Light Mode Design Tokens ═══ */
+/* ═══ Saptang Intelligence — Warm Grey Design Tokens ═══ */
 @theme {
-  /* Surface hierarchy: light greys with subtle blue tint */
-  --color-sap-bg: #f0f2f5;
+  /* Surface hierarchy: warm grey (Notion/Linear/Apple style) */
+  --color-sap-bg: #f5f5f7;
   --color-sap-surface: #ffffff;
-  --color-sap-panel: #f7f8fa;
-  --color-sap-border: #d4d9e3;
-  --color-sap-border-light: #e2e6ee;
-  --color-sap-text: #1a1d23;
-  --color-sap-dim: #5a6578;
-  --color-sap-muted: #8994a8;
+  --color-sap-panel: #f0f0f3;
+  --color-sap-border: #d1d5db;
+  --color-sap-border-light: #e5e7eb;
+  --color-sap-text: #111827;
+  --color-sap-dim: #4b5563;
+  --color-sap-muted: #9ca3af;
   --color-sap-gold: #92710a;
-  --color-sap-accent: #2563eb;
-  --color-sap-accent-glow: #1d4ed8;
+  --color-sap-accent: #4f46e5;
+  --color-sap-accent-glow: #4338ca;
 
-  /* Entity colours — slightly muted for light background */
-  --color-entity-phone: #2563eb;
-  --color-entity-email: #059669;
-  --color-entity-person: #1a1d23;
-  --color-entity-breach: #d97706;
-  --color-entity-darkweb: #7c3aed;
-  --color-entity-drug: #dc2626;
-  --color-entity-telegram: #0891b2;
-  --color-entity-upi: #ca8a04;
-  --color-entity-bank: #b45309;
-  --color-entity-crypto: #ea580c;
-  --color-entity-url: #475569;
-  --color-entity-watchlist: #b91c1c;
+  /* Entity colours — saturated for grey background contrast */
+  --color-entity-phone: #3b82f6;
+  --color-entity-email: #10b981;
+  --color-entity-person: #111827;
+  --color-entity-breach: #f59e0b;
+  --color-entity-darkweb: #8b5cf6;
+  --color-entity-drug: #ef4444;
+  --color-entity-telegram: #06b6d4;
+  --color-entity-upi: #eab308;
+  --color-entity-bank: #d97706;
+  --color-entity-crypto: #f97316;
+  --color-entity-url: #64748b;
+  --color-entity-watchlist: #dc2626;
 
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
   --font-sans: 'Inter', system-ui, sans-serif;
@@ -48,7 +48,7 @@ body {
   background: var(--color-sap-bg);
   color: var(--color-sap-text);
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
@@ -59,9 +59,9 @@ body {
 .tactical-surface {
   background-color: var(--color-sap-bg);
   background-image:
-    linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
-  background-size: 32px 32px;
+    linear-gradient(rgba(0, 0, 0, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.018) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
 /* ═══ Scrollbar ═══ */
@@ -80,5 +80,5 @@ body {
 
 /* ═══ Bigger base sizing ═══ */
 /* Override tiny mono text throughout to be more readable */
-.font-mono { font-size: 0.8125rem; /* 13px */ }
-table .font-mono, table td, table th { font-size: 0.8125rem; }
+.font-mono { font-size: 0.84375rem; /* 13.5px */ }
+table .font-mono, table td, table th { font-size: 0.84375rem; }

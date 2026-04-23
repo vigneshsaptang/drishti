@@ -1,4 +1,5 @@
 import EntityBadge from '../components/EntityBadge';
+import { extractGeoIntel } from '../lib/breach';
 
 export default function OverviewTab({ data, onPivot }) {
   if (!data) return null;
@@ -27,6 +28,20 @@ export default function OverviewTab({ data, onPivot }) {
     }
   }
 
+  // Extract geo-intelligence from first available record
+  let geoIntel = null;
+  for (const r of (b.results || [])) {
+    if (geoIntel) break;
+    if (!r.found) continue;
+    for (const src of (r.sources || [])) {
+      if (geoIntel) break;
+      for (const rec of (src.records || [])) {
+        const g = extractGeoIntel(rec.fields);
+        if (g) { geoIntel = g; break; }
+      }
+    }
+  }
+
   const breachSources = [];
   (b.results || []).forEach(r => (r.sources || []).forEach(s => breachSources.push(s)));
   const dwThreads = (dw.entity_matches?.threads?.length || 0) + (dw.entity_matches?.posts?.length || 0);
@@ -39,7 +54,7 @@ export default function OverviewTab({ data, onPivot }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 animate-fade-in">
       {/* Profile Card */}
-      <div className="bg-sap-surface border border-sap-border rounded-xl p-6 shadow-sm">
+      <div className="bg-sap-surface border border-sap-border rounded-lg p-6 shadow-sm">
         <h3 className="text-xs font-mono tracking-widest text-sap-dim mb-4 uppercase font-semibold">Individual Profile & Identity</h3>
         <div className="flex items-start gap-4">
           <div className="w-14 h-14 bg-sap-panel rounded-full flex items-center justify-center border border-sap-border flex-shrink-0 overflow-hidden">
@@ -53,6 +68,19 @@ export default function OverviewTab({ data, onPivot }) {
             {location && <p className="text-sm text-sap-dim mt-1">{location}</p>}
           </div>
         </div>
+        {/* Geo-intelligence */}
+        {geoIntel && (
+          <div className={`mt-3 px-3 py-2.5 rounded-lg border flex items-center gap-3 ${geoIntel.bgColor}`}>
+            <svg className={`w-4 h-4 shrink-0 ${geoIntel.color}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <div className="min-w-0">
+              <p className={`text-sm font-semibold ${geoIntel.color}`}>{geoIntel.label}</p>
+              <p className="text-xs text-sap-dim font-mono">{geoIntel.lat.toFixed(4)}°N, {geoIntel.lng.toFixed(4)}°E — {geoIntel.badge}</p>
+            </div>
+          </div>
+        )}
         <div className="mt-4 pt-3 border-t border-sap-border flex flex-wrap gap-1.5">
           {(de.emails || []).map(e => <EntityBadge key={e} type="email" value={e} onClick={onPivot} />)}
           {(de.phones || []).map(p => <EntityBadge key={p} type="phone" value={p} onClick={onPivot} />)}
@@ -64,8 +92,8 @@ export default function OverviewTab({ data, onPivot }) {
         <Module title="Digital Footprint" value={breachSources.length} color={breachSources.length ? 'text-entity-breach' : 'text-emerald-500'}>
           <p className="text-sm">{breachSources.length ? `Exposed in ${breachSources.length} data sources — linked accounts and identifiers discovered` : 'No exposed data found'}</p>
           <div className="mt-2 flex flex-wrap gap-1">
-            {breachSources.slice(0, 5).map(s => <span key={s.collection} className="text-[10px] font-mono px-1.5 py-0.5 bg-entity-breach/10 text-entity-breach rounded">{s.leak_name || s.collection}</span>)}
-            {breachSources.length > 5 && <span className="text-[10px] font-mono text-sap-dim">+{breachSources.length - 5} more</span>}
+            {breachSources.slice(0, 5).map(s => <span key={s.collection} className="text-xs font-mono px-1.5 py-0.5 bg-entity-breach/10 text-entity-breach rounded">{s.leak_name || s.collection}</span>)}
+            {breachSources.length > 5 && <span className="text-xs font-mono text-sap-dim">+{breachSources.length - 5} more</span>}
           </div>
         </Module>
 
@@ -101,11 +129,11 @@ export default function OverviewTab({ data, onPivot }) {
 
 function Module({ title, value, color, badge, badgeColor, children }) {
   return (
-    <div className="bg-sap-surface border border-sap-border rounded-xl p-5 shadow-sm">
+    <div className="bg-sap-surface border border-sap-border rounded-lg p-5 shadow-sm">
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-xs font-mono tracking-widest text-sap-dim uppercase font-semibold">{title}</h4>
         {badge ? (
-          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${badgeColor}`}>{badge}</span>
+          <span className={`px-2 py-0.5 rounded text-xs font-bold ${badgeColor}`}>{badge}</span>
         ) : value !== undefined ? (
           <span className={`font-mono text-sm font-bold ${color}`}>{value}</span>
         ) : null}

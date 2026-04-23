@@ -62,6 +62,11 @@ export async function searchDread(q) {
   return res.json();
 }
 
+export async function getDarkwebOverview() {
+  const res = await apiFetch(`${API}/darkweb/overview`);
+  return res.json();
+}
+
 export async function getWallet(address) {
   const res = await apiFetch(`${API}/darkweb/wallet/${address}`);
   return res.json();
@@ -82,6 +87,18 @@ export async function getCryptoTrace(address) {
   return res.json();
 }
 
+export async function listFraudUpis(limit = 50, classification = '') {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (classification) params.set('classification', classification);
+  const res = await apiFetch(`${API}/financial/fraud-upis?${params}`);
+  return res.json();
+}
+
+export async function listBankAccounts(limit = 50) {
+  const res = await apiFetch(`${API}/financial/bank-accounts?limit=${limit}`);
+  return res.json();
+}
+
 export async function buildGraph(searchResults) {
   const res = await apiFetch(`${API}/graph/build`, {
     method: 'POST',
@@ -93,5 +110,10 @@ export async function buildGraph(searchResults) {
 
 export async function getDashboardIntel() {
   const res = await apiFetch(`${API}/dashboard/intel`);
+  return res.json();
+}
+
+export async function getPlatformStats() {
+  const res = await apiFetch(`${API}/stats/platform`);
   return res.json();
 }

@@ -24,61 +24,46 @@ export default function Header({ data }) {
     URL.revokeObjectURL(url);
   };
 
-  const subject = data?.seed?.value || '— no case loaded —';
-  const st = data?.seed?.type;
-  const label = st ? st.toUpperCase() : '—';
+  const hasTarget = data?.seed?.value;
 
   return (
-    <header className="shrink-0 border-b border-sap-border bg-sap-surface px-4 py-3 flex items-center justify-between gap-3 shadow-sm">
-      <div className="min-w-0 flex items-center gap-4">
-        <div className="flex items-center gap-2.5 shrink-0">
-          <div className="w-10 h-10 rounded-lg border border-sap-accent/30 bg-sap-accent/10 flex items-center justify-center shadow-sm">
-            <svg className="w-4 h-4 text-sap-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-4 4h2m-6-8h8a2 2 0 012 2v8a2 2 0 01-2 2H7a2 2 0 01-2-2v-8a2 2 0 012-2z" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-base font-bold tracking-tight text-sap-text font-sans">Auracle</h1>
-            <p className="text-[10px] font-mono text-sap-dim uppercase tracking-[0.18em]">by Saptang Labs</p>
-          </div>
-        </div>
-        <div className="hidden sm:block h-8 w-px bg-sap-border" />
-        <div className="min-w-0 hidden sm:block">
-          <p className="text-[9px] font-mono text-sap-muted uppercase tracking-wider">Active target</p>
-          <p className="text-xs font-mono text-sap-text truncate" title={subject === '— no case loaded —' ? undefined : String(subject)}>
-            <span className="text-sap-dim mr-1.5">[{label}]</span>
-            {subject}
-          </p>
-        </div>
+    <header className="shrink-0 border-b border-sap-border bg-sap-surface px-5 h-12 flex items-center justify-between gap-4">
+      {/* Left: Logo + active target */}
+      <div className="flex items-center gap-3 min-w-0">
+        <img src="/saptang-logo.svg" alt="" className="h-6 w-auto opacity-80" onError={e => e.target.style.display='none'} />
+        <div className="h-4 w-px bg-sap-border" />
+        <h1 className="text-sm font-bold tracking-tight text-sap-text">Auracle</h1>
+
+        {hasTarget && (
+          <>
+            <div className="h-4 w-px bg-sap-border hidden sm:block" />
+            <div className="hidden sm:flex items-center gap-2 min-w-0">
+              <span className="px-1.5 py-0.5 rounded bg-sap-accent/10 text-sap-accent text-[10px] font-mono font-bold uppercase">{data.seed.type}</span>
+              <span className="text-sm font-mono text-sap-text truncate max-w-[220px]">{data.seed.value}</span>
+            </div>
+          </>
+        )}
       </div>
-      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+
+      {/* Right: Actions — compact single row */}
+      <div className="flex items-center gap-2.5 shrink-0 text-xs">
         {data && (
-          <button
-            type="button"
-            onClick={handleExport}
-            className="hidden sm:flex items-center gap-1.5 text-[10px] font-mono text-sap-dim hover:text-sap-text border border-sap-border rounded-md px-2.5 py-1.5 transition-colors uppercase tracking-wider"
-          >
+          <button type="button" onClick={handleExport}
+            className="hidden sm:flex items-center gap-1.5 text-sap-dim hover:text-sap-accent border border-sap-border rounded px-2.5 py-1 transition-colors font-medium">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            Intel Report
+            Export
           </button>
         )}
-        <button
-          type="button"
-          onClick={signOut}
-          className="text-[9px] font-mono text-sap-muted hover:text-rose-400/90 uppercase tracking-wider px-2 py-1.5"
-        >
+        <div className="flex items-center gap-1.5 text-sap-muted font-mono">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span className="tabular-nums">{formatTime(now)}</span>
+        </div>
+        <div className="h-4 w-px bg-sap-border" />
+        <button type="button" onClick={signOut} className="text-sap-muted hover:text-entity-drug transition-colors font-medium">
           Sign out
         </button>
-        <div className="text-right font-mono text-[10px] sm:text-xs">
-          <p className="text-sap-muted">UTC</p>
-          <p className="text-sap-text tabular-nums">{formatTime(now)}</p>
-        </div>
-        <div className="flex items-center gap-1.5 pl-2 sm:pl-3 border-l border-sap-border">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981]" />
-          <span className="text-[9px] sm:text-[10px] font-mono text-emerald-500/90 uppercase tracking-wider">Live</span>
-        </div>
       </div>
     </header>
   );

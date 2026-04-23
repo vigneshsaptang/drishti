@@ -1,0 +1,17 @@
+{$DOMAIN:localhost} {
+	# Everything goes to the backend (which serves both API and built frontend)
+	reverse_proxy backend:{$BACKEND_PORT:8000} {
+		# SSE / long-polling support
+		flush_interval -1
+	}
+
+	# Security headers
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	encode gzip
+}

@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+/* ═══ Saptang Intelligence — Light Mode Design Tokens ═══ */
+@theme {
+  /* Surface hierarchy: light greys with subtle blue tint */
+  --color-sap-bg: #f0f2f5;
+  --color-sap-surface: #ffffff;
+  --color-sap-panel: #f7f8fa;
+  --color-sap-border: #d4d9e3;
+  --color-sap-border-light: #e2e6ee;
+  --color-sap-text: #1a1d23;
+  --color-sap-dim: #5a6578;
+  --color-sap-muted: #8994a8;
+  --color-sap-gold: #92710a;
+  --color-sap-accent: #2563eb;
+  --color-sap-accent-glow: #1d4ed8;
+
+  /* Entity colours — slightly muted for light background */
+  --color-entity-phone: #2563eb;
+  --color-entity-email: #059669;
+  --color-entity-person: #1a1d23;
+  --color-entity-breach: #d97706;
+  --color-entity-darkweb: #7c3aed;
+  --color-entity-drug: #dc2626;
+  --color-entity-telegram: #0891b2;
+  --color-entity-upi: #ca8a04;
+  --color-entity-bank: #b45309;
+  --color-entity-crypto: #ea580c;
+  --color-entity-url: #475569;
+  --color-entity-watchlist: #b91c1c;
+
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  --animate-fade-in: fadeIn 0.3s ease-out;
+  --animate-slide-up: slideUp 0.3s ease-out;
+  --animate-scan: scan 2s ease-in-out infinite;
+  --animate-pulse-slow: pulse 3s ease-in-out infinite;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scan { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+/* ═══ Base ═══ */
+body {
+  margin: 0;
+  background: var(--color-sap-bg);
+  color: var(--color-sap-text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { min-height: 100vh; }
+
+/* Subtle grid pattern on content area */
+.tactical-surface {
+  background-color: var(--color-sap-bg);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* ═══ Scrollbar ═══ */
+::-webkit-scrollbar { width: 7px; }
+::-webkit-scrollbar-track { background: var(--color-sap-panel); }
+::-webkit-scrollbar-thumb { background: var(--color-sap-border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-sap-muted); }
+
+/* ═══ Field highlights — bolder for light bg ═══ */
+.field-location { color: #047857; font-weight: 500; }
+.field-phone { color: #1d4ed8; font-weight: 500; }
+.field-email { color: #047857; font-weight: 500; }
+.field-password { color: #b91c1c; font-weight: 600; }
+.field-financial { color: #b45309; font-weight: 500; }
+.field-social { color: #6d28d9; font-weight: 500; }
+
+/* ═══ Bigger base sizing ═══ */
+/* Override tiny mono text throughout to be more readable */
+.font-mono { font-size: 0.8125rem; /* 13px */ }
+table .font-mono, table td, table th { font-size: 0.8125rem; }

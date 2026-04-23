@@ -1,0 +1,26 @@
+# ═══════════════════════════════════════════
+# Saptang Intelligence — Dev Backend Only
+# Frontend runs separately via Vite on the host
+# ═══════════════════════════════════════════
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# App code is volume-mounted at runtime for hot-reload
+COPY backend/app/ ./app/
+
+EXPOSE 8888
+
+CMD ["uvicorn", "app.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8888", \
+     "--reload", \
+     "--reload-dir", "/app/app", \
+     "--log-level", "debug"]

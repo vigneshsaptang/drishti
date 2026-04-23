@@ -1,0 +1,43 @@
+# ═══════════════════════════════════════════════════════
+# UI Development Mode
+#
+# Backend + Tor run in Docker. Frontend runs on your machine.
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up --build -d
+#   cd frontend && npm run dev
+#   → Open http://localhost:4444
+#
+# - Backend code hot-reloads inside Docker (volume mounted)
+# - Frontend hot-reloads via Vite HMR on your machine
+# - Vite proxies /api → Docker backend
+# ═══════════════════════════════════════════════════════
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: saptang-dev-backend
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${BACKEND_PORT:-8888}:8888"
+    volumes:
+      - ./backend/app:/app/app    # live code changes → uvicorn --reload picks them up
+    networks:
+      - dev
+
+  tor:
+    image: dperson/torproxy:latest
+    container_name: saptang-dev-tor
+    restart: unless-stopped
+    ports:
+      - "${TOR_SOCKS_PORT:-9050}:9050"
+      - "${TOR_HTTP_PORT:-8118}:8118"
+    networks:
+      - dev
+
+networks:
+  dev:
+    driver: bridge

@@ -43,5 +43,5 @@ export async function postLogin(username, password) {
 
 export function signOut() {
   clearToken();
-  window.location.reload();
+  window.dispatchEvent(new Event('saptang-auth-failed'));
 }

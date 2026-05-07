@@ -6,3 +6,18 @@ node_modules/
 .DS_Store
 data/
 *.log
+
+CLAUDE.md
+
+# Dev / research artifacts
+docs/
+plans/
+research/
+scripts/
+
+# Python venvs
+.venv/
+.venv-scripts/
+
+# Build output
+frontend/dist/

@@ -9,9 +9,6 @@ services:
     env_file: .env
     ports:
       - "${BACKEND_PORT:-8000}:8000"
-    depends_on:
-      tor:
-        condition: service_started
     networks:
       - sigint
 
@@ -33,17 +30,6 @@ services:
       - BACKEND_PORT=${BACKEND_PORT:-8000}
     depends_on:
       - backend
-    networks:
-      - sigint
-
-  # ── Tor SOCKS5 Proxy (for .onion rendering) ─────────────
-  tor:
-    image: dperson/torproxy:latest
-    container_name: sigint-tor
-    restart: unless-stopped
-    ports:
-      - "${TOR_SOCKS_PORT:-9050}:9050"
-      - "${TOR_HTTP_PORT:-8118}:8118"
     networks:
       - sigint
 

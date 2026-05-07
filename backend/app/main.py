@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 
 from app.auth_middleware import SaptangAuthMiddleware
 from app.db import get_credmon, get_darkmon, get_fti, close_all
-from app.routes import search, stream, darkweb, drugs, telegram, financial, graph, report, tor, auth, dashboard, stats
+from app.routes import search, stream, search_v2, darkweb, drugs, telegram, financial, graph, report, auth, dashboard, stats, ecourts, ecourts_search, mca
 
 # In dev: sigint/frontend/dist (built by Vite)
 # In Docker: /app/frontend/dist (copied by Dockerfile)
@@ -54,15 +54,18 @@ app.add_middleware(SaptangAuthMiddleware)
 app.include_router(auth.router, prefix="/api")
 app.include_router(search.router, prefix="/api")
 app.include_router(stream.router, prefix="/api")
+app.include_router(search_v2.router, prefix="/api/v2")
 app.include_router(darkweb.router, prefix="/api")
 app.include_router(drugs.router, prefix="/api")
 app.include_router(telegram.router, prefix="/api")
 app.include_router(financial.router, prefix="/api")
 app.include_router(graph.router, prefix="/api")
 app.include_router(report.router, prefix="/api")
-app.include_router(tor.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")
+app.include_router(ecourts.router, prefix="/api/ecourts")
+app.include_router(ecourts_search.router, prefix="/api/ecourts")
+app.include_router(mca.router, prefix="/api/mca")
 
 
 @app.get("/api/health")

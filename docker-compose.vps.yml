@@ -18,14 +18,3 @@ services:
     env_file: .env
     ports:
       - "${BACKEND_PORT:-8888}:${BACKEND_PORT:-8888}"
-    depends_on:
-      tor:
-        condition: service_started
-
-  tor:
-    image: dperson/torproxy:latest
-    container_name: saptang-tor
-    restart: unless-stopped
-    ports:
-      - "${TOR_SOCKS_PORT:-9050}:9050"
-      - "${TOR_HTTP_PORT:-8118}:8118"

@@ -2,6 +2,7 @@ const TABS = [
   { id: 'overview', label: 'Overview', sub: 'Subject profiling' },
   { id: 'breaches', label: 'Exposed Data', sub: 'Digital footprint' },
   { id: 'darkweb', label: 'Dark Web', sub: 'Monitoring & OSINT' },
+  { id: 'ecourts', label: 'Court Directory', sub: 'Jurisdiction map' },
   { id: 'drugs', label: 'Drug Markets', sub: 'Listings & routes' },
   { id: 'telegram', label: 'Social Intel', sub: 'Telegram & channels' },
   { id: 'financial', label: 'Financial Trail', sub: 'UPI, banks & crypto' },
@@ -18,6 +19,7 @@ const icons = {
   telegram: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />,
   financial: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />,
   graph: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />,
+  ecourts: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 21h18M5 21V10l7-6 7 6v11M9 21v-6h6v6M11 9h2" />,
 };
 
 export default function SidebarNav({ activeTab, onTabChange }) {

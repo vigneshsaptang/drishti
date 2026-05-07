@@ -30,10 +30,6 @@ class Settings(BaseSettings):
     darkmon_query_timeout_ms: int = 8000
     credmon_socket_timeout_ms: int = 30000
 
-    # Tor
-    tor_socks_port: int = 9050
-    tor_http_port: int = 8118
-
     admin_email: str = ""
 
     # Saptang UI login (leave password empty to disable gate)
@@ -41,6 +37,19 @@ class Settings(BaseSettings):
     saptang_admin_password: str = ""
     saptang_jwt_secret: str = "saptang-dev-change-me"
     saptang_token_exp_hours: int = 24
+
+    # AI summary (Claude)
+    anthropic_api_key: str = ""
+
+    # eCourts Partner API — for live court-record searches and PDF retrieval
+    ecourts_api_token: str = ""
+    ecourts_api_base: str = "https://webapi.ecourtsindia.com/api/partner"
+    ecourts_request_timeout: int = 30
+    ecourts_paid_sleep_ms: int = 1500       # min interval between paid calls
+    ecourts_search_chunk_size: int = 30     # >30 court codes per call → silent 404 (per knowledge base)
+    ecourts_search_page_size: int = 50      # server caps at 50 even if higher requested
+    ecourts_case_ttl_seconds: int = 30 * 24 * 3600   # case detail cache — 30 days
+    ecourts_search_ttl_seconds: int = 24 * 3600      # search results cache — 24 hours
 
     model_config = {"env_file": str(_env_file), "env_file_encoding": "utf-8", "extra": "ignore"}
 

@@ -121,20 +121,32 @@ def _flatten_record(record: dict) -> dict[str, str]:
 
 # ── Core pipeline ─────────────────────────────────────────
 
-def search_master(entity_type: str, value: str) -> dict | None:
-    """Search Master_extracts for a phone or email. Returns sources with ObjectIDs."""
+def search_master(entity_type: str, value: str, exact: bool = False) -> dict | None:
+    """Search Master_extracts for a phone or email. Returns sources with ObjectIDs.
+
+    When exact=True, queries the value as-is (no variant generation for phones).
+    """
     master = get_credmon()["Master_extracts"]
 
     if entity_type == "phone":
-        digits = re.sub(r"\D", "", value)
-        for variant in [digits, digits[-10:], "91" + digits[-10:]]:
-            hit = master["contactNumbers"].find_one({"contactNumber": variant})
+        if exact:
+            hit = master["contactNumbers"].find_one({"contactNumber": value})
             if hit:
                 return {
                     "type": "phone",
-                    "value": variant,
+                    "value": value,
                     "sources": hit.get("sources", []),
                 }
+        else:
+            digits = re.sub(r"\D", "", value)
+            for variant in [digits, digits[-10:], "91" + digits[-10:]]:
+                hit = master["contactNumbers"].find_one({"contactNumber": variant})
+                if hit:
+                    return {
+                        "type": "phone",
+                        "value": variant,
+                        "sources": hit.get("sources", []),
+                    }
     elif entity_type == "email":
         hit = master["emails"].find_one({"email": value.lower()})
         if hit:
@@ -144,6 +156,22 @@ def search_master(entity_type: str, value: str) -> dict | None:
                 "sources": hit.get("sources", []),
                 "domain": hit.get("domain"),
                 "count": hit.get("count"),
+            }
+    elif entity_type == "username":
+        hit = master["usernames"].find_one({"username": value})
+        if hit:
+            return {
+                "type": "username",
+                "value": value,
+                "sources": hit.get("sources", []),
+            }
+    elif entity_type == "fullname":
+        hit = master["fullnames"].find_one({"fullname": value})
+        if hit:
+            return {
+                "type": "fullname",
+                "value": value,
+                "sources": hit.get("sources", []),
             }
     return None
 
@@ -266,3 +294,150 @@ def run_pipeline(
             queue.append(("phone", phone, depth + 1))
 
     return results
+
+
+def run_pipeline_streaming(
+    seeds: list[dict],
+    max_depth: int = 5,
+    max_entities_per_depth: int | None = None,
+):
+    """
+    BFS streaming pipeline — generator that yields per-entity result dicts.
+
+    Args:
+        seeds: list of {"type": "phone"|"email", "value": "..."} dicts
+        max_depth: maximum BFS depth (default 5)
+        max_entities_per_depth: cap per depth level (default from settings)
+
+    Yields:
+        dict per entity searched, with keys: depth, entity_type, entity_value,
+        found, search_time_ms, sources, new_identifiers
+    """
+    if max_entities_per_depth is None:
+        max_entities_per_depth = settings.max_entities_per_depth
+
+    visited: set[str] = set()
+    # BFS queue: list of (type, value, depth)
+    queue: list[tuple[str, str, int]] = []
+    for seed in seeds:
+        queue.append((seed["type"], seed["value"], 0))
+
+    # Track depth-level entity counts for the cap
+    depth_counts: dict[int, int] = {}
+
+    while queue:
+        etype, evalue, depth = queue.pop(0)
+
+        if depth > max_depth:
+            continue
+
+        entity_key = f"{etype}:{evalue}"
+        if entity_key in visited:
+            continue
+        visited.add(entity_key)
+
+        # Enforce per-depth entity cap
+        depth_counts.setdefault(depth, 0)
+        if depth_counts[depth] >= max_entities_per_depth:
+            continue
+        depth_counts[depth] += 1
+
+        # Search master_extracts (exact matching only)
+        t0 = time.time()
+        hit = search_master(etype, evalue, exact=True)
+        search_time_ms = round((time.time() - t0) * 1000)
+
+        if not hit:
+            yield {
+                "depth": depth,
+                "entity_type": etype,
+                "entity_value": evalue,
+                "found": False,
+                "search_time_ms": search_time_ms,
+                "sources": [],
+                "new_identifiers": [],
+            }
+            continue
+
+        # Process each source — fetch actual records via ObjectID (cap at 50)
+        source_results = []
+        new_emails: set[str] = set()
+        new_phones: set[str] = set()
+        new_usernames: set[str] = set()
+        new_fullnames: set[str] = set()
+
+        for src in hit["sources"]:
+            col_name = src["collection"]
+            record_ids = src.get("id", [])
+            schema_info = _get_leak_schema(col_name)
+
+            records = []
+            for rid in record_ids[:50]:
+                rec = fetch_record_by_id(col_name, rid)
+                if rec:
+                    flat = _flatten_record(rec)
+                    extracted_emails, extracted_phones = _extract_entities(rec, schema_info)
+
+                    # Remove current entity from extracted results
+                    extracted_emails.discard(evalue.lower() if etype == "email" else "")
+                    extracted_phones.discard(evalue if etype == "phone" else "")
+
+                    new_emails.update(extracted_emails)
+                    new_phones.update(extracted_phones)
+
+                    # Extract usernames and fullnames from record fields
+                    for k, v in flat.items():
+                        if not v or not isinstance(v, str) or len(v) < 2 or len(v) > 100:
+                            continue
+                        kl = k.lower()
+                        if ("username" in kl or "user_name" in kl) and "@" not in v and not v.isdigit():
+                            new_usernames.add(v.strip())
+                        elif ("fullname" in kl or "full_name" in kl or kl == "name") and "@" not in v and not v.isdigit() and len(v) > 3:
+                            new_fullnames.add(v.strip())
+
+                    records.append({
+                        "record_id": str(rid),
+                        "fields": flat,
+                    })
+
+            source_results.append({
+                "collection": col_name,
+                "leak_name": schema_info.get("leak_name", col_name) if schema_info else col_name,
+                "breach_date": schema_info.get("breach_date", "unknown") if schema_info else "unknown",
+                "records": records,
+            })
+
+        # Filter new_identifiers to only those not already visited
+        new_identifiers = []
+        for email in new_emails:
+            if f"email:{email}" not in visited:
+                new_identifiers.append({"type": "email", "value": email})
+        for phone in new_phones:
+            if f"phone:{phone}" not in visited:
+                new_identifiers.append({"type": "phone", "value": phone})
+        for uname in new_usernames:
+            if f"username:{uname}" not in visited:
+                new_identifiers.append({"type": "username", "value": uname})
+        for fname in new_fullnames:
+            if f"fullname:{fname}" not in visited:
+                new_identifiers.append({"type": "fullname", "value": fname})
+
+        yield {
+            "depth": depth,
+            "entity_type": etype,
+            "entity_value": evalue,
+            "found": True,
+            "search_time_ms": search_time_ms,
+            "sources": source_results,
+            "new_identifiers": new_identifiers,
+        }
+
+        # Queue new entities for next depth
+        for email in new_emails:
+            queue.append(("email", email, depth + 1))
+        for phone in new_phones:
+            queue.append(("phone", phone, depth + 1))
+        for uname in new_usernames:
+            queue.append(("username", uname, depth + 1))
+        for fname in new_fullnames:
+            queue.append(("fullname", fname, depth + 1))

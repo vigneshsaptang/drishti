@@ -108,12 +108,75 @@ export async function buildGraph(searchResults) {
   return res.json();
 }
 
-export async function getDashboardIntel() {
-  const res = await apiFetch(`${API}/dashboard/intel`);
+// ── Dashboard panels ───────────────────────────────────────
+// Returns { data, _cached, _age_s, _stale?, _error? }. Frontend reads .data.
+// DARKMON and Telegram-fed panels are disabled — those engines are too slow for the idle dashboard.
+async function dashboardPanel(slug) {
+  const res = await apiFetch(`${API}/dashboard/${slug}`);
+  if (!res.ok) throw new Error(`dashboard/${slug} failed: ${res.status}`);
   return res.json();
 }
 
-export async function getPlatformStats() {
-  const res = await apiFetch(`${API}/stats/platform`);
+export const getPanelTotalInfo = () => dashboardPanel('total-info');
+export const getPanelWorldCheck = () => dashboardPanel('world-check');
+export const getPanelDwForums  = () => dashboardPanel('dw/forums');
+export const getPanelDwDread   = () => dashboardPanel('dw/dread');
+export const getPanelDwMarkets = () => dashboardPanel('dw/markets');
+export const getPanelDwCrypto  = () => dashboardPanel('dw/crypto');
+export const getPanelDwHealth  = () => dashboardPanel('dw/health');
+
+// ── eCourts cached corpus ──────────────────────────────────────
+async function ecourtsGet(path, params) {
+  const qs = params ? `?${new URLSearchParams(params)}` : '';
+  const res = await apiFetch(`${API}/ecourts/${path}${qs}`);
+  if (!res.ok) throw new Error(`ecourts/${path} failed: ${res.status}`);
   return res.json();
+}
+
+export const getEcourtsCoverage  = () => ecourtsGet('coverage');
+export const getEcourtsByState   = () => ecourtsGet('by-state');
+export const getEcourtsCaseTypes = () => ecourtsGet('case-types');
+export const getEcourtsCourts    = (filters = {}) => ecourtsGet('courts', filters);
+
+// ── eCourts live (paid, cached) ────────────────────────────────
+async function _readErrorDetail(res) {
+  try {
+    const j = await res.json();
+    return j?.detail || j?.error?.message || j?.message || `HTTP ${res.status}`;
+  } catch {
+    return `HTTP ${res.status}`;
+  }
+}
+export async function ecourtsSearch(body) {
+  const res = await apiFetch(`${API}/ecourts/search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await _readErrorDetail(res));
+  return res.json();
+}
+export const getEcourtsCase   = (cnr, refresh = false) => ecourtsGet(`case/${cnr}`, refresh ? { refresh: 'true' } : null);
+export const getEcourtsOrders = (cnr) => ecourtsGet(`case/${cnr}/orders`);
+export const getEcourtsOrder  = (cnr, filename) => ecourtsGet(`case/${cnr}/order/${encodeURIComponent(filename)}`);
+export const getEcourtsOrderAi = (cnr, filename) => ecourtsGet(`case/${cnr}/order/${encodeURIComponent(filename)}/ai`);
+export const ecourtsOrderPdfUrl = (cnr, filename) => `${API}/ecourts/case/${cnr}/order/${encodeURIComponent(filename)}/pdf`;
+export const getEcourtsUsage = (days = 7) => ecourtsGet('usage', { days: String(days) });
+
+// ── MCA company enrichment ─────────────────────────────────────────────────
+/**
+ * Look up a company by name against the MCA registry.
+ * Returns { query, matched_count, results: [{cin, company_name, company_status,
+ *   incorporation_date, address, industry, state, _match_score}], _cached? }
+ * On network error returns { matched_count: 0, results: [], _error }.
+ */
+export async function getMcaCompany(q, limit = 3) {
+  try {
+    const params = new URLSearchParams({ q, limit: String(limit) });
+    const res = await apiFetch(`${API}/mca/company?${params}`);
+    if (!res.ok) return { query: q, matched_count: 0, results: [], _error: `HTTP ${res.status}` };
+    return res.json();
+  } catch (err) {
+    return { query: q, matched_count: 0, results: [], _error: String(err) };
+  }
 }

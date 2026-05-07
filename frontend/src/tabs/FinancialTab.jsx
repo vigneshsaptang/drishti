@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { listFraudUpis, listBankAccounts, getCryptoTrace, getDashboardIntel } from '../lib/api';
+import { listFraudUpis, listBankAccounts, getCryptoTrace } from '../lib/api';
 import { EvidenceImage } from '../components/Lightbox';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -180,7 +180,7 @@ const SUB_TABS = [
   { id: 'crypto',    label: 'Crypto Wallets' },
 ];
 
-export default function FinancialTab({ data }) {
+export default function FinancialTab({ data, financialResults = [], financialMeta = null }) {
   const [upis, setUpis] = useState(null);
   const [banks, setBanks] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -188,7 +188,6 @@ export default function FinancialTab({ data }) {
   const [walletQuery, setWalletQuery] = useState('');
   const [walletData, setWalletData] = useState(null);
   const [walletLoading, setWalletLoading] = useState(false);
-  const [topWallets, setTopWallets] = useState([]);
   const [subTab, setSubTab] = useState('upi');
   const [upiPage, setUpiPage] = useState(1);
   const [bankPage, setBankPage] = useState(1);
@@ -202,7 +201,6 @@ export default function FinancialTab({ data }) {
       setBanks(b);
       setLoading(false);
     });
-    getDashboardIntel().then(d => setTopWallets(d?.top_wallets || [])).catch(() => {});
   }, []);
 
   const handleWalletSearch = async (e, addressOverride) => {
@@ -259,6 +257,66 @@ export default function FinancialTab({ data }) {
           </button>
         ))}
       </div>
+
+      {/* ── Search-linked UPI hits ── */}
+      {subTab === 'upi' && (() => {
+        const upiHits = financialResults.filter(r => r.found);
+        if (upiHits.length === 0 && !financialMeta && financialResults.length === 0) return null;
+        return (
+          <div className="rounded-lg border border-entity-drug/30 overflow-hidden">
+            <div className="bg-entity-drug/5 border-b border-entity-drug/15 px-5 py-3 flex items-center gap-3">
+              <h3 className="text-sm font-bold text-entity-drug">Subject-Linked Fraud UPIs</h3>
+              {financialMeta && (
+                <span className="text-xs text-sap-muted font-mono">
+                  {financialMeta.total_upi_hits} hit{financialMeta.total_upi_hits !== 1 ? 's' : ''} from {financialMeta.total_phones_screened} phone{financialMeta.total_phones_screened !== 1 ? 's' : ''} in {financialMeta.total_time_ms}ms
+                </span>
+              )}
+              {!financialMeta && financialResults.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-entity-drug animate-pulse" />
+                  <span className="text-xs text-entity-drug font-mono">Screening phones against fraud UPIs...</span>
+                </div>
+              )}
+            </div>
+            {upiHits.length > 0 ? (
+              <div className="p-4 space-y-3">
+                {upiHits.map((hit, hi) => (
+                  <div key={hi}>
+                    <p className="text-xs text-sap-muted font-mono mb-2">Phone: <span className="text-sap-text font-semibold">{hit.phone}</span></p>
+                    {hit.upi_records.map((u, ui) => {
+                      const pa = u.upi_details?.pa || '—';
+                      return (
+                        <div key={ui} className="bg-sap-panel border border-sap-border rounded-lg px-4 py-3 mb-2 flex items-start gap-4">
+                          <div className="min-w-0 flex-1">
+                            <span className="font-mono text-sm font-bold text-entity-drug">{pa}</span>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-sap-dim">
+                              {u.clasification && (
+                                <span className={`px-2 py-0.5 rounded-md font-semibold border ${
+                                  u.clasification === 'BETTING_SITE' ? 'bg-entity-drug/10 text-entity-drug border-entity-drug/20' :
+                                  u.clasification === 'CRYPTO_EXCHANGE' ? 'bg-entity-crypto/10 text-entity-crypto border-entity-crypto/20' :
+                                  'bg-entity-breach/10 text-entity-breach border-entity-breach/20'
+                                }`}>{u.clasification}</span>
+                              )}
+                              {u.site && <a href={u.site} target="_blank" rel="noopener" className="text-sap-accent hover:underline truncate max-w-[250px]">{u.site}</a>}
+                              {u.payment_gateway && <span className="text-entity-crypto font-mono">{u.payment_gateway}</span>}
+                            </div>
+                          </div>
+                          <div className="flex gap-1.5 flex-shrink-0">
+                            <EvidenceImage src={u.home_page_screenshot} alt="Site" className="h-10 w-auto rounded" />
+                            <EvidenceImage src={u.upi_screen_shot} alt="UPI" className="h-10 w-auto rounded" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            ) : financialMeta ? (
+              <p className="text-sm text-sap-muted px-5 py-4">No fraud UPI links found for discovered phone numbers.</p>
+            ) : null}
+          </div>
+        );
+      })()}
 
       {/* ── Fraud UPI Table ── */}
       {subTab === 'upi' && (
@@ -450,52 +508,6 @@ export default function FinancialTab({ data }) {
               {walletLoading ? 'Tracing...' : 'Trace Wallet'}
             </button>
           </form>
-
-          {topWallets.length > 0 && (
-            <div className="rounded-lg border border-sap-border bg-sap-panel p-4 mb-4">
-              <h4 className="text-sm font-semibold text-sap-dim mb-3">Notable Wallets</h4>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b-2 border-sap-border text-left">
-                      <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Blockchain</th>
-                      <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Address</th>
-                      <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Total Volume</th>
-                      <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Transactions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topWallets.map((w, i) => {
-                      const addr = w.wallet_address || w.address || '';
-                      const truncated = addr.length > 16 ? addr.slice(0, 8) + '...' + addr.slice(-8) : addr;
-                      return (
-                        <tr
-                          key={i}
-                          onClick={() => { setWalletQuery(addr); handleWalletSearch(null, addr); }}
-                          className="border-b border-sap-border/50 hover:bg-sap-surface/50 cursor-pointer transition-colors"
-                        >
-                          <td className="px-3 py-2.5">
-                            <span className="px-2 py-0.5 bg-entity-crypto/15 text-entity-crypto text-xs font-bold rounded-md">
-                              {w.blockchain_type || w.blockchain || 'BTC'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 font-mono text-xs text-sap-text" title={addr}>{truncated}</td>
-                          <td className="px-3 py-2.5 font-mono text-sm font-medium text-entity-crypto">
-                            {w.total_volume?.fiat?.amount
-                              ? `${w.total_volume.fiat.amount} ${w.total_volume.fiat.currency_type || ''}`
-                              : typeof w.total_volume === 'string' ? w.total_volume : '---'}
-                          </td>
-                          <td className="px-3 py-2.5 font-mono text-sm text-sap-text">
-                            {typeof w.transactions_count === 'object' ? w.transactions_count?.total || '---' : w.transactions_count ?? '---'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
 
           {walletData?.wallet && (
             <div className="rounded-lg border border-entity-crypto/20 bg-sap-panel p-5 mb-4">

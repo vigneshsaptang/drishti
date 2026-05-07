@@ -19,6 +19,8 @@ export function redactPassword(key, value) {
 export const entityColors = {
   phone: { bg: 'bg-entity-phone/20', text: 'text-entity-phone', border: 'border-entity-phone/30' },
   email: { bg: 'bg-entity-email/20', text: 'text-entity-email', border: 'border-entity-email/30' },
+  username: { bg: 'bg-entity-darkweb/20', text: 'text-entity-darkweb', border: 'border-entity-darkweb/30' },
+  fullname: { bg: 'bg-entity-person/20', text: 'text-entity-person', border: 'border-entity-person/30' },
   breach: { bg: 'bg-entity-breach/20', text: 'text-entity-breach', border: 'border-entity-breach/30' },
   darkweb: { bg: 'bg-entity-darkweb/20', text: 'text-entity-darkweb', border: 'border-entity-darkweb/30' },
   drug: { bg: 'bg-entity-drug/20', text: 'text-entity-drug', border: 'border-entity-drug/30' },

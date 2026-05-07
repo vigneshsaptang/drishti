@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
 /* ═══ Saptang Intelligence — Warm Grey Design Tokens ═══ */
 @theme {
   /* Surface hierarchy: warm grey (Notion/Linear/Apple style) */
@@ -36,11 +41,39 @@
   --animate-slide-up: slideUp 0.3s ease-out;
   --animate-scan: scan 2s ease-in-out infinite;
   --animate-pulse-slow: pulse 3s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+  --animate-stream: streamLine 4s linear infinite;
+  --animate-bar-grow: barGrow 1.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-blip: blip 1.4s ease-in-out infinite;
+  --animate-blink-cursor: blink-cursor 1.06s steps(2, start) infinite;
 }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes scan { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+@keyframes streamLine {
+  0%   { transform: translateX(-100%); opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateX(100%); opacity: 0; }
+}
+@keyframes barGrow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes blip {
+  0%, 70%, 100% { transform: scale(1); opacity: 1; }
+  35%           { transform: scale(1.4); opacity: 0.6; }
+}
+/* Hard binary blink — `steps(2, start)` snaps on/off (no fade) for a true terminal feel. */
+@keyframes blink-cursor {
+  from, to { opacity: 1; }
+  50%      { opacity: 0; }
+}
 
 /* ═══ Base ═══ */
 body {

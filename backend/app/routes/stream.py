@@ -7,11 +7,13 @@ import time
 import concurrent.futures
 from datetime import datetime
 from bson import ObjectId
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
 
 from app.engines import credmon, darkmon, fti
+from app.audit import audit as audit_service
+from app.credits import require_credits
 
 
 def _serialize(obj):
@@ -38,7 +40,7 @@ class StreamSearchRequest(BaseModel):
 
 
 @router.post("/stream/search")
-async def stream_search(req: StreamSearchRequest):
+async def stream_search(req: StreamSearchRequest, request: Request, _credits: dict = Depends(require_credits("combined_search"))):
     value = req.value.strip()
     if not value:
         return {"error": "No value provided"}
@@ -158,5 +160,23 @@ async def stream_search(req: StreamSearchRequest):
             "event": "complete",
             "data": _dumps({"total_time_ms": total_time, "credmon_ms": credmon_time}),
         }
+
+        audit_service.log_from_request(request,
+            category="search", action="search.execute",
+            response_time_ms=total_time,
+            detail={
+                "search_type": req.type,
+                "search_value": value,
+                "max_depth": req.max_depth,
+                "endpoint": "/api/stream/search",
+                "result_summary": {
+                    "credmon_entities_searched": len(breach_results),
+                    "credmon_entities_found": sum(1 for r in breach_results if r.get("found")),
+                    "credmon_time_ms": credmon_time,
+                    "darkmon_usernames_searched": len(all_usernames),
+                    "total_time_ms": total_time,
+                },
+            },
+        )
 
     return EventSourceResponse(event_generator())

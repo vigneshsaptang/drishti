@@ -4,10 +4,12 @@ Returns results as a single JSON response (SSE streaming will be added later).
 """
 import time
 import concurrent.futures
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from app.engines import credmon, darkmon, fti
+from app.audit import audit
+from app.credits import require_credits
 
 router = APIRouter(tags=["search"])
 
@@ -19,7 +21,7 @@ class SearchRequest(BaseModel):
 
 
 @router.post("/search")
-def search(req: SearchRequest):
+def search(req: SearchRequest, request: Request, _credits: dict = Depends(require_credits("combined_search"))):
     t_start = time.time()
     value = req.value.strip()
     if not value:
@@ -121,6 +123,24 @@ def search(req: SearchRequest):
         parallel_time = round((time.time() - t1) * 1000)
 
     total_time = round((time.time() - t_start) * 1000)
+
+    audit.log_from_request(request,
+        category="search", action="search.execute",
+        response_time_ms=total_time,
+        detail={
+            "search_type": req.type,
+            "search_value": value,
+            "max_depth": req.max_depth,
+            "endpoint": "/api/search",
+            "result_summary": {
+                "credmon_entities_searched": len(breach_results),
+                "credmon_entities_found": sum(1 for r in breach_results if r.get("found")),
+                "credmon_time_ms": credmon_time,
+                "darkmon_usernames_searched": len(all_usernames),
+                "total_time_ms": total_time,
+            },
+        },
+    )
 
     return {
         "seed": {"type": req.type, "value": value},

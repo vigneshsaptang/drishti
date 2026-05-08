@@ -22,7 +22,7 @@ const icons = {
   ecourts: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 21h18M5 21V10l7-6 7 6v11M9 21v-6h6v6M11 9h2" />,
 };
 
-export default function SidebarNav({ activeTab, onTabChange }) {
+export default function SidebarNav({ activeTab, onTabChange, onShowFaq, onShowStatus }) {
   return (
     <aside className="w-60 shrink-0 border-r border-sap-border bg-sap-surface flex flex-col">
       <div className="p-4 border-b border-sap-border">
@@ -57,6 +57,12 @@ export default function SidebarNav({ activeTab, onTabChange }) {
         })}
       </nav>
       <div className="p-3.5 border-t border-sap-border text-xs font-mono text-sap-muted space-y-1.5">
+        {onShowFaq && (
+          <button onClick={onShowFaq} className="block text-sap-dim hover:text-sap-accent transition-colors">Help & FAQ</button>
+        )}
+        {onShowStatus && (
+          <button onClick={onShowStatus} className="block text-sap-dim hover:text-sap-accent transition-colors">System Status</button>
+        )}
         <p className="text-sap-dim">Auracle</p>
       </div>
     </aside>

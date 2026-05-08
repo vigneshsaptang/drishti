@@ -5,7 +5,7 @@
 # Usage:
 #   docker compose -f docker-compose.vps.yml up --build -d
 #
-# Then point your system Caddy at localhost:8888
+# Then point your system Caddy at localhost:${BACKEND_PORT:-8888}
 # ═══════════════════════════════════════════════════════
 
 services:
@@ -17,4 +17,4 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "${BACKEND_PORT:-8888}:${BACKEND_PORT:-8888}"
+      - "127.0.0.1:${BACKEND_PORT:-8888}:${BACKEND_PORT:-8888}"

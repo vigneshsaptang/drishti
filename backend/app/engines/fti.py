@@ -9,6 +9,7 @@ from typing import Any
 
 from app.db import get_fti
 from app.config import settings
+from app.sanitize import safe_regex
 
 
 def _safe_fti_query(db_name: str, col_name: str, query: dict, projection: dict | None = None, limit: int = 20) -> list[dict]:
@@ -29,7 +30,7 @@ def search_mobile_numbers(phone: str) -> dict | None:
     """Search MOBILE_NUMBERS for phone intelligence."""
     digits = re.sub(r"\D", "", phone)
     for variant in [digits, f"91{digits[-10:]}", digits[-10:]]:
-        results = _safe_fti_query("i4c_testing_env", "MOBILE_NUMBERS", {"entity": {"$regex": variant}}, limit=5)
+        results = _safe_fti_query("i4c_testing_env", "MOBILE_NUMBERS", {"entity": {"$regex": safe_regex(variant)}}, limit=5)
         if results:
             return results[0]
     return None
@@ -44,7 +45,7 @@ def search_telegram_mentions(phone: str) -> dict:
 
     try:
         pipeline = [
-            {"$match": {"original_text": {"$regex": digits}}},
+            {"$match": {"original_text": {"$regex": safe_regex(digits)}}},
             {"$group": {
                 "_id": None,
                 "total_mentions": {"$sum": 1},
@@ -75,7 +76,7 @@ def get_telegram_group_details(phone: str, limit: int = 10) -> list[dict]:
     db = get_fti()["TELEMON_PARSED_NEW"]
     try:
         pipeline = [
-            {"$match": {"original_text": {"$regex": digits}}},
+            {"$match": {"original_text": {"$regex": safe_regex(digits)}}},
             {"$group": {
                 "_id": "$group_id",
                 "mentions": {"$sum": 1},
@@ -97,7 +98,7 @@ def search_upi_by_phone(phone: str) -> list[dict]:
     digits = re.sub(r"\D", "", phone)[-10:]
     return _safe_fti_query(
         "testing_i4c", "UPI_ID_parsed",
-        {"upi_details.pa": {"$regex": digits}},
+        {"upi_details.pa": {"$regex": safe_regex(digits)}},
         {"upi_details": 1, "clasification": 1, "site": 1, "payment_gateway": 1,
          "home_page_screenshot": 1, "upi_screen_shot": 1, "created_at": 1},
         limit=10,
@@ -108,9 +109,9 @@ def search_bank_accounts(phone: str = "", site_url: str = "") -> list[dict]:
     """Search BANK_ACCOUNT_DETAILS."""
     query_parts = []
     if phone:
-        query_parts.append({"mobile_number": {"$regex": phone}})
+        query_parts.append({"mobile_number": {"$regex": safe_regex(phone)}})
     if site_url:
-        query_parts.append({"site_url": {"$regex": site_url, "$options": "i"}})
+        query_parts.append({"site_url": {"$regex": safe_regex(site_url), "$options": "i"}})
     if not query_parts:
         return []
     query = {"$or": query_parts} if len(query_parts) > 1 else query_parts[0]

@@ -1,21 +1,38 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { postLogin } from '../lib/auth';
 
 export default function LoginPage({ onSuccess }) {
-  const [user, setUser] = useState('operator');
+  const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaAnswer, setCaptchaAnswer] = useState('');
+  const [captchaImg, setCaptchaImg] = useState('');
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  const fetchCaptcha = useCallback(async () => {
+    try {
+      const r = await fetch('/api/auth/captcha');
+      if (!r.ok) return;
+      const data = await r.json();
+      setCaptchaToken(data.captcha_token || '');
+      setCaptchaImg(data.image || '');
+      setCaptchaAnswer('');
+    } catch { /* silent */ }
+  }, []);
+
+  useEffect(() => { fetchCaptcha(); }, [fetchCaptcha]);
 
   const submit = async (e) => {
     e.preventDefault();
     setErr(null);
     setBusy(true);
     try {
-      await postLogin(user, pass);
-      onSuccess();
+      const data = await postLogin(user, pass, captchaToken, captchaAnswer);
+      onSuccess(data);
     } catch (error_) {
       setErr(error_ instanceof Error ? error_.message : 'Sign-in failed');
+      fetchCaptcha();
     } finally {
       setBusy(false);
     }
@@ -73,7 +90,7 @@ export default function LoginPage({ onSuccess }) {
                 autoComplete="username"
               />
             </div>
-            <div className="space-y-1.5 mb-6">
+            <div className="space-y-1.5 mb-4">
               <label htmlFor="sap-pass" className="text-[10px] font-mono text-slate-600 uppercase tracking-[0.18em]">Password</label>
               <input
                 id="sap-pass"
@@ -84,6 +101,31 @@ export default function LoginPage({ onSuccess }) {
                 autoComplete="current-password"
               />
             </div>
+
+            {captchaImg && (
+              <div className="mb-4 space-y-2">
+                <label className="text-[10px] font-mono text-slate-600 uppercase tracking-[0.18em]">Verification</label>
+                <div className="flex items-center gap-3">
+                  <img src={captchaImg} alt="CAPTCHA" className="rounded-lg border border-slate-200 h-[52px]" />
+                  <button
+                    type="button"
+                    onClick={fetchCaptcha}
+                    className="text-[10px] font-mono text-slate-500 hover:text-slate-800 transition-colors uppercase tracking-wider"
+                  >
+                    Refresh
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={captchaAnswer}
+                  onChange={e => setCaptchaAnswer(e.target.value)}
+                  placeholder="Enter answer"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-mono text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                  autoComplete="off"
+                />
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={busy}

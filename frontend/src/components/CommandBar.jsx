@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useCredits } from '../lib/creditContext';
 
 const TYPE_META = {
   phone:    { label: 'phone',    color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
@@ -8,6 +9,15 @@ const TYPE_META = {
 };
 
 const TYPES = ['phone', 'email', 'fullname', 'username'];
+
+const ENGINE_META = [
+  { key: 'breach',       label: 'Breaches',    icon: '⛊' },
+  { key: 'threat_intel', label: 'Watchlist',    icon: '⚑' },
+  { key: 'darkweb',      label: 'Dark Web',    icon: '◑' },
+  { key: 'financial',    label: 'Financial',   icon: '₹' },
+];
+
+const ALL_ENGINE_KEYS = ENGINE_META.map(e => e.key);
 
 function detectType(value) {
   const v = value.trim();
@@ -28,13 +38,34 @@ function Spinner() {
 }
 
 export default function CommandBar({ onSearch, loading, onCancel, onClear, collapsed, activeSeeds }) {
-  const [value, setValue] = useState('saikrishnabvs@gmail.com');
+  const [value, setValue] = useState('');
   const [manualType, setManualType] = useState(null);
+  const [selectedEngines, setSelectedEngines] = useState(new Set(ALL_ENGINE_KEYS));
   const inputRef = useRef(null);
+  const { engineCosts, remaining, overage, isAdmin } = useCredits();
 
   const detectedType = manualType ?? detectType(value);
   const meta = TYPE_META[detectedType];
   const hasValue = value.trim().length > 0;
+
+  const totalCost = useMemo(() => {
+    if (!engineCosts || Object.keys(engineCosts).length === 0) return 0;
+    return [...selectedEngines].reduce((sum, e) => sum + (engineCosts[e] || 0), 0);
+  }, [selectedEngines, engineCosts]);
+
+  const canAfford = isAdmin || remaining === null || remaining >= totalCost || overage !== 'hard';
+
+  const toggleEngine = useCallback((key) => {
+    setSelectedEngines(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        if (next.size > 1) next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
 
   const cycleType = useCallback(() => {
     const current = manualType ?? detectType(value);
@@ -46,8 +77,9 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
     e?.preventDefault();
     const v = value.trim();
     if (!v) return;
-    onSearch([{ type: detectedType, value: v }]);
-  }, [value, detectedType, onSearch]);
+    const engines = selectedEngines.size === ALL_ENGINE_KEYS.length ? null : [...selectedEngines];
+    onSearch([{ type: detectedType, value: v }], engines);
+  }, [value, detectedType, onSearch, selectedEngines]);
 
   const handleClear = useCallback(() => {
     setValue('');
@@ -138,47 +170,93 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
     );
   }
 
+  const showCostBar = hasValue && !loading && !isAdmin && Object.keys(engineCosts).length > 0;
+
   return (
-    <form onSubmit={handleSubmit} className="flex items-center gap-2 h-12 px-2 rounded-lg border border-sap-border bg-sap-surface shadow-sm focus-within:border-sap-accent focus-within:ring-2 focus-within:ring-sap-accent/10 transition-all">
-      <input
-        ref={inputRef}
-        type="text"
-        value={value}
-        onChange={e => { setValue(e.target.value); setManualType(null); }}
-        onKeyDown={e => e.key === 'Escape' && (setValue(''), setManualType(null))}
-        placeholder="Search phone, email, name, or username..."
-        autoFocus
-        className="flex-1 min-w-0 bg-transparent outline-none font-mono text-sm text-sap-text placeholder:text-sap-muted px-2"
-      />
-      {hasValue && (
-        <button
-          type="button"
-          onClick={cycleType}
-          title="Click to change type"
-          className="shrink-0 inline-flex items-center px-2 py-1 rounded cursor-pointer transition-colors hover:opacity-80 active:scale-95"
-          style={{ color: meta.color, background: meta.bg, border: `1px solid ${meta.border}` }}
-        >
-          <span className="text-[10px] font-mono font-semibold uppercase tracking-wider">{meta.label}</span>
-        </button>
+    <div className="space-y-1.5">
+      <form onSubmit={handleSubmit} className="flex items-center gap-2 h-12 px-2 rounded-lg border border-sap-border bg-sap-surface shadow-sm focus-within:border-sap-accent focus-within:ring-2 focus-within:ring-sap-accent/10 transition-all">
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={e => { setValue(e.target.value); setManualType(null); }}
+          onKeyDown={e => e.key === 'Escape' && (setValue(''), setManualType(null))}
+          placeholder="Search phone, email, name, or username..."
+          autoFocus
+          className="flex-1 min-w-0 bg-transparent outline-none font-mono text-sm text-sap-text placeholder:text-sap-muted px-2"
+        />
+        {hasValue && (
+          <button
+            type="button"
+            onClick={cycleType}
+            title="Click to change type"
+            className="shrink-0 inline-flex items-center px-2 py-1 rounded cursor-pointer transition-colors hover:opacity-80 active:scale-95"
+            style={{ color: meta.color, background: meta.bg, border: `1px solid ${meta.border}` }}
+          >
+            <span className="text-[10px] font-mono font-semibold uppercase tracking-wider">{meta.label}</span>
+          </button>
+        )}
+        {loading ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="shrink-0 h-8 px-3.5 rounded-md bg-entity-drug hover:bg-entity-drug/80 text-white text-xs font-semibold font-mono uppercase tracking-wider transition-colors flex items-center gap-1.5"
+          >
+            <Spinner />
+            Cancel
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!hasValue || !canAfford}
+            className="shrink-0 h-8 px-4 rounded-md bg-sap-accent hover:bg-sap-accent-glow disabled:opacity-35 disabled:cursor-not-allowed text-white text-xs font-semibold font-mono uppercase tracking-wider transition-colors"
+          >
+            Search
+          </button>
+        )}
+      </form>
+
+      {showCostBar && (
+        <div className="flex items-center gap-1.5 px-1">
+          {ENGINE_META.map(eng => {
+            const active = selectedEngines.has(eng.key);
+            const cost = engineCosts[eng.key] || 0;
+            return (
+              <button
+                key={eng.key}
+                type="button"
+                onClick={() => toggleEngine(eng.key)}
+                className={`
+                  inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium
+                  transition-all duration-150 border cursor-pointer select-none
+                  ${active
+                    ? 'bg-sap-accent/10 border-sap-accent/30 text-sap-accent'
+                    : 'bg-sap-bg border-sap-border text-sap-muted line-through decoration-sap-muted/40'
+                  }
+                `}
+              >
+                <span className="text-[11px]">{eng.icon}</span>
+                <span>{eng.label}</span>
+                {cost > 0 && (
+                  <span className={`font-mono tabular-nums ${active ? 'text-sap-accent/70' : 'text-sap-muted/50'}`}>
+                    {cost}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+
+          <span className="ml-auto flex items-center gap-1">
+            <span className={`text-[10px] font-mono font-semibold tabular-nums px-1.5 py-0.5 rounded ${
+              canAfford
+                ? 'text-sap-dim bg-sap-bg border border-sap-border'
+                : 'text-rose-700 bg-rose-50 border border-rose-200'
+            }`}>
+              {totalCost} cr
+            </span>
+          </span>
+        </div>
       )}
-      {loading ? (
-        <button
-          type="button"
-          onClick={onCancel}
-          className="shrink-0 h-8 px-3.5 rounded-md bg-entity-drug hover:bg-entity-drug/80 text-white text-xs font-semibold font-mono uppercase tracking-wider transition-colors flex items-center gap-1.5"
-        >
-          <Spinner />
-          Cancel
-        </button>
-      ) : (
-        <button
-          type="submit"
-          disabled={!hasValue}
-          className="shrink-0 h-8 px-4 rounded-md bg-sap-accent hover:bg-sap-accent-glow disabled:opacity-35 disabled:cursor-not-allowed text-white text-xs font-semibold font-mono uppercase tracking-wider transition-colors"
-        >
-          Search
-        </button>
-      )}
-    </form>
+    </div>
   );
 }

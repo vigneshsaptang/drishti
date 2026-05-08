@@ -24,12 +24,14 @@ from typing import Any, Optional
 
 import httpx
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.engines import fti
+from app.audit import audit as audit_service
+from app.credits import require_credits
 
 router = APIRouter(tags=["ecourts-live"])
 
@@ -203,7 +205,7 @@ class SearchBody(BaseModel):
 
 
 @router.post("/search")
-def search(body: SearchBody):
+def search(body: SearchBody, request: Request, _credits: dict = Depends(require_credits("ecourts_search"))):
     """Litigant search across the full case corpus.
     Chunks courtCodes at the safe limit, paginates within each chunk, deduplicates by CNR,
     and caches the aggregate keyed by (name, codes-hash, filters).
@@ -282,6 +284,18 @@ def search(body: SearchBody):
         "_fetched_at": _utc_now().isoformat(),
     }
     _store("searches", cache_key, payload, ttl_seconds=settings.ecourts_search_ttl_seconds)
+
+    audit_service.log_from_request(request,
+        category="data", action="data.ecourts_search",
+        detail={
+            "query_name": name,
+            "court_codes_searched": len(codes),
+            "result_count": len(aggregate),
+            "paid_calls": total_paid_calls,
+            "cached": False,
+        },
+    )
+
     return payload
 
 
@@ -296,7 +310,8 @@ def _validate_cnr(cnr: str) -> str:
 
 @router.get("/case/{cnr}")
 def case_detail(cnr: str = Path(..., min_length=16, max_length=16),
-                refresh: bool = Query(False, description="Bypass cache, fetch fresh from eCourts")):
+                refresh: bool = Query(False, description="Bypass cache, fetch fresh from eCourts"),
+                _credits: dict = Depends(require_credits("ecourts_case"))):
     cnr = _validate_cnr(cnr)
     if not refresh:
         cached = _cached("cases", cnr)
@@ -416,7 +431,8 @@ def _fetch_and_cache_order(cnr: str, filename: str) -> dict:
 
 @router.get("/case/{cnr}/order/{filename}")
 def order_detail(cnr: str = Path(..., min_length=16, max_length=16),
-                 filename: str = Path(..., min_length=3)):
+                 filename: str = Path(..., min_length=3),
+                 _credits: dict = Depends(require_credits("ecourts_order_md"))):
     payload = _fetch_and_cache_order(cnr, filename)
     # Don't ship the base64 in the JSON response — it's huge. Use the /pdf endpoint instead.
     return {
@@ -457,7 +473,8 @@ def order_pdf(cnr: str = Path(..., min_length=16, max_length=16),
 
 @router.get("/case/{cnr}/order/{filename}/ai")
 def order_ai(cnr: str = Path(..., min_length=16, max_length=16),
-             filename: str = Path(..., min_length=3)):
+             filename: str = Path(..., min_length=3),
+             _credits: dict = Depends(require_credits("ecourts_order_ai"))):
     """Premium AI-extracted analysis. First access does OCR — may take 10–60s."""
     cnr = _validate_cnr(cnr)
     key = _order_cache_key(cnr, filename)

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { getAuthHeaders, clearToken } from '../lib/auth';
+import { notifyCreditUpdate } from '../lib/api';
 
 function onUnauthorized(res) {
   if (res.status === 401) {
@@ -9,31 +10,9 @@ function onUnauthorized(res) {
 }
 
 /**
- * Hook for the v2 CREDMON breach search endpoint (POST /api/v2/search).
- *
- * Streams per-entity results via SSE.  Each `entity:result` event is appended
- * to the `results` array so the UI updates progressively.
- *
- * Also handles FTI (threat intelligence) screening events:
- *   fti:result    – individual screening match, appended to ftiResults
- *   fti:complete  – summary metadata for the screening phase
- *
- * Also handles DARKMON (dark web intelligence) events:
- *   darkmon:result   – individual username match, appended to darkmonResults
- *   darkmon:complete – summary metadata for the dark web phase
- *
- * Returns:
- *   results          – entity:result objects accumulated as they stream in
- *   ftiResults       – fti:result objects accumulated as they stream in
- *   ftiMeta          – populated on fti:complete
- *   darkmonResults   – darkmon:result objects accumulated as they stream in
- *   darkmonMeta      – populated on darkmon:complete
- *   loading          – true while SSE connection is open
- *   error            – error message string, or null
- *   searchMeta       – populated on search:complete
- *   doSearch(seeds, maxDepth) – starts a new search
- *   cancelSearch     – aborts the in-flight SSE
- *   clearResults     – resets all state
+ * Streaming search hook (POST /api/v2/search).
+ * Accumulates per-entity breach results, threat intel, dark web, and financial
+ * screening events via SSE.
  */
 export function useSearchV2() {
   const [results, setResults] = useState([]);
@@ -49,7 +28,7 @@ export function useSearchV2() {
   const [searchMeta, setSearchMeta] = useState(null);
   const abortRef = useRef(null);
 
-  const doSearch = useCallback(async (seeds, maxDepth = 5) => {
+  const doSearch = useCallback(async (seeds, maxDepth = 5, engines = null) => {
     if (!seeds || seeds.length === 0) return;
 
     // Abort any previous search
@@ -73,13 +52,22 @@ export function useSearchV2() {
       const res = await fetch('/api/v2/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ seeds, max_depth: maxDepth }),
+        body: JSON.stringify({ seeds, max_depth: maxDepth, ...(engines ? { engines } : {}) }),
         signal: controller.signal,
       });
 
       onUnauthorized(res);
       if (!res.ok) {
         if (res.status === 401) return;
+        if (res.status === 402) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.detail?.error === 'insufficient_credits'
+            ? `Insufficient credits: need ${body.detail.required}, have ${body.detail.available}`
+            : 'Insufficient credits');
+        }
+        if (res.status === 429) {
+          throw new Error('Daily credit limit exceeded');
+        }
         throw new Error(`Search failed: ${res.status}`);
       }
 
@@ -106,8 +94,15 @@ export function useSearchV2() {
               const parsed = JSON.parse(eventData);
 
               switch (eventType) {
+                case 'credits:update':
+                  notifyCreditUpdate({
+                    remaining: parsed.remaining,
+                    deducted: parsed.deducted,
+                    warning: parsed.warning,
+                  });
+                  break;
+
                 case 'search:start':
-                  // Store seeds/max_depth as initial meta
                   setSearchMeta(prev => ({
                     ...(prev || {}),
                     seeds: parsed.seeds,

@@ -7,6 +7,25 @@ import FtiScreening from './components/FtiScreening';
 import ClassificationBanner from './components/ClassificationBanner';
 import TabStrip from './components/TabStrip';
 import DashboardIdle from './components/DashboardIdle';
+import ProfileDialog from './components/ProfileDialog';
+import SessionList from './components/SessionList';
+import ApiKeyManager from './components/ApiKeyManager';
+import CreditPanel from './components/CreditPanel';
+import FeedbackFab from './components/FeedbackFab';
+import FeedbackModal from './components/FeedbackModal';
+import MyTickets from './components/MyTickets';
+import FaqPage from './components/FaqPage';
+import StatusPage from './components/StatusPage';
+import AdminUsers from './pages/AdminUsers';
+import AdminConfig from './pages/AdminConfig';
+import AdminAuditLog from './pages/AdminAuditLog';
+import AdminRoles from './pages/AdminRoles';
+import AdminCredits from './pages/AdminCredits';
+import TicketManager from './admin/TicketManager';
+import FaqManager from './admin/FaqManager';
+import StatusManager from './admin/StatusManager';
+import { PermissionProvider } from './lib/permissions';
+import { getUser } from './lib/auth';
 import OverviewTab from './tabs/OverviewTab';
 import BreachesV2Tab from './tabs/BreachesV2Tab';
 import DarkwebTab from './tabs/DarkwebTab';
@@ -19,6 +38,7 @@ import { useSearchV2 } from './hooks/useSearchV2';
 import { chooseCanonicalIdentity } from './lib/canonicalIdentity';
 import { extractIdentifiers } from './lib/identifierExtract';
 import { openReport } from './lib/reportGenerator';
+import { useNotifications } from './hooks/useNotifications';
 
 
 function v2ToLegacyData(results, searchMeta, darkmonResults) {
@@ -39,10 +59,10 @@ function v2ToLegacyData(results, searchMeta, darkmonResults) {
   };
 }
 
-function renderTab(activeTab, data, results, onPivot, loading, ftiResults, onFocusEntity, focusedEntity, clearFocusedEntity, darkmonResults, darkmonMeta) {
+function renderTab(activeTab, data, results, onPivot, loading, ftiResults, onFocusEntity, focusedEntity, clearFocusedEntity, darkmonResults, darkmonMeta, financialResults, financialMeta) {
   switch (activeTab) {
     case 'graph': return <GraphTab data={data} onPivot={onPivot} focusedEntity={focusedEntity} onClearFocus={clearFocusedEntity} />;
-    case 'financial': return <FinancialTab data={data} financialResults={financialResults} financialMeta={financialMeta} />;
+    case 'financial': return <FinancialTab financialResults={financialResults} financialMeta={financialMeta} />;
     case 'telegram': return <TelegramTab data={data} />;
     case 'breaches': return <BreachesV2Tab results={results} onPivot={onPivot} loading={loading} onFocusEntity={onFocusEntity} />;
     case 'darkweb': return <DarkwebTab data={data} onPivot={onPivot} darkmonResults={darkmonResults} darkmonMeta={darkmonMeta} />;
@@ -68,6 +88,9 @@ export default function App() {
   const { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, loading, error, searchMeta, doSearch, cancelSearch, clearResults } = useSearchV2();
   const [activeTab, setActiveTab] = useState('overview');
   const [focusedEntity, setFocusedEntity] = useState(null);   // { type, value } | null
+  const [overlay, setOverlay] = useState(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const { unreadCount, notifications: notifList, loading: notifLoading, fetchNotifications, markRead, markAllRead } = useNotifications();
 
   const handleFocusEntity = useCallback((type, value) => {
     if (!type || !value) return;
@@ -107,10 +130,10 @@ export default function App() {
       .filter(t => t.length >= 3 && !/^\d/.test(t));
   }, [canonical]);
 
-  const handleSearch = useCallback((seeds) => {
+  const handleSearch = useCallback((seeds, engines) => {
     setActiveTab('overview');
     setFocusedEntity(null);
-    doSearch(seeds, 5);
+    doSearch(seeds, 5, engines);
   }, [doSearch]);
 
   const handleExportReport = useCallback(() => {
@@ -131,20 +154,36 @@ export default function App() {
       );
     }
     if (activeTab === 'drugs') return <DrugsTab />;
-    if (activeTab === 'financial') return <FinancialTab data={data} financialResults={financialResults} financialMeta={financialMeta} />;
+    if (activeTab === 'financial') return <FinancialTab financialResults={financialResults} financialMeta={financialMeta} />;
     if (activeTab === 'darkweb') return <DarkwebTab data={data} onPivot={handlePivot} darkmonResults={darkmonResults} darkmonMeta={darkmonMeta} />;
     if (activeTab === 'ecourts') return <EcourtsTab />;
     if (activeTab === 'graph') return <GraphTab data={data} onPivot={handlePivot} focusedEntity={focusedEntity} onClearFocus={clearFocusedEntity} />;
     if (loading && !hasResults) return <ScannerWait />;
     if (!hasResults && !loading) return <DashboardIdle />;
-    if (hasResults) return renderTab(activeTab, data, results, handlePivot, loading, ftiResults, handleFocusEntity, focusedEntity, clearFocusedEntity, darkmonResults, darkmonMeta);
+    if (hasResults) return renderTab(activeTab, data, results, handlePivot, loading, ftiResults, handleFocusEntity, focusedEntity, clearFocusedEntity, darkmonResults, darkmonMeta, financialResults, financialMeta);
     return null;
   };
 
+  const currentUser = useMemo(() => getUser(), []);
+
   return (
+    <PermissionProvider user={currentUser}>
     <div className="h-screen min-h-0 flex flex-col overflow-hidden bg-sap-bg text-sap-text font-sans">
       <ClassificationBanner />
-      <Header data={data} onExportPDF={hasResults && !loading ? handleExportReport : null} />
+      <Header
+        data={data}
+        onExportPDF={hasResults && !loading ? handleExportReport : null}
+        onShowProfile={() => setOverlay('profile')}
+        onShowSessions={() => setOverlay('sessions')}
+        onShowApiKeys={() => setOverlay('apikeys')}
+        onShowAdmin={() => setOverlay('admin-users')}
+        onShowCredits={() => setOverlay('credits')}
+        notifications={{
+          unreadCount, notifList, notifLoading, fetchNotifications, markRead, markAllRead,
+          onNotificationClick: (n) => { if (n.link?.target === 'ticket_detail') setOverlay('my-tickets'); },
+          onViewAllTickets: () => setOverlay('my-tickets'),
+        }}
+      />
       <div className="shrink-0 px-4 sm:px-5 pt-3 pb-2 space-y-2">
         <CommandBar
           onSearch={handleSearch}
@@ -167,6 +206,31 @@ export default function App() {
         {(ftiResults.length > 0 || ftiMeta) && activeTab === 'overview' && <FtiScreening ftiResults={ftiResults} ftiMeta={ftiMeta} loading={loading} canonicalTokens={watchlistFilterTokens} canonicalName={canonical?.canonical || null} />}
         {renderBody()}
       </main>
+
+      {overlay === 'profile' && <ProfileDialog onClose={() => setOverlay(null)} />}
+      {overlay === 'sessions' && <SessionList onClose={() => setOverlay(null)} />}
+      {overlay === 'apikeys' && <ApiKeyManager onClose={() => setOverlay(null)} />}
+      {overlay === 'admin-users' && <AdminUsers onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
+      {overlay === 'admin-config' && <AdminConfig onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
+      {overlay === 'admin-audit' && <AdminAuditLog onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
+      {overlay === 'admin-roles' && <AdminRoles onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
+      {overlay === 'admin-credits' && <AdminCredits onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
+      {overlay === 'credits' && <CreditPanel onClose={() => setOverlay(null)} />}
+      {overlay === 'my-tickets' && <MyTickets isOpen onClose={() => setOverlay(null)} />}
+      {overlay === 'faq' && <FaqPage isOpen onClose={() => setOverlay(null)} onOpenFeedback={() => { setOverlay(null); setFeedbackOpen(true); }} />}
+      {overlay === 'status' && <StatusPage isOpen onClose={() => setOverlay(null)} />}
+      {overlay === 'admin-tickets' && <TicketManager />}
+      {overlay === 'admin-faq' && <FaqManager />}
+      {overlay === 'admin-status' && <StatusManager />}
+
+      <FeedbackFab onClick={() => setFeedbackOpen(true)} unreadCount={unreadCount} />
+      <FeedbackModal
+        isOpen={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        activeTab={activeTab}
+        onOpenTickets={() => { setFeedbackOpen(false); setOverlay('my-tickets'); }}
+      />
     </div>
+    </PermissionProvider>
   );
 }

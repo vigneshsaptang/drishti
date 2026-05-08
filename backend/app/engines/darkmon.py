@@ -26,6 +26,7 @@ def _clean(doc):
         return doc.decode('utf-8', errors='replace')
     return doc
 from app.config import settings
+from app.sanitize import safe_regex
 
 
 def _safe_query(collection_name: str, query: dict, projection: dict, limit: int = 10) -> list[dict]:
@@ -176,13 +177,14 @@ def search_drug_vendors(query: str | None = None, shipping_from: str | None = No
     db = get_darkmon()["forums_market"]
     mongo_query: dict = {}
     if query:
+        escaped = safe_regex(query)
         mongo_query["$or"] = [
-            {"vendor_name": {"$regex": query, "$options": "i"}},
-            {"listing_category": {"$regex": query, "$options": "i"}},
-            {"listing_title": {"$regex": query, "$options": "i"}},
+            {"vendor_name": {"$regex": escaped, "$options": "i"}},
+            {"listing_category": {"$regex": escaped, "$options": "i"}},
+            {"listing_title": {"$regex": escaped, "$options": "i"}},
         ]
     if shipping_from:
-        mongo_query["shipping_from"] = {"$regex": shipping_from, "$options": "i"}
+        mongo_query["shipping_from"] = {"$regex": safe_regex(shipping_from), "$options": "i"}
 
     try:
         results = list(
@@ -236,11 +238,12 @@ def search_dread(query: str, limit: int = 10) -> dict:
     results: dict[str, list] = {"threads": [], "comments": []}
 
     try:
+        escaped_query = safe_regex(query)
         threads = list(
             db["dread_threads"].find(
                 {"$or": [
-                    {"thread_content": {"$regex": query, "$options": "i"}},
-                    {"thread_title": {"$regex": query, "$options": "i"}},
+                    {"thread_content": {"$regex": escaped_query, "$options": "i"}},
+                    {"thread_title": {"$regex": escaped_query, "$options": "i"}},
                 ]},
                 {"thread_title": 1, "subreddit_name": 1, "author_name": 1,
                  "posted_datetime": 1, "total_comments": 1, "thread_score": 1,
@@ -257,7 +260,7 @@ def search_dread(query: str, limit: int = 10) -> dict:
     try:
         comments = list(
             db["dread_comments"].find(
-                {"comment_content": {"$regex": query, "$options": "i"}},
+                {"comment_content": {"$regex": safe_regex(query), "$options": "i"}},
                 {"comment_content": 1, "author_name": 1, "posted_datetime": 1,
                  "thread_id": 1, "comment_score": 1},
             ).limit(limit)

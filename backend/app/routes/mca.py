@@ -4,9 +4,11 @@ import time
 import logging
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from app.db import get_fti
+from app.audit import audit as audit_service
+from app.credits import require_credits
 
 router = APIRouter(tags=["mca"])
 log = logging.getLogger("mca")
@@ -118,8 +120,10 @@ def _base_projection():
 
 @router.get("/company")
 def company_lookup(
+    request: Request,
     q: str = Query(..., min_length=2),
     limit: int = Query(5, ge=1, le=20),
+    _credits: dict = Depends(require_credits("mca_lookup")),
 ):
     """
     Lookup MCA companies by name with normalization + 7-day cache.
@@ -193,6 +197,12 @@ def company_lookup(
 
     elapsed_ms = round((time.time() - t0) * 1000)
     _log_usage(q, len(results), elapsed_ms)
+
+    audit_service.log_from_request(request,
+        category="data", action="data.mca_lookup",
+        detail={"query": q, "result_count": len(results)},
+    )
+
     return payload
 
 
@@ -273,7 +283,7 @@ class BatchNameCheckRequest(BaseModel):
 
 
 @router.post("/batch-name-check")
-def batch_name_check(body: BatchNameCheckRequest):
+def batch_name_check(body: BatchNameCheckRequest, _credits: dict = Depends(require_credits("mca_batch"))):
     if len(body.names) > 20:
         raise HTTPException(status_code=400, detail="Maximum 20 names per request")
     if not body.names:

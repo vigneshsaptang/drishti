@@ -8,11 +8,13 @@ import re
 import time
 from datetime import datetime
 from bson import ObjectId
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel, field_validator
 
 from app.engines import credmon, darkmon, fti
+from app.audit import audit as audit_service
+from app.credits import require_credits, ENGINE_COST_KEYS
 
 log = logging.getLogger("search_v2")
 
@@ -59,9 +61,12 @@ class SeedItem(BaseModel):
         return v
 
 
+VALID_ENGINES = {"breach", "threat_intel", "darkweb", "financial", "ecourts"}
+
 class SearchRequestV2(BaseModel):
     seeds: list[SeedItem]
     max_depth: int = 5
+    engines: list[str] | None = None
 
     @field_validator("seeds")
     @classmethod
@@ -69,6 +74,14 @@ class SearchRequestV2(BaseModel):
         if not v:
             raise ValueError("at least one seed is required")
         return v
+
+    @field_validator("engines")
+    @classmethod
+    def validate_engines(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return None
+        filtered = [e for e in v if e in VALID_ENGINES]
+        return filtered or None
 
 
 _FULLNAME_FIELD_KEYS = {"fullname", "full_name", "name", "first_name", "last_name"}
@@ -273,9 +286,10 @@ def _generate_programmatic_summary(
 
 
 @router.post("/search")
-async def search_v2(req: SearchRequestV2):
+async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Depends(require_credits("combined_search", use_engine_cost=True))):
     """Stream CREDMON breach search results via SSE, one event per entity."""
 
+    engines = set(req.engines) if req.engines else {"breach", "threat_intel", "darkweb", "financial"}
     seeds_dicts = [{"type": s.type, "value": s.value} for s in req.seeds]
 
     async def event_generator():
@@ -289,6 +303,25 @@ async def search_v2(req: SearchRequestV2):
                 "max_depth": req.max_depth,
             }),
         }
+
+        if _credits.get("cached"):
+            yield {
+                "event": "credits:update",
+                "data": _dumps({
+                    "deducted": 0,
+                    "remaining": _credits.get("remaining"),
+                    "cached": True,
+                }),
+            }
+        elif _credits.get("deducted"):
+            yield {
+                "event": "credits:update",
+                "data": _dumps({
+                    "deducted": _credits["deducted"],
+                    "remaining": _credits["remaining"],
+                    "warning": _credits.get("warning"),
+                }),
+            }
 
         # 2. Stream entity:result events from the pipeline generator
         total_entities_searched = 0
@@ -316,53 +349,52 @@ async def search_v2(req: SearchRequestV2):
 
         # 3. FTI screening phase — screen fullnames discovered by CREDMON
         t_fti_start = time.time()
-        fullnames = _extract_fullnames(all_results)
-        total_names_screened = len(fullnames)
+        total_names_screened = 0
         crimedata_matches = 0
         worldcheck_matches = 0
 
-        for name in fullnames:
-            # CrimeData screening
-            t_q = time.time()
-            cd_results = fti.screen_crimedata(name)
-            cd_time = round((time.time() - t_q) * 1000)
-            cd_found = len(cd_results) > 0
-            if cd_found:
-                crimedata_matches += 1
+        if "threat_intel" in engines:
+            fullnames = _extract_fullnames(all_results)
+            total_names_screened = len(fullnames)
+            for name in fullnames:
+                t_q = time.time()
+                cd_results = fti.screen_crimedata(name)
+                cd_time = round((time.time() - t_q) * 1000)
+                cd_found = len(cd_results) > 0
+                if cd_found:
+                    crimedata_matches += 1
 
-            yield {
-                "event": "fti:result",
-                "data": _dumps({
-                    "query_type": "crimedata",
-                    "entity_value": name,
-                    "found": cd_found,
-                    "results": cd_results,
-                    "search_time_ms": cd_time,
-                }),
-            }
+                yield {
+                    "event": "fti:result",
+                    "data": _dumps({
+                        "query_type": "crimedata",
+                        "entity_value": name,
+                        "found": cd_found,
+                        "results": cd_results,
+                        "search_time_ms": cd_time,
+                    }),
+                }
 
-            # World Check screening
-            t_q = time.time()
-            wc_results = fti.screen_worldcheck(name)
-            wc_time = round((time.time() - t_q) * 1000)
-            wc_found = len(wc_results) > 0
-            if wc_found:
-                worldcheck_matches += 1
+                t_q = time.time()
+                wc_results = fti.screen_worldcheck(name)
+                wc_time = round((time.time() - t_q) * 1000)
+                wc_found = len(wc_results) > 0
+                if wc_found:
+                    worldcheck_matches += 1
 
-            yield {
-                "event": "fti:result",
-                "data": _dumps({
-                    "query_type": "worldcheck",
-                    "entity_value": name,
-                    "found": wc_found,
-                    "results": wc_results,
-                    "search_time_ms": wc_time,
-                }),
-            }
+                yield {
+                    "event": "fti:result",
+                    "data": _dumps({
+                        "query_type": "worldcheck",
+                        "entity_value": name,
+                        "found": wc_found,
+                        "results": wc_results,
+                        "search_time_ms": wc_time,
+                    }),
+                }
 
         fti_total_time_ms = round((time.time() - t_fti_start) * 1000)
 
-        # 4. fti:complete
         yield {
             "event": "fti:complete",
             "data": _dumps({
@@ -375,36 +407,38 @@ async def search_v2(req: SearchRequestV2):
 
         # 5. Financial screening — check discovered phones against fraud UPIs
         t_fin_start = time.time()
-        phones: set[str] = set()
-        for result in all_results:
-            if result.get("entity_type") == "phone":
-                phones.add(result["entity_value"])
-            for p in result.get("new_phones_found", []):
-                phones.add(p)
-        for seed in seeds_dicts:
-            if seed["type"] == "phone":
-                phones.add(seed["value"])
-
         total_phones_screened = 0
         total_upi_hits = 0
-        for phone in list(phones)[:10]:
-            total_phones_screened += 1
-            t_q = time.time()
-            upi_results = fti.search_upi_by_phone(phone)
-            q_time = round((time.time() - t_q) * 1000)
-            upi_found = len(upi_results) > 0
-            if upi_found:
-                total_upi_hits += 1
 
-            yield {
-                "event": "financial:result",
-                "data": _dumps({
-                    "phone": phone,
-                    "found": upi_found,
-                    "upi_records": upi_results,
-                    "search_time_ms": q_time,
-                }),
-            }
+        if "financial" in engines:
+            phones: set[str] = set()
+            for result in all_results:
+                if result.get("entity_type") == "phone":
+                    phones.add(result["entity_value"])
+                for p in result.get("new_phones_found", []):
+                    phones.add(p)
+            for seed in seeds_dicts:
+                if seed["type"] == "phone":
+                    phones.add(seed["value"])
+
+            for phone in list(phones)[:10]:
+                total_phones_screened += 1
+                t_q = time.time()
+                upi_results = fti.search_upi_by_phone(phone)
+                q_time = round((time.time() - t_q) * 1000)
+                upi_found = len(upi_results) > 0
+                if upi_found:
+                    total_upi_hits += 1
+
+                yield {
+                    "event": "financial:result",
+                    "data": _dumps({
+                        "phone": phone,
+                        "found": upi_found,
+                        "upi_records": upi_results,
+                        "search_time_ms": q_time,
+                    }),
+                }
 
         fin_total_time_ms = round((time.time() - t_fin_start) * 1000)
 
@@ -419,41 +453,41 @@ async def search_v2(req: SearchRequestV2):
 
         # 6. DARKMON phase — search usernames discovered by CREDMON
         t_darkmon_start = time.time()
-        usernames = _extract_usernames(all_results)
         total_usernames_searched = 0
         total_darkmon_matches = 0
 
-        for entry in usernames:
-            uname = entry["username"]
-            breach_sources = entry["breach_sources"]
-            total_usernames_searched += 1
-            t_q = time.time()
-            try:
-                uh = darkmon.search_by_username(uname)
-            except Exception:
-                uh = {"threads": [], "posts": [], "author_profile": None}
-            q_time = round((time.time() - t_q) * 1000)
+        if "darkweb" in engines:
+            usernames = _extract_usernames(all_results)
+            for entry in usernames:
+                uname = entry["username"]
+                breach_sources = entry["breach_sources"]
+                total_usernames_searched += 1
+                t_q = time.time()
+                try:
+                    uh = darkmon.search_by_username(uname)
+                except Exception:
+                    uh = {"threads": [], "posts": [], "author_profile": None}
+                q_time = round((time.time() - t_q) * 1000)
 
-            has_data = bool(uh.get("threads") or uh.get("posts") or uh.get("author_profile"))
-            if has_data:
-                total_darkmon_matches += 1
+                has_data = bool(uh.get("threads") or uh.get("posts") or uh.get("author_profile"))
+                if has_data:
+                    total_darkmon_matches += 1
 
-            yield {
-                "event": "darkmon:result",
-                "data": _dumps({
-                    "username": uname,
-                    "breach_sources": breach_sources,
-                    "threads": uh.get("threads", []),
-                    "posts": uh.get("posts", []),
-                    "author_profile": uh.get("author_profile"),
-                    "found": has_data,
-                    "search_time_ms": q_time,
-                }),
-            }
+                yield {
+                    "event": "darkmon:result",
+                    "data": _dumps({
+                        "username": uname,
+                        "breach_sources": breach_sources,
+                        "threads": uh.get("threads", []),
+                        "posts": uh.get("posts", []),
+                        "author_profile": uh.get("author_profile"),
+                        "found": has_data,
+                        "search_time_ms": q_time,
+                    }),
+                }
 
         darkmon_total_time_ms = round((time.time() - t_darkmon_start) * 1000)
 
-        # 6. darkmon:complete
         yield {
             "event": "darkmon:complete",
             "data": _dumps({
@@ -505,5 +539,34 @@ async def search_v2(req: SearchRequestV2):
                 "reason": reason,
             }),
         }
+
+        user = getattr(request.state, "user", None) or {}
+        audit_service.log_search(
+            user_id=user.get("id"),
+            username=user.get("username"),
+            session_id=user.get("jti"),
+            client_ip=getattr(request.state, "client_ip", None),
+            user_agent=getattr(request.state, "user_agent", None),
+            request_id=getattr(request.state, "request_id", None),
+            search_type=seeds_dicts[0]["type"],
+            search_value=seeds_dicts[0]["value"],
+            seeds=seeds_dicts,
+            max_depth=req.max_depth,
+            endpoint="/api/v2/search",
+            response_time_ms=total_time_ms,
+            result_summary={
+                "credmon_entities_searched": total_entities_searched,
+                "credmon_entities_found": total_found,
+                "fti_names_screened": total_names_screened,
+                "fti_crimedata_matches": crimedata_matches,
+                "fti_worldcheck_matches": worldcheck_matches,
+                "darkmon_usernames_searched": total_usernames_searched,
+                "darkmon_matches": total_darkmon_matches,
+                "credmon_time_ms": total_time_ms - fti_total_time_ms - fin_total_time_ms - darkmon_total_time_ms,
+                "fti_time_ms": fti_total_time_ms,
+                "darkmon_time_ms": darkmon_total_time_ms,
+                "total_time_ms": total_time_ms,
+            },
+        )
 
     return EventSourceResponse(event_generator())

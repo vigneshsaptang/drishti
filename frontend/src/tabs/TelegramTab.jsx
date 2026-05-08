@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { searchTelegramMessages } from '../lib/api';
 
 export default function TelegramTab({ data }) {
-  if (!data) return null;
-  const tg = data.threat_intel?.telegram || {};
   const [msgQuery, setMsgQuery] = useState('');
   const [messages, setMessages] = useState(null);
   const [searching, setSearching] = useState(false);
+
+  if (!data) return null;
+  const tg = data.threat_intel?.telegram || {};
 
   const handleMsgSearch = async (e) => {
     e?.preventDefault();

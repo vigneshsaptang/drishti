@@ -180,7 +180,7 @@ const SUB_TABS = [
   { id: 'crypto',    label: 'Crypto Wallets' },
 ];
 
-export default function FinancialTab({ data, financialResults = [], financialMeta = null }) {
+export default function FinancialTab({ financialResults = [], financialMeta = null }) {
   const [upis, setUpis] = useState(null);
   const [banks, setBanks] = useState(null);
   const [loading, setLoading] = useState(true);

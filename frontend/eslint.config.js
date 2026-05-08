@@ -24,6 +24,11 @@ export default defineConfig([
     },
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-restricted-properties': ['error', {
+        object: 'React',
+        property: 'dangerouslySetInnerHTML',
+        message: 'dangerouslySetInnerHTML is a security risk — avoid using it with user-controlled data.',
+      }],
     },
   },
 ])

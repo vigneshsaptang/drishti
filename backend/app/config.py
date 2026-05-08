@@ -32,11 +32,54 @@ class Settings(BaseSettings):
 
     admin_email: str = ""
 
-    # Saptang UI login (leave password empty to disable gate)
+    # Platform database (on the FTI Mongo instance)
+    mongo_db_platform: str = "auracle_platform"
+
+    # Legacy single-user login (auto-migrated to DB on first startup)
     saptang_admin_user: str = "operator"
     saptang_admin_password: str = ""
     saptang_jwt_secret: str = "saptang-dev-change-me"
     saptang_token_exp_hours: int = 24
+
+    # Audit logging (separate Mongo deployment)
+    mongo_uri_audit: str = ""
+    audit_db_name: str = "auracle_audit"
+    audit_store_plaintext: bool = False
+    audit_hmac_key: str = ""
+    audit_retention_days: int = 365
+    audit_search_history_days: int = 90
+    audit_analytics_retention_days: int = 730
+    audit_buffer_size: int = 50
+    audit_flush_interval_s: float = 2.0
+
+    # IP control (comma-separated CIDR or IPs, leave empty to disable)
+    ip_allowlist: str = ""
+    ip_blocklist: str = ""
+
+    # Brute force
+    ip_block_threshold: int = 50
+    ip_block_duration_seconds: int = 1800
+
+    # Rate limiting
+    rate_limit_enabled: bool = True
+
+    # Credit system
+    credits_enabled: bool = True
+
+    # Support & Feedback (SMTP email)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_use_tls: bool = True
+    smtp_starttls: bool = True
+    smtp_timeout_s: int = 30
+    support_email_to: str = ""
+    support_email_from: str = ""
+    support_email_from_name: str = "Auracle Platform"
+    feedback_max_per_day: int = 10
+    feedback_max_attachment_bytes: int = 5 * 1024 * 1024
+    feedback_max_attachments: int = 3
 
     # AI summary (Claude)
     anthropic_api_key: str = ""

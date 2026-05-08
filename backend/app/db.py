@@ -31,6 +31,20 @@ def get_fti() -> MongoClient:
     return _connect("fti", settings.mongo_uri_fti)
 
 
+def get_audit() -> MongoClient | None:
+    """Returns None when MONGO_URI_AUDIT is empty (audit disabled)."""
+    if not settings.mongo_uri_audit:
+        return None
+    return _connect("audit", settings.mongo_uri_audit)
+
+
+def get_platform_db():
+    """Returns the auracle_platform database on the FTI instance."""
+    from app.config import settings
+    client = get_fti()
+    return client[settings.mongo_db_platform]
+
+
 def close_all():
     for c in _clients.values():
         c.close()

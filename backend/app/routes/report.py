@@ -2,9 +2,11 @@
 import json
 import time
 from datetime import datetime
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
+
+from app.credits import require_credits
 
 router = APIRouter(tags=["report"])
 
@@ -14,7 +16,7 @@ class ReportRequest(BaseModel):
 
 
 @router.post("/report/json")
-def export_json(req: ReportRequest):
+def export_json(req: ReportRequest, request: Request, _credits: dict = Depends(require_credits("report_export"))):
     """Export search results as a formatted JSON intelligence report."""
     data = req.search_results
     report = {

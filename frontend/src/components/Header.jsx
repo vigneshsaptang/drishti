@@ -1,12 +1,17 @@
 import { useState, useEffect } from 'react';
-import { signOut } from '../lib/auth';
+import UserMenu from './UserMenu';
+import CreditBar from './CreditBar';
+import NotificationBell from './NotificationBell';
+import NotificationDropdown from './NotificationDropdown';
 
 function formatTime(d) {
   return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 }
 
-export default function Header({ data, onExportPDF }) {
+export default function Header({ data, onExportPDF, onShowProfile, onShowSessions, onShowApiKeys, onShowAdmin, onShowCredits, notifications }) {
+  const { unreadCount = 0, notifList = [], notifLoading = false, fetchNotifications, markRead, markAllRead, onNotificationClick, onViewAllTickets } = notifications || {};
   const [now, setNow] = useState(() => new Date());
+  const [notifOpen, setNotifOpen] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -67,14 +72,34 @@ export default function Header({ data, onExportPDF }) {
             )}
           </>
         )}
+        <CreditBar onClick={onShowCredits} />
+        {notifications && (
+          <div className="relative">
+            <NotificationBell unreadCount={unreadCount} onClick={() => { setNotifOpen(!notifOpen); if (!notifOpen && fetchNotifications) fetchNotifications(); }} />
+            <NotificationDropdown
+              isOpen={notifOpen}
+              onClose={() => setNotifOpen(false)}
+              notifications={notifList}
+              loading={notifLoading}
+              unreadCount={unreadCount}
+              onMarkRead={(id) => { markRead?.(id); }}
+              onMarkAllRead={() => { markAllRead?.(); }}
+              onNotificationClick={(n) => { setNotifOpen(false); onNotificationClick?.(n); }}
+              onViewAll={() => { setNotifOpen(false); onViewAllTickets?.(); }}
+            />
+          </div>
+        )}
         <div className="flex items-center gap-1.5 text-sap-muted font-mono">
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           <span className="tabular-nums">{formatTime(now)}</span>
         </div>
         <div className="h-4 w-px bg-sap-border" />
-        <button type="button" onClick={signOut} className="text-sap-muted hover:text-entity-drug transition-colors font-medium">
-          Sign out
-        </button>
+        <UserMenu
+          onShowProfile={onShowProfile}
+          onShowSessions={onShowSessions}
+          onShowApiKeys={onShowApiKeys}
+          onShowAdmin={onShowAdmin}
+        />
       </div>
     </header>
   );

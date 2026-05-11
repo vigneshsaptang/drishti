@@ -6,7 +6,6 @@ import {
   adminUpdateUser,
   adminDeleteUser,
   adminResetPassword,
-  adminUnlockUser,
   adminRevokeUserSessions,
 } from '../lib/api';
 
@@ -362,7 +361,7 @@ export default function AdminUsers({ onClose, onNavigate }) {
 
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
-  const load = useCallback(async (p = page) => {
+  const load = useCallback(async (p) => {
     setLoading(true);
     setError('');
     try {
@@ -377,9 +376,12 @@ export default function AdminUsers({ onClose, onNavigate }) {
     } finally {
       setLoading(false);
     }
-  }, [page, perPage, q, status]);
+  }, [perPage, q, status]);
 
-  useEffect(() => { load(1); setPage(1); }, [q, status]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data-fetching effect, setState in async callback is intentional
+  useEffect(() => { load(1); setPage(1); }, [load]);
+  // page-only effect: intentionally omits `load` to avoid re-fetch loops when filters change
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   useEffect(() => { load(page); }, [page]);
 
   function refresh() {

@@ -6,6 +6,10 @@ export default function StatusLine({ visible, results, searchMeta }) {
 
   useEffect(() => {
     if (!visible) return;
+    // Reset index to 0 and start cycling through status messages.
+    // The synchronous setState here is intentional: we need to reset before the
+    // interval subscription starts, and this only fires when `visible` changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFallbackIdx(0);
     const timer = setInterval(() => setFallbackIdx(i => (i + 1) % STATUS_MESSAGES.length), 1800);
     return () => clearInterval(timer);

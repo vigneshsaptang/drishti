@@ -30,7 +30,7 @@ const RULES = {
     validate: v => /\d{7,}/.test(v.replace(/\D/g, '')),
   },
   usernames: {
-    match:    k => /username|user_?name|login|nickname|screen_?name|handle/i.test(k) && !/email/i.test(k),
+    match:    k => /^(user_?name|username|nick(?:name)?|screen_?name|handle|login(?:name)?|user_?id|username_?2)$/i.test(k) && !/email/i.test(k),
   },
   names: {
     match:    k => /^(name|fullname|full_name|first_?name|last_?name|middle_?name|display_?name|displayname|real_?name)$/i.test(k)

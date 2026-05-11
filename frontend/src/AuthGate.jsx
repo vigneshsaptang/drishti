@@ -10,7 +10,7 @@ export default function AuthGate({ children }) {
   const [ok, setOk] = useState(false);
   const [setupNeeded, setSetupNeeded] = useState(false);
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
-  const [pendingCredentials, setPendingCredentials] = useState(null);
+  const [_pendingCredentials, setPendingCredentials] = useState(null);
 
   const runBootstrap = useCallback(async () => {
     const status = await fetchAuthStatus();

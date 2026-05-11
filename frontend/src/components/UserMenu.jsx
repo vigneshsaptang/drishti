@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getUser, signOut } from '../lib/auth';
-import { useAnyPermission } from '../lib/permissions';
+import { useAnyPermission } from '../lib/permissionUtils';
 
 function getInitials(displayName) {
   if (!displayName) return '?';

@@ -106,7 +106,7 @@ function PlatformAuditTable({ action, actorQ, from, to }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const load = useCallback(async (p = page) => {
+  const load = useCallback(async (p) => {
     setLoading(true); setError('');
     try {
       const params = { page: p, per_page: perPage };
@@ -119,9 +119,12 @@ function PlatformAuditTable({ action, actorQ, from, to }) {
       setTotal(data.total || 0);
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
-  }, [page, action, actorQ, from, to]);
+  }, [action, actorQ, from, to]);
 
-  useEffect(() => { setPage(1); load(1); }, [action, actorQ, from, to]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data-fetching effect, setState in async callback is intentional
+  useEffect(() => { setPage(1); load(1); }, [load]);
+  // page-only effect: intentionally omits `load` to avoid re-fetch loops when filters change
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   useEffect(() => { load(page); }, [page]);
 
   return (
@@ -170,7 +173,7 @@ function ComprehensiveAuditTable({ category, severity, userIdQ, from, to }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const load = useCallback(async (p = page) => {
+  const load = useCallback(async (p) => {
     setLoading(true); setError('');
     try {
       const params = { page: p, page_size: pageSize };
@@ -184,9 +187,12 @@ function ComprehensiveAuditTable({ category, severity, userIdQ, from, to }) {
       setTotal(data.total || 0);
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
-  }, [page, category, severity, userIdQ, from, to]);
+  }, [category, severity, userIdQ, from, to]);
 
-  useEffect(() => { setPage(1); load(1); }, [category, severity, userIdQ, from, to]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data-fetching effect, setState in async callback is intentional
+  useEffect(() => { setPage(1); load(1); }, [load]);
+  // page-only effect: intentionally omits `load` to avoid re-fetch loops when filters change
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   useEffect(() => { load(page); }, [page]);
 
   return (

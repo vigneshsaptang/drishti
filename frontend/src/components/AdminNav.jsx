@@ -4,6 +4,7 @@ const tabs = [
   { key: 'admin-credits', label: 'Credits' },
   { key: 'admin-config', label: 'Settings' },
   { key: 'admin-audit', label: 'Audit Log' },
+  { key: 'health', label: 'Health' },
 ];
 
 export default function AdminNav({ active, onNavigate }) {

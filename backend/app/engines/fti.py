@@ -4,10 +4,13 @@ Threat Intelligence Engine — FTI
 Covers: MOBILE_NUMBERS, UPI_ID_parsed, TELEMON_PARSED_NEW, CrimeData, world_check,
 CRYPTO_TRANSACTION, TELEGRAM_raw, BANK_ACCOUNT_DETAILS, EMAILS, telegram_data.
 """
+import logging
 import re
 from typing import Any
 
 from app.db import get_fti
+
+log = logging.getLogger("engine.fti")
 from app.config import settings
 from app.sanitize import safe_regex
 
@@ -21,6 +24,7 @@ def _safe_fti_query(db_name: str, col_name: str, query: dict, projection: dict |
             r["_id"] = str(r["_id"])
         return results
     except Exception:
+        log.exception("_safe_fti_query failed: db=%s col=%s", db_name, col_name)
         return []
 
 
@@ -65,7 +69,7 @@ def search_telegram_mentions(phone: str) -> dict:
                 "sender_ids": result["senders"][:20],
             }
     except Exception:
-        pass
+        log.exception("search_telegram_mentions aggregation failed: phone=%s", phone)
 
     return {"found": False, "total_mentions": 0, "unique_groups": 0, "unique_senders": 0}
 
@@ -88,6 +92,7 @@ def get_telegram_group_details(phone: str, limit: int = 10) -> list[dict]:
         ]
         return list(db["entities_mobile_numbers_in_dup"].aggregate(pipeline, allowDiskUse=True, maxTimeMS=10000))
     except Exception:
+        log.exception("get_telegram_group_details failed: phone=%s", phone)
         return []
 
 
@@ -142,6 +147,7 @@ def screen_crimedata(name: str) -> list[dict]:
             r["_id"] = str(r["_id"])
         return results
     except Exception:
+        log.error("screen_crimedata FAILED — returning empty, NOT a clean screen: name=%s", name, exc_info=True)
         return []
 
 
@@ -169,6 +175,7 @@ def screen_worldcheck(name: str) -> list[dict]:
                 r["EXTRA_DATA"]["further_info"] = r["EXTRA_DATA"]["further_info"][:300]
         return results
     except Exception:
+        log.error("screen_worldcheck FAILED — returning empty, NOT a clean screen: name=%s", name, exc_info=True)
         return []
 
 
@@ -219,4 +226,5 @@ def search_telegram_messages(query: str, limit: int = 20) -> list[dict]:
             r["message_text"] = (r.get("message_text") or "")[:500]
         return results
     except Exception:
+        log.exception("search_telegram_messages failed: query=%s", query)
         return []

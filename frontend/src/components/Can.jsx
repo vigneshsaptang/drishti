@@ -1,4 +1,4 @@
-import { usePermission, usePermissions, useAnyPermission } from '../lib/permissions';
+import { usePermission, usePermissions, useAnyPermission } from '../lib/permissionUtils';
 
 function CanSingle({ permission, fallback, children }) {
   const allowed = usePermission(permission);

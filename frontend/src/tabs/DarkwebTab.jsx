@@ -2,6 +2,7 @@ import EntityBadge from '../components/EntityBadge';
 import OnionLink from '../components/OnionLink';
 import { getDarkwebAuthor } from '../lib/api';
 import { useState } from 'react';
+import Shimmer from '../components/Shimmer';
 
 export default function DarkwebTab({ data, onPivot, darkmonResults = [], darkmonMeta = null }) {
   const dw = data?.darkweb || {};
@@ -14,20 +15,71 @@ export default function DarkwebTab({ data, onPivot, darkmonResults = [], darkmon
   const [authorQuery, setAuthorQuery] = useState('');
   const [authorResult, setAuthorResult] = useState(null);
   const [searching, setSearching] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleAuthorSearch = async (e) => {
     e?.preventDefault();
     if (!authorQuery.trim()) return;
     setSearching(true);
+    setError(null);
     try { setAuthorResult(await getDarkwebAuthor(authorQuery.trim())); }
-    catch { setAuthorResult(null); }
+    catch (err) { setError(err.message || 'Failed to load darkweb data'); }
     setSearching(false);
   };
 
   const hasSearchData = streamedMatches.length > 0 || threads.length > 0 || posts.length > 0 || uMatches.length > 0;
 
+  if (!data) {
+    return (
+      <div className="space-y-4 p-4 animate-fade-in">
+        <div className="flex gap-3">
+          <Shimmer className="h-10 flex-1" />
+          <Shimmer className="h-10 w-24" />
+        </div>
+        <div className="bg-sap-surface border border-sap-border rounded-lg p-4 space-y-3">
+          <div className="flex items-center gap-4">
+            <Shimmer className="h-12 w-12 rounded-full" />
+            <div className="space-y-2 flex-1">
+              <Shimmer className="h-4 w-40" />
+              <Shimmer className="h-3 w-24" />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4 pt-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="text-center space-y-2">
+                <Shimmer className="h-6 w-16 mx-auto" />
+                <Shimmer className="h-3 w-12 mx-auto" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="bg-sap-surface border border-sap-border rounded-lg p-4 space-y-2">
+              <Shimmer className="h-4 w-3/4" />
+              <Shimmer className="h-3 w-full" />
+              <Shimmer className="h-3 w-2/3" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
+      {error && (
+        <div className="rounded-lg border border-entity-drug/30 bg-entity-drug/5 p-4">
+          <p className="text-entity-drug font-mono text-sm">{error}</p>
+          <button
+            type="button"
+            onClick={() => { setError(null); handleAuthorSearch(); }}
+            className="mt-2 text-xs font-mono text-sap-accent hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       {/* ── Author Lookup ── */}
       <form onSubmit={handleAuthorSearch} className="flex gap-2 max-w-lg">
         <input type="text" value={authorQuery} onChange={e => setAuthorQuery(e.target.value)}

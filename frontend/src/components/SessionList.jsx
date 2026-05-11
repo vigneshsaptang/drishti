@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { getSessions, revokeSession, revokeAllSessions } from '../lib/api';
 
 function timeAgo(dateStr) {
@@ -26,7 +26,7 @@ export default function SessionList({ onClose }) {
   const [revoking, setRevoking] = useState(null);
   const [revokingAll, setRevokingAll] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -37,9 +37,10 @@ export default function SessionList({ onClose }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data-fetching effect, setState in async callback is intentional
+  useEffect(() => { load(); }, [load]);
 
   async function handleRevoke(id) {
     setRevoking(id);

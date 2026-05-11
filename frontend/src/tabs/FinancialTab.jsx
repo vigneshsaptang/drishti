@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { listFraudUpis, listBankAccounts, getCryptoTrace } from '../lib/api';
 import { EvidenceImage } from '../components/Lightbox';
+import Shimmer from '../components/Shimmer';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -191,11 +192,19 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
   const [subTab, setSubTab] = useState('upi');
   const [upiPage, setUpiPage] = useState(1);
   const [bankPage, setBankPage] = useState(1);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const loadInitialData = useCallback(() => {
+    setError(null);
     Promise.all([
-      listFraudUpis(100).catch(() => []),
-      listBankAccounts(100).catch(() => []),
+      listFraudUpis(100).catch(err => {
+        setError(err.message || 'Failed to load UPI data');
+        return [];
+      }),
+      listBankAccounts(100).catch(err => {
+        setError(err.message || 'Failed to load bank account data');
+        return [];
+      }),
     ]).then(([u, b]) => {
       setUpis(u);
       setBanks(b);
@@ -203,13 +212,17 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
     });
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { loadInitialData(); }, [loadInitialData]);
+
   const handleWalletSearch = async (e, addressOverride) => {
     e?.preventDefault();
     const address = addressOverride || walletQuery.trim();
     if (!address) return;
     setWalletLoading(true);
+    setError(null);
     try { setWalletData(await getCryptoTrace(address)); }
-    catch { setWalletData(null); }
+    catch (err) { setError(err.message || 'Failed to load crypto data'); }
     setWalletLoading(false);
   };
 
@@ -227,15 +240,39 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
 
   if (loading) {
     return (
-      <div className="flex items-center gap-3 p-6">
-        <div className="w-2.5 h-2.5 rounded-full bg-sap-accent animate-pulse" />
-        <p className="text-sm text-sap-accent font-mono">Loading financial intelligence...</p>
+      <div className="space-y-4 p-4 animate-fade-in">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {[1, 2].map(i => (
+            <div key={i} className="bg-sap-surface border border-sap-border rounded-lg p-4 space-y-3">
+              <Shimmer className="h-3 w-28" />
+              <div className="space-y-2">
+                {[1, 2, 3].map(j => <Shimmer key={j} className="h-10 w-full" />)}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="bg-sap-surface border border-sap-border rounded-lg p-4 space-y-3">
+          <Shimmer className="h-3 w-32" />
+          <Shimmer className="h-10 w-full" />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-5 animate-fade-in">
+      {error && (
+        <div className="rounded-lg border border-entity-drug/30 bg-entity-drug/5 p-4">
+          <p className="text-entity-drug font-mono text-sm">{error}</p>
+          <button
+            type="button"
+            onClick={() => { setError(null); loadInitialData(); }}
+            className="mt-2 text-xs font-mono text-sap-accent hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* ── Sub-tab navigation ── */}
       <div className="flex items-center gap-1 border-b border-sap-border">

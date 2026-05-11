@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { getApiKeys, createApiKey, revokeApiKey } from '../lib/api';
 
 const XIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>;
@@ -73,7 +73,7 @@ export default function ApiKeyManager({ onClose }) {
   const [createError, setCreateError] = useState('');
   const [newKeyValue, setNewKeyValue] = useState('');
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -84,9 +84,10 @@ export default function ApiKeyManager({ onClose }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data-fetching effect, setState in async callback is intentional
+  useEffect(() => { load(); }, [load]);
 
   async function handleRevoke(id) {
     setRevoking(id);

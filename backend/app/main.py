@@ -25,7 +25,7 @@ from app.error_handler import (
     http_exception_handler,
     unhandled_exception_handler,
 )
-from app.routes import search, stream, search_v2, darkweb, drugs, telegram, financial, graph, report, auth, admin, dashboard, stats, ecourts, ecourts_search, mca, audit_admin, credits, support
+from app.routes import search, stream, search_v2, darkweb, drugs, telegram, financial, graph, report, auth, admin, dashboard, stats, ecourts, ecourts_search, mca, audit_admin, credits, support, errors, health
 
 logger = logging.getLogger("auracle")
 
@@ -140,6 +140,8 @@ app.include_router(mca.router, prefix="/api/mca")
 app.include_router(audit_admin.router, prefix="/api")
 app.include_router(credits.router, prefix="/api")
 app.include_router(support.router, prefix="/api")
+app.include_router(errors.router, prefix="/api")
+app.include_router(health.router, prefix="/api")
 
 
 @app.get("/api/health")

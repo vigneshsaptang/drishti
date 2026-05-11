@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getDrugStats, getIndiaVendors, searchDrugs } from '../lib/api';
 import DrugRouteMap from '../components/DrugRouteMap';
+import Shimmer from '../components/Shimmer';
 
 export default function DrugsTab() {
   const [stats, setStats] = useState(null);
@@ -9,23 +10,33 @@ export default function DrugsTab() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleDrugSearch = async (e) => {
     e?.preventDefault();
     if (!searchQuery.trim()) return;
     setSearching(true);
+    setError(null);
     try {
       const results = await searchDrugs(searchQuery.trim());
       setSearchResults(results);
-    } catch { setSearchResults([]); }
+    } catch (err) {
+      setError(err.message || 'Drug search failed');
+    }
     setSearching(false);
   };
 
-  useEffect(() => {
-    setLoading(true);
+  const loadInitialData = useCallback(() => {
+    setError(null);
     Promise.all([
-      getDrugStats().catch(() => ({ categories: [], marketplaces: [] })),
-      getIndiaVendors().catch(() => []),
+      getDrugStats().catch(err => {
+        setError(err.message || 'Failed to load drug statistics');
+        return { categories: [], marketplaces: [] };
+      }),
+      getIndiaVendors().catch(err => {
+        setError(err.message || 'Failed to load vendor data');
+        return [];
+      }),
     ]).then(([s, l]) => {
       setStats(s);
       setListings(l);
@@ -33,7 +44,30 @@ export default function DrugsTab() {
     });
   }, []);
 
-  if (loading) return <p className="text-xs text-sap-dim font-mono py-8 text-center animate-scan">Loading drug intelligence...</p>;
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { loadInitialData(); }, [loadInitialData]);
+
+  if (loading) {
+    return (
+      <div className="space-y-4 p-4 animate-fade-in">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="bg-sap-surface border border-sap-border rounded-lg p-4 space-y-3">
+              <Shimmer className="h-3 w-24" />
+              <Shimmer className="h-8 w-20" />
+              <Shimmer className="h-2 w-full" />
+            </div>
+          ))}
+        </div>
+        <div className="bg-sap-surface border border-sap-border rounded-lg p-4 space-y-3">
+          <Shimmer className="h-3 w-32" />
+          <div className="space-y-2">
+            {[1, 2, 3, 4].map(i => <Shimmer key={i} className="h-10 w-full" />)}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Group listings by vendor
   const vendors = {};
@@ -47,6 +81,18 @@ export default function DrugsTab() {
 
   return (
     <div className="space-y-4 animate-fade-in">
+      {error && (
+        <div className="rounded-lg border border-entity-drug/30 bg-entity-drug/5 p-4">
+          <p className="text-entity-drug font-mono text-sm">{error}</p>
+          <button
+            type="button"
+            onClick={() => { setError(null); loadInitialData(); }}
+            className="mt-2 text-xs font-mono text-sap-accent hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       {/* Drug Search */}
       <form onSubmit={handleDrugSearch} className="flex gap-3 items-center">
         <input

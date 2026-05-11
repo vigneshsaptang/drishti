@@ -21,6 +21,7 @@ export default function LoginPage({ onSuccess }) {
     } catch { /* silent */ }
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data-fetching effect, setState in async callback is intentional
   useEffect(() => { fetchCaptcha(); }, [fetchCaptcha]);
 
   const submit = async (e) => {

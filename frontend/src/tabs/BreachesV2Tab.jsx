@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import EntityBadge from '../components/EntityBadge';
 import { fieldClass, redactPassword } from '../lib/utils';
-import { classifyBreach, getRecency, extractGeoIntel } from '../lib/breach';
+import { classifyBreach, getRecency, recencyScore, extractGeoIntel } from '../lib/breach';
 import { extractIdentifiers } from '../lib/identifierExtract';
 
 const DEPTH_LABELS = {
@@ -331,9 +331,15 @@ function EntityCard({ entity, depth, onPivot, onFocusEntity }) {
       {/* Expanded content */}
       {open && entity.found && (
         <div>
-          {(entity.sources || []).map((src, si) => (
-            <BreachSource key={si} source={src} />
-          ))}
+          {[...(entity.sources || [])]
+            .sort((a, b) => {
+              const scoreA = recencyScore(a.records?.[0]?.fields || {});
+              const scoreB = recencyScore(b.records?.[0]?.fields || {});
+              return scoreB - scoreA;
+            })
+            .map((src, si) => (
+              <BreachSource key={si} source={src} />
+            ))}
 
           {/* New identifiers discovered */}
           {entity.new_identifiers?.length > 0 && (
@@ -382,10 +388,20 @@ function BreachSource({ source }) {
   const breachType = classifyBreach(source.collection, source.leak_name);
   const firstRecFields = source.records?.[0]?.fields || {};
   const recency = getRecency(firstRecFields);
+  const score = recencyScore(source.records?.[0]?.fields || {});
   const recordCount = source.records?.length ?? 0;
+  const relativeTime = (() => {
+    if (!recency) return null;
+    const ay = recency.ageYears;
+    if (ay < 1 / 12) return `${Math.floor(ay * 365)}d ago`;
+    if (ay < 1) return `${Math.floor(ay * 12)}mo ago`;
+    const years = Math.floor(ay);
+    const months = Math.floor((ay - years) * 12);
+    return months > 0 ? `${years}y ${months}mo ago` : `${years}y ago`;
+  })();
 
   return (
-    <div className="border-t border-sap-border">
+    <div className="border-t border-sap-border" style={{ opacity: score }}>
       {/* Source header */}
       <div className="px-4 py-2 bg-sap-panel/50 flex items-center justify-between text-xs font-mono flex-wrap gap-2">
         <div className="flex items-center gap-2">
@@ -403,7 +419,7 @@ function BreachSource({ source }) {
           {source.breach_date && <span>Breach: {source.breach_date}</span>}
           {recency && (
             <span className={recency.color} title={`Record from ${recency.date}`}>
-              {recency.label}
+              {relativeTime || recency.label}
             </span>
           )}
           <span>{recordCount} record{recordCount !== 1 ? 's' : ''}</span>

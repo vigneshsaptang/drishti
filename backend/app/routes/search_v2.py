@@ -2,6 +2,7 @@
 CREDMON v2 streaming search endpoint — SSE (Server-Sent Events).
 Streams per-entity breach results as they are discovered via BFS.
 """
+import concurrent.futures
 import json
 import logging
 import re
@@ -65,7 +66,7 @@ VALID_ENGINES = {"breach", "threat_intel", "darkweb", "financial", "ecourts"}
 
 class SearchRequestV2(BaseModel):
     seeds: list[SeedItem]
-    max_depth: int = 5
+    max_depth: int = 2
     engines: list[str] | None = None
 
     @field_validator("seeds")
@@ -347,155 +348,177 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
                 "data": _dumps(result),
             }
 
-        # 3. FTI screening phase — screen fullnames discovered by CREDMON
-        t_fti_start = time.time()
-        total_names_screened = 0
-        crimedata_matches = 0
-        worldcheck_matches = 0
+        # 3. FTI + Financial + DARKMON — run in parallel with 60s wall timeout
+        t_parallel_start = time.time()
 
-        if "threat_intel" in engines:
-            fullnames = _extract_fullnames(all_results)
-            total_names_screened = len(fullnames)
-            for name in fullnames:
-                t_q = time.time()
-                cd_results = fti.screen_crimedata(name)
-                cd_time = round((time.time() - t_q) * 1000)
-                cd_found = len(cd_results) > 0
-                if cd_found:
-                    crimedata_matches += 1
+        def _run_fti_and_financial():
+            """FTI screening + financial screening (runs in thread)."""
+            events = []
+            t_fti = time.time()
+            names_screened = 0
+            cd_matches = 0
+            wc_matches = 0
 
-                yield {
-                    "event": "fti:result",
-                    "data": _dumps({
-                        "query_type": "crimedata",
-                        "entity_value": name,
-                        "found": cd_found,
-                        "results": cd_results,
-                        "search_time_ms": cd_time,
-                    }),
-                }
+            if "threat_intel" in engines:
+                fullnames = _extract_fullnames(all_results)
+                names_screened = len(fullnames)
+                for name in fullnames:
+                    t_q = time.time()
+                    cd_results = fti.screen_crimedata(name)
+                    cd_time = round((time.time() - t_q) * 1000)
+                    cd_found = len(cd_results) > 0
+                    if cd_found:
+                        cd_matches += 1
+                    events.append({"event": "fti:result", "data": _dumps({
+                        "query_type": "crimedata", "entity_value": name,
+                        "found": cd_found, "results": cd_results, "search_time_ms": cd_time,
+                    })})
 
-                t_q = time.time()
-                wc_results = fti.screen_worldcheck(name)
-                wc_time = round((time.time() - t_q) * 1000)
-                wc_found = len(wc_results) > 0
-                if wc_found:
-                    worldcheck_matches += 1
+                    t_q = time.time()
+                    wc_results = fti.screen_worldcheck(name)
+                    wc_time = round((time.time() - t_q) * 1000)
+                    wc_found = len(wc_results) > 0
+                    if wc_found:
+                        wc_matches += 1
+                    events.append({"event": "fti:result", "data": _dumps({
+                        "query_type": "worldcheck", "entity_value": name,
+                        "found": wc_found, "results": wc_results, "search_time_ms": wc_time,
+                    })})
 
-                yield {
-                    "event": "fti:result",
-                    "data": _dumps({
-                        "query_type": "worldcheck",
-                        "entity_value": name,
-                        "found": wc_found,
-                        "results": wc_results,
-                        "search_time_ms": wc_time,
-                    }),
-                }
+            fti_ms = round((time.time() - t_fti) * 1000)
+            events.append({"event": "fti:complete", "data": _dumps({
+                "total_names_screened": names_screened,
+                "crimedata_matches": cd_matches, "worldcheck_matches": wc_matches,
+                "total_time_ms": fti_ms,
+            })})
 
-        fti_total_time_ms = round((time.time() - t_fti_start) * 1000)
+            t_fin = time.time()
+            phones_screened = 0
+            upi_hits = 0
 
-        yield {
-            "event": "fti:complete",
-            "data": _dumps({
-                "total_names_screened": total_names_screened,
-                "crimedata_matches": crimedata_matches,
-                "worldcheck_matches": worldcheck_matches,
-                "total_time_ms": fti_total_time_ms,
-            }),
-        }
+            if "financial" in engines:
+                phones: set[str] = set()
+                for result in all_results:
+                    if result.get("entity_type") == "phone":
+                        phones.add(result["entity_value"])
+                    for p in result.get("new_phones_found", []):
+                        phones.add(p)
+                for seed in seeds_dicts:
+                    if seed["type"] == "phone":
+                        phones.add(seed["value"])
 
-        # 5. Financial screening — check discovered phones against fraud UPIs
-        t_fin_start = time.time()
-        total_phones_screened = 0
-        total_upi_hits = 0
+                for phone in list(phones)[:10]:
+                    phones_screened += 1
+                    t_q = time.time()
+                    upi_results = fti.search_upi_by_phone(phone)
+                    q_time = round((time.time() - t_q) * 1000)
+                    upi_found = len(upi_results) > 0
+                    if upi_found:
+                        upi_hits += 1
+                    events.append({"event": "financial:result", "data": _dumps({
+                        "phone": phone, "found": upi_found,
+                        "upi_records": upi_results, "search_time_ms": q_time,
+                    })})
 
-        if "financial" in engines:
-            phones: set[str] = set()
-            for result in all_results:
-                if result.get("entity_type") == "phone":
-                    phones.add(result["entity_value"])
-                for p in result.get("new_phones_found", []):
-                    phones.add(p)
-            for seed in seeds_dicts:
-                if seed["type"] == "phone":
-                    phones.add(seed["value"])
+            fin_ms = round((time.time() - t_fin) * 1000)
+            events.append({"event": "financial:complete", "data": _dumps({
+                "total_phones_screened": phones_screened,
+                "total_upi_hits": upi_hits, "total_time_ms": fin_ms,
+            })})
 
-            for phone in list(phones)[:10]:
-                total_phones_screened += 1
-                t_q = time.time()
-                upi_results = fti.search_upi_by_phone(phone)
-                q_time = round((time.time() - t_q) * 1000)
-                upi_found = len(upi_results) > 0
-                if upi_found:
-                    total_upi_hits += 1
+            return {
+                "events": events,
+                "names_screened": names_screened,
+                "cd_matches": cd_matches, "wc_matches": wc_matches,
+                "fti_ms": fti_ms,
+                "phones_screened": phones_screened, "upi_hits": upi_hits,
+                "fin_ms": fin_ms,
+            }
 
-                yield {
-                    "event": "financial:result",
-                    "data": _dumps({
-                        "phone": phone,
-                        "found": upi_found,
-                        "upi_records": upi_results,
-                        "search_time_ms": q_time,
-                    }),
-                }
+        def _run_darkmon():
+            """DARKMON username search (runs in thread)."""
+            events = []
+            t_dm = time.time()
+            unames_searched = 0
+            dm_matches = 0
 
-        fin_total_time_ms = round((time.time() - t_fin_start) * 1000)
+            if "darkweb" in engines:
+                usernames = _extract_usernames(all_results)
+                for entry in usernames:
+                    uname = entry["username"]
+                    breach_sources = entry["breach_sources"]
+                    unames_searched += 1
+                    t_q = time.time()
+                    try:
+                        uh = darkmon.search_by_username(uname)
+                    except Exception:
+                        log.warning("darkmon search_by_username failed: uname=%s", uname, exc_info=True)
+                        uh = {"threads": [], "posts": [], "author_profile": None}
+                    q_time = round((time.time() - t_q) * 1000)
 
-        yield {
-            "event": "financial:complete",
-            "data": _dumps({
-                "total_phones_screened": total_phones_screened,
-                "total_upi_hits": total_upi_hits,
-                "total_time_ms": fin_total_time_ms,
-            }),
-        }
-
-        # 6. DARKMON phase — search usernames discovered by CREDMON
-        t_darkmon_start = time.time()
-        total_usernames_searched = 0
-        total_darkmon_matches = 0
-
-        if "darkweb" in engines:
-            usernames = _extract_usernames(all_results)
-            for entry in usernames:
-                uname = entry["username"]
-                breach_sources = entry["breach_sources"]
-                total_usernames_searched += 1
-                t_q = time.time()
-                try:
-                    uh = darkmon.search_by_username(uname)
-                except Exception:
-                    uh = {"threads": [], "posts": [], "author_profile": None}
-                q_time = round((time.time() - t_q) * 1000)
-
-                has_data = bool(uh.get("threads") or uh.get("posts") or uh.get("author_profile"))
-                if has_data:
-                    total_darkmon_matches += 1
-
-                yield {
-                    "event": "darkmon:result",
-                    "data": _dumps({
-                        "username": uname,
-                        "breach_sources": breach_sources,
-                        "threads": uh.get("threads", []),
-                        "posts": uh.get("posts", []),
+                    has_data = bool(uh.get("threads") or uh.get("posts") or uh.get("author_profile"))
+                    if has_data:
+                        dm_matches += 1
+                    events.append({"event": "darkmon:result", "data": _dumps({
+                        "username": uname, "breach_sources": breach_sources,
+                        "threads": uh.get("threads", []), "posts": uh.get("posts", []),
                         "author_profile": uh.get("author_profile"),
-                        "found": has_data,
-                        "search_time_ms": q_time,
-                    }),
+                        "found": has_data, "search_time_ms": q_time,
+                    })})
+
+            dm_ms = round((time.time() - t_dm) * 1000)
+            events.append({"event": "darkmon:complete", "data": _dumps({
+                "total_usernames_searched": unames_searched,
+                "total_matches": dm_matches, "total_time_ms": dm_ms,
+            })})
+
+            return {
+                "events": events,
+                "unames_searched": unames_searched,
+                "dm_matches": dm_matches, "dm_ms": dm_ms,
+            }
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            f_fti = executor.submit(_run_fti_and_financial)
+            f_dm = executor.submit(_run_darkmon)
+
+            try:
+                fti_result = f_fti.result(timeout=60)
+            except Exception:
+                log.error("FTI/financial thread failed or timed out", exc_info=True)
+                fti_result = {
+                    "events": [
+                        {"event": "fti:complete", "data": _dumps({"total_names_screened": 0, "crimedata_matches": 0, "worldcheck_matches": 0, "total_time_ms": 0})},
+                        {"event": "financial:complete", "data": _dumps({"total_phones_screened": 0, "total_upi_hits": 0, "total_time_ms": 0})},
+                    ],
+                    "names_screened": 0, "cd_matches": 0, "wc_matches": 0, "fti_ms": 0,
+                    "phones_screened": 0, "upi_hits": 0, "fin_ms": 0,
                 }
 
-        darkmon_total_time_ms = round((time.time() - t_darkmon_start) * 1000)
+            try:
+                dm_result = f_dm.result(timeout=60)
+            except Exception:
+                log.error("DARKMON thread failed or timed out", exc_info=True)
+                dm_result = {
+                    "events": [{"event": "darkmon:complete", "data": _dumps({"total_usernames_searched": 0, "total_matches": 0, "total_time_ms": 0})}],
+                    "unames_searched": 0, "dm_matches": 0, "dm_ms": 0,
+                }
 
-        yield {
-            "event": "darkmon:complete",
-            "data": _dumps({
-                "total_usernames_searched": total_usernames_searched,
-                "total_matches": total_darkmon_matches,
-                "total_time_ms": darkmon_total_time_ms,
-            }),
-        }
+        for evt in fti_result["events"]:
+            yield evt
+        for evt in dm_result["events"]:
+            yield evt
+
+        total_names_screened = fti_result["names_screened"]
+        crimedata_matches = fti_result["cd_matches"]
+        worldcheck_matches = fti_result["wc_matches"]
+        fti_total_time_ms = fti_result["fti_ms"]
+        total_phones_screened = fti_result["phones_screened"]
+        total_upi_hits = fti_result["upi_hits"]
+        fin_total_time_ms = fti_result["fin_ms"]
+        total_usernames_searched = dm_result["unames_searched"]
+        total_darkmon_matches = dm_result["dm_matches"]
+        darkmon_total_time_ms = dm_result["dm_ms"]
 
         # 8. AI summary
         profile = _extract_profile_for_summary(all_results)

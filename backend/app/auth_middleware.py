@@ -18,7 +18,8 @@ from app.platform.rbac import resolve_effective_permissions
 log = logging.getLogger("auth_middleware")
 
 _PUBLIC_PREFIXES = ("/api/health", "/api/auth/status", "/api/auth/setup", "/api/auth/login",
-                    "/api/auth/refresh", "/api/auth/change-password/temp", "/api/auth/captcha")
+                    "/api/auth/refresh", "/api/auth/change-password/temp", "/api/auth/captcha",
+                    "/api/errors")
 
 _jti_cache: dict[str, tuple[dict, float]] = {}
 _JTI_CACHE_TTL = 60

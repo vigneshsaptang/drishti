@@ -10,6 +10,7 @@ Pipeline:
   6. Queue discovered entities for next depth
   7. Repeat until max_depth or no new entities
 """
+import logging
 import re
 import time
 from typing import Any
@@ -17,6 +18,8 @@ from bson import ObjectId
 
 from app.db import get_credmon
 from app.config import settings
+
+log = logging.getLogger("engine.credmon")
 
 
 # ── Schema cache ──────────────────────────────────────────
@@ -182,6 +185,7 @@ def fetch_record_by_id(collection_name: str, record_id: str) -> dict | None:
     try:
         return leaks_db[collection_name].find_one({"_id": ObjectId(record_id)})
     except Exception:
+        log.debug("ObjectId parse failed for record_id=%s, trying raw string", record_id)
         return leaks_db[collection_name].find_one({"_id": record_id})
 
 
@@ -296,9 +300,12 @@ def run_pipeline(
     return results
 
 
+_BFS_WALL_TIMEOUT_S = 30
+
+
 def run_pipeline_streaming(
     seeds: list[dict],
-    max_depth: int = 5,
+    max_depth: int = 2,
     max_entities_per_depth: int | None = None,
 ):
     """
@@ -306,7 +313,7 @@ def run_pipeline_streaming(
 
     Args:
         seeds: list of {"type": "phone"|"email", "value": "..."} dicts
-        max_depth: maximum BFS depth (default 5)
+        max_depth: maximum BFS depth (default 2)
         max_entities_per_depth: cap per depth level (default from settings)
 
     Yields:
@@ -317,15 +324,27 @@ def run_pipeline_streaming(
         max_entities_per_depth = settings.max_entities_per_depth
 
     visited: set[str] = set()
-    # BFS queue: list of (type, value, depth)
     queue: list[tuple[str, str, int]] = []
     for seed in seeds:
         queue.append((seed["type"], seed["value"], 0))
 
-    # Track depth-level entity counts for the cap
     depth_counts: dict[int, int] = {}
+    t_wall_start = time.monotonic()
 
     while queue:
+        if time.monotonic() - t_wall_start > _BFS_WALL_TIMEOUT_S:
+            yield {
+                "depth": -1,
+                "entity_type": "system",
+                "entity_value": "timeout",
+                "found": False,
+                "search_time_ms": 0,
+                "sources": [],
+                "new_identifiers": [],
+                "warning": f"BFS wall-clock timeout ({_BFS_WALL_TIMEOUT_S}s) — {len(queue)} entities skipped",
+            }
+            break
+
         etype, evalue, depth = queue.pop(0)
 
         if depth > max_depth:
@@ -336,13 +355,11 @@ def run_pipeline_streaming(
             continue
         visited.add(entity_key)
 
-        # Enforce per-depth entity cap
         depth_counts.setdefault(depth, 0)
         if depth_counts[depth] >= max_entities_per_depth:
             continue
         depth_counts[depth] += 1
 
-        # Search master_extracts (exact matching only)
         t0 = time.time()
         hit = search_master(etype, evalue, exact=True)
         search_time_ms = round((time.time() - t0) * 1000)
@@ -359,7 +376,6 @@ def run_pipeline_streaming(
             }
             continue
 
-        # Process each source — fetch actual records via ObjectID (cap at 50)
         source_results = []
         new_emails: set[str] = set()
         new_phones: set[str] = set()
@@ -378,14 +394,12 @@ def run_pipeline_streaming(
                     flat = _flatten_record(rec)
                     extracted_emails, extracted_phones = _extract_entities(rec, schema_info)
 
-                    # Remove current entity from extracted results
                     extracted_emails.discard(evalue.lower() if etype == "email" else "")
                     extracted_phones.discard(evalue if etype == "phone" else "")
 
                     new_emails.update(extracted_emails)
                     new_phones.update(extracted_phones)
 
-                    # Extract usernames and fullnames from record fields
                     for k, v in flat.items():
                         if not v or not isinstance(v, str) or len(v) < 2 or len(v) > 100:
                             continue
@@ -407,7 +421,6 @@ def run_pipeline_streaming(
                 "records": records,
             })
 
-        # Filter new_identifiers to only those not already visited
         new_identifiers = []
         for email in new_emails:
             if f"email:{email}" not in visited:
@@ -432,12 +445,10 @@ def run_pipeline_streaming(
             "new_identifiers": new_identifiers,
         }
 
-        # Queue new entities for next depth
+        # Only queue emails and phones for BFS — usernames/fullnames are
+        # reported as discovered identifiers but not re-searched, matching
+        # the v1 run_pipeline behavior and preventing fan-out explosion.
         for email in new_emails:
             queue.append(("email", email, depth + 1))
         for phone in new_phones:
             queue.append(("phone", phone, depth + 1))
-        for uname in new_usernames:
-            queue.append(("username", uname, depth + 1))
-        for fname in new_fullnames:
-            queue.append(("fullname", fname, depth + 1))

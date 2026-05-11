@@ -531,6 +531,11 @@ function ClearSection({ label }) {
 
 export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTokens, canonicalName }) {
   const [filterToCanonical, setFilterToCanonical] = useState(true);   // default ON
+  const [prevFtiResults, setPrevFtiResults] = useState(ftiResults);
+  if (ftiResults !== prevFtiResults) {
+    setPrevFtiResults(ftiResults);
+    if (!filterToCanonical) setFilterToCanonical(true);
+  }
 
   // Split results by query_type; track raw totals AND filtered sets separately.
   const {
@@ -673,7 +678,7 @@ export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTo
               <span className="text-sap-muted">Filtered to subject</span>
               <span className="text-sap-text font-semibold">"{canonicalName || tokens.join(' ')}"</span>
               <span className="text-sap-muted">
-                · {hiddenCount > 0 ? `${hiddenCount} namesake hit${hiddenCount === 1 ? '' : 's'} hidden` : 'no namesake hits to hide'}
+                · {hiddenCount > 0 ? `${hiddenCount} namesake hit${hiddenCount === 1 ? '' : 's'} hidden` : 'all results match subject'}
               </span>
               <button
                 type="button"

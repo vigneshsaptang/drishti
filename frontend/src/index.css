@@ -33,6 +33,7 @@ html, body, #root {
   --color-entity-crypto: #f97316;
   --color-entity-url: #64748b;
   --color-entity-watchlist: #dc2626;
+  --color-entity-legal: #d97706;
 
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
   --font-sans: 'Inter', system-ui, sans-serif;

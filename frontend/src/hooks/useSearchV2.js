@@ -28,7 +28,7 @@ export function useSearchV2() {
   const [searchMeta, setSearchMeta] = useState(null);
   const abortRef = useRef(null);
 
-  const doSearch = useCallback(async (seeds, maxDepth = 5, engines = null) => {
+  const doSearch = useCallback(async (seeds, maxDepth = 2, engines = null) => {
     if (!seeds || seeds.length === 0) return;
 
     // Abort any previous search
@@ -47,6 +47,8 @@ export function useSearchV2() {
     setLoading(true);
     setError(null);
     setSearchMeta(null);
+
+    let searchCompleted = false;
 
     try {
       const res = await fetch('/api/v2/search', {
@@ -78,6 +80,7 @@ export function useSearchV2() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        if (controller.signal.aborted) break;
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -144,6 +147,7 @@ export function useSearchV2() {
                   break;
 
                 case 'search:complete':
+                  searchCompleted = true;
                   setSearchMeta(prev => ({
                     ...(prev || {}),
                     total_time_ms: parsed.total_time_ms,
@@ -166,6 +170,9 @@ export function useSearchV2() {
       if (e.name === 'AbortError') return;
       setError(e.message);
     } finally {
+      if (!searchCompleted && !controller.signal.aborted) {
+        setError('Search stream ended unexpectedly — results may be incomplete');
+      }
       setLoading(false);
     }
   }, []);

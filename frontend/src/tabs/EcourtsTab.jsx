@@ -11,6 +11,8 @@ import {
   getEcourtsOrder,
   ecourtsOrderPdfUrl,
 } from '../lib/api';
+import Shimmer from '../components/Shimmer';
+import SectionDivider from '../components/SectionDivider';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -78,7 +80,7 @@ const GEO_NAME_TO_CODE = {
   'West Bengal': 'WB',
 };
 
-const ACCENT = '#f59e0b';      // entity-breach amber
+const ACCENT = '#d97706';      // entity-legal amber-600
 const ACCENT_DARK = '#92400e';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -115,29 +117,6 @@ function Caption({ children, className = '' }) {
   return <div className={`text-[10px] font-mono font-semibold uppercase tracking-[0.22em] text-sap-muted ${className}`}>{children}</div>;
 }
 
-function SectionDivider({ label, code, sublabel }) {
-  return (
-    <div className="flex items-center gap-3 pt-1 pb-1 px-1">
-      <span className="text-[10px] font-mono font-bold uppercase tracking-[0.28em] text-sap-text">§ {label}</span>
-      <span aria-hidden className="flex-1 h-px bg-gradient-to-r from-sap-border via-sap-border/50 to-transparent" />
-      <span className="text-[10px] font-mono text-sap-muted tabular-nums">{code}</span>
-      {sublabel && (
-        <>
-          <span aria-hidden className="h-3 w-px bg-sap-border" />
-          <span className="text-[10px] font-mono text-sap-muted tabular-nums">{sublabel}</span>
-        </>
-      )}
-    </div>
-  );
-}
-
-function Shimmer({ className = '' }) {
-  return (
-    <div className={`relative overflow-hidden bg-sap-panel rounded-sm ${className}`}>
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/70 to-transparent animate-shimmer" />
-    </div>
-  );
-}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Coverage hero — 4 stat blocks
@@ -152,12 +131,12 @@ function CoverageHero({ data, loading }) {
   ];
   return (
     <article className="relative bg-sap-surface border border-sap-border rounded-lg overflow-hidden shadow-sm">
-      <CornerMarks color="border-amber-500/40" />
+      <CornerMarks color="border-entity-legal/40" />
       <DocStrip
         code="DOCKET · EC-001"
         label="Court Coverage"
         sublabel="Pan-India court index"
-        accent="text-amber-600"
+        accent="text-entity-legal"
       />
       <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-sap-border/50">
         {tiles.map(t => (
@@ -165,7 +144,7 @@ function CoverageHero({ data, loading }) {
             <Caption>{t.label}</Caption>
             <div className="mt-2.5 mb-1">
               {loading ? <Shimmer className="h-9 w-28" /> : (
-                <span className="font-mono font-bold tabular-nums leading-none text-3xl sm:text-4xl text-amber-600">
+                <span className="font-mono font-bold tabular-nums leading-none text-3xl sm:text-4xl text-entity-legal">
                   {fmtBigNum(t.value)}
                 </span>
               )}
@@ -295,12 +274,12 @@ function IndiaChoropleth({ byState, loading, selected, onSelect }) {
 
   return (
     <article className="relative bg-sap-surface border border-sap-border rounded-lg overflow-hidden shadow-sm h-full">
-      <CornerMarks color="border-amber-500/40" />
+      <CornerMarks color="border-entity-legal/40" />
       <DocStrip
         code="MAP · EC-002"
         label="Jurisdiction Coverage"
         sublabel="Court count per state · click to filter"
-        accent="text-amber-600"
+        accent="text-entity-legal"
       />
       <div className="relative" style={{ height: '520px' }}>
         {loadErr && (
@@ -328,8 +307,8 @@ function TopStatesBar({ byState, loading, selected, onSelect, limit = 10 }) {
   const max = Math.max(1, ...sorted.map(r => r.count || 0));
   return (
     <article className="relative bg-sap-surface border border-sap-border rounded-lg overflow-hidden shadow-sm">
-      <CornerMarks color="border-amber-500/40" />
-      <DocStrip code="EC-003" label="Top States by Court Count" sublabel={`top ${limit}`} accent="text-amber-600" />
+      <CornerMarks color="border-entity-legal/40" />
+      <DocStrip code="EC-003" label="Top States by Court Count" sublabel={`top ${limit}`} accent="text-entity-legal" />
       <div className="px-5 py-4 space-y-2">
         {loading && Array.from({ length: limit }).map((_, i) => (
           <div key={i} className="flex items-center gap-3"><Shimmer className="h-3 w-12" /><Shimmer className="h-2 flex-1" /><Shimmer className="h-3 w-10" /></div>
@@ -343,11 +322,11 @@ function TopStatesBar({ byState, loading, selected, onSelect, limit = 10 }) {
               type="button"
               onClick={() => onSelect && onSelect(isSel ? null : r.state_code)}
               className={`group w-full flex items-center gap-3 text-left rounded-sm px-1.5 py-1 transition-colors ${
-                isSel ? 'bg-amber-500/10' : 'hover:bg-sap-panel/60'
+                isSel ? 'bg-entity-legal/10' : 'hover:bg-sap-panel/60'
               }`}
             >
-              <span className={`text-[11px] font-mono tabular-nums w-7 ${isSel ? 'text-amber-700 font-bold' : 'text-sap-muted'}`}>{r.state_code}</span>
-              <span className={`text-xs font-medium w-32 truncate ${isSel ? 'text-amber-700' : 'text-sap-text'}`}>{r.state_name || r.state_code}</span>
+              <span className={`text-[11px] font-mono tabular-nums w-7 ${isSel ? 'text-entity-legal font-bold' : 'text-sap-muted'}`}>{r.state_code}</span>
+              <span className={`text-xs font-medium w-32 truncate ${isSel ? 'text-entity-legal' : 'text-sap-text'}`}>{r.state_name || r.state_code}</span>
               <div className="flex-1 h-2 bg-sap-panel rounded-sm overflow-hidden">
                 <div
                   className="h-full origin-left animate-bar-grow"
@@ -403,8 +382,8 @@ function CourtKindDonut({ breakdown, loading }) {
 
   return (
     <article className="relative bg-sap-surface border border-sap-border rounded-lg overflow-hidden shadow-sm">
-      <CornerMarks color="border-amber-500/40" />
-      <DocStrip code="EC-004" label="Court Kind Mix" sublabel={`${total.toLocaleString()} total`} accent="text-amber-600" />
+      <CornerMarks color="border-entity-legal/40" />
+      <DocStrip code="EC-004" label="Court Kind Mix" sublabel={`${total.toLocaleString()} total`} accent="text-entity-legal" />
       <div className="px-5 py-5 flex items-center gap-6">
         <div className="relative shrink-0" style={{ width: 132, height: 132 }}>
           {loading ? (
@@ -479,12 +458,12 @@ function CourtDirectoryTable({ stateFilter, onStateChange, byState }) {
 
   return (
     <article className="relative bg-sap-surface border border-sap-border rounded-lg overflow-hidden shadow-sm">
-      <CornerMarks color="border-amber-500/40" />
+      <CornerMarks color="border-entity-legal/40" />
       <DocStrip
         code="REGISTRY · EC-005"
         label="Court Directory"
         sublabel={`${fmtExact(total)} matches · page ${page}`}
-        accent="text-amber-600"
+        accent="text-entity-legal"
       />
 
       <div className="flex flex-wrap items-center gap-3 px-5 py-3 bg-sap-panel/30 border-b border-sap-border/60">
@@ -550,9 +529,9 @@ function CourtDirectoryTable({ stateFilter, onStateChange, byState }) {
                 <td className="px-4 py-2">
                   <span className={`inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] uppercase tracking-wider ${
                     r._court_kind === 'SupremeCourt' ? 'bg-purple-900/10 text-purple-900 border border-purple-900/40' :
-                    r._court_kind === 'HighCourt'    ? 'bg-amber-700/10 text-amber-800 border border-amber-700/40' :
-                    r._court_kind === 'NCLT'         ? 'bg-amber-300/15 text-amber-800 border border-amber-300/40' :
-                                                       'bg-amber-500/10 text-amber-700 border border-amber-500/40'
+                    r._court_kind === 'HighCourt'    ? 'bg-entity-legal/10 text-entity-legal border border-entity-legal/40' :
+                    r._court_kind === 'NCLT'         ? 'bg-entity-legal/15 text-entity-legal border border-entity-legal/40' :
+                                                       'bg-entity-legal/10 text-entity-legal border border-entity-legal/40'
                   }`}>{r._court_kind || 'Other'}</span>
                 </td>
                 <td className="px-4 py-2 text-sap-dim">
@@ -599,12 +578,12 @@ function CaseTypesPanel({ caseTypes, total, loading }) {
 
   return (
     <article className="relative bg-sap-surface border border-sap-border rounded-lg overflow-hidden shadow-sm">
-      <CornerMarks color="border-amber-500/30" />
+      <CornerMarks color="border-entity-legal/30" />
       <DocStrip
         code="GLOSSARY · EC-006"
         label="Case Types"
         sublabel={`${total} categories · standard filing classifications`}
-        accent="text-amber-600"
+        accent="text-entity-legal"
       />
 
       <div className="px-5 py-3 bg-sap-panel/30 border-b border-sap-border/60 flex items-center gap-3">
@@ -634,7 +613,7 @@ function CaseTypesPanel({ caseTypes, total, loading }) {
                 key={c.code}
                 className="group flex items-baseline gap-2.5 py-1 border-b border-sap-border/30 last:border-0"
               >
-                <span className="font-mono font-bold text-[11px] text-amber-700 tracking-tight w-[88px] shrink-0 truncate">
+                <span className="font-mono font-bold text-[11px] text-entity-legal tracking-tight w-[88px] shrink-0 truncate">
                   {c.code}
                 </span>
                 <span className="text-xs text-sap-dim leading-tight flex-1 truncate" title={c.description}>
@@ -676,7 +655,7 @@ function PillToggle({ active, onClick, children, accent = false }) {
       onClick={onClick}
       className={`px-2.5 py-1 rounded-sm text-[11px] font-mono uppercase tracking-[0.14em] transition-colors border ${
         active
-          ? (accent ? 'bg-amber-500 text-white border-amber-500' : 'bg-sap-text text-white border-sap-text')
+          ? (accent ? 'bg-entity-legal text-white border-entity-legal' : 'bg-sap-text text-white border-sap-text')
           : 'bg-sap-surface text-sap-dim border-sap-border hover:text-sap-text hover:border-sap-text/40'
       }`}
     >{children}</button>
@@ -739,7 +718,7 @@ function SearchForm({ form, onChange, onSubmit, onReset, loading, byState, cover
           onChange={e => onChange({ ...form, name: e.target.value })}
           placeholder="e.g. Abhishek Kumar, Sitaram Sharma…"
           autoComplete="off"
-          className="w-full text-sm font-mono px-3 py-2.5 rounded-sm border border-sap-border bg-sap-surface text-sap-text placeholder:text-sap-muted focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+          className="w-full text-sm font-mono px-3 py-2.5 rounded-sm border border-sap-border bg-sap-surface text-sap-text placeholder:text-sap-muted focus:outline-none focus:ring-1 focus:ring-entity-legal focus:border-entity-legal"
         />
       </div>
 
@@ -756,12 +735,12 @@ function SearchForm({ form, onChange, onSubmit, onReset, loading, byState, cover
                 onClick={() => onChange({ ...form, scope: s.id, kinds: [] })}
                 className={`text-left px-3 py-2.5 rounded-sm border transition-colors ${
                   active
-                    ? 'border-amber-500 bg-amber-500/10'
+                    ? 'border-entity-legal bg-entity-legal/10'
                     : 'border-sap-border bg-sap-surface hover:border-sap-text/40'
                 }`}
               >
-                <div className={`flex items-center gap-2 text-[11px] font-mono font-semibold uppercase tracking-[0.14em] ${active ? 'text-amber-700' : 'text-sap-text'}`}>
-                  <span className={`w-2.5 h-2.5 rounded-full border ${active ? 'bg-amber-500 border-amber-500' : 'border-sap-border'}`} />
+                <div className={`flex items-center gap-2 text-[11px] font-mono font-semibold uppercase tracking-[0.14em] ${active ? 'text-entity-legal' : 'text-sap-text'}`}>
+                  <span className={`w-2.5 h-2.5 rounded-full border ${active ? 'bg-entity-legal border-entity-legal' : 'border-sap-border'}`} />
                   {s.label}
                 </div>
                 <div className="text-[10px] font-mono text-sap-muted mt-1 ml-[18px]">{s.hint}</div>
@@ -773,7 +752,7 @@ function SearchForm({ form, onChange, onSubmit, onReset, loading, byState, cover
 
       {/* State + kind narrowing — only visible for state-scope */}
       {scope.requiresState && (
-        <div className="space-y-3 px-3 py-3 rounded-sm border border-amber-500/30 bg-amber-500/5">
+        <div className="space-y-3 px-3 py-3 rounded-sm border border-entity-legal/30 bg-entity-legal/5">
           <div className="space-y-1.5">
             <label className="text-[10px] font-mono font-semibold uppercase tracking-[0.22em] text-sap-muted">
               State <span className="text-rose-600">(required)</span>
@@ -845,7 +824,7 @@ function SearchForm({ form, onChange, onSubmit, onReset, loading, byState, cover
           <button
             type="submit"
             disabled={!canSubmit}
-            className="px-4 py-1.5 rounded-sm text-[11px] font-mono uppercase tracking-[0.16em] bg-amber-600 text-white border border-amber-600 hover:bg-amber-700 hover:border-amber-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-4 py-1.5 rounded-sm text-[11px] font-mono uppercase tracking-[0.16em] bg-entity-legal text-white border border-entity-legal hover:bg-entity-legal/90 hover:border-entity-legal/90 disabled:opacity-40 disabled:cursor-not-allowed"
           >{loading ? 'Searching…' : 'Run Search'}</button>
         </div>
       </div>
@@ -870,7 +849,7 @@ function StatusBadge({ status }) {
   const s = (status || '').toUpperCase();
   const tone =
     s === 'DISPOSED' ? 'bg-sap-panel text-sap-dim border-sap-border' :
-    s === 'PENDING'  ? 'bg-amber-500/15 text-amber-700 border-amber-500/40' :
+    s === 'PENDING'  ? 'bg-entity-legal/15 text-entity-legal border-entity-legal/40' :
                        'bg-sap-panel text-sap-dim border-sap-border';
   return (
     <span className={`inline-flex items-center px-1.5 py-0.5 rounded-sm border text-[10px] font-mono uppercase tracking-wider ${tone}`}>
@@ -905,7 +884,7 @@ function SearchResults({ data, selectedCnr, onSelectCnr }) {
           {data.results.map(r => {
             const isSel = r.cnr === selectedCnr;
             return (
-              <tr key={r.cnr} className={`border-b border-sap-border/40 ${isSel ? 'bg-amber-500/8' : 'hover:bg-sap-panel/30'}`}>
+              <tr key={r.cnr} className={`border-b border-sap-border/40 ${isSel ? 'bg-entity-legal/8' : 'hover:bg-sap-panel/30'}`}>
                 <td className="px-4 py-2 text-sap-text font-bold tracking-tight whitespace-nowrap">{r.cnr}</td>
                 <td className="px-4 py-2 text-sap-dim">{r.caseType || '—'}</td>
                 <td className="px-4 py-2"><StatusBadge status={r.caseStatus} /></td>
@@ -932,8 +911,8 @@ function SearchResults({ data, selectedCnr, onSelectCnr }) {
                     onClick={() => onSelectCnr(isSel ? null : r.cnr)}
                     className={`text-[10px] font-mono uppercase tracking-[0.16em] px-2 py-1 rounded-sm border transition-colors ${
                       isSel
-                        ? 'bg-amber-600 text-white border-amber-600'
-                        : 'border-amber-500/50 text-amber-700 hover:bg-amber-500/10'
+                        ? 'bg-entity-legal text-white border-entity-legal'
+                        : 'border-entity-legal/50 text-entity-legal hover:bg-entity-legal/10'
                     }`}
                   >
                     {isSel ? 'Hide' : 'View'}
@@ -972,7 +951,7 @@ function OrderViewer({ cnr, filename, onClose }) {
               href={ecourtsOrderPdfUrl(cnr, filename)}
               target="_blank"
               rel="noopener"
-              className="text-[10px] font-mono uppercase tracking-[0.16em] px-2 py-1 rounded-sm border border-amber-500/50 text-amber-700 hover:bg-amber-500/10"
+              className="text-[10px] font-mono uppercase tracking-[0.16em] px-2 py-1 rounded-sm border border-entity-legal/50 text-entity-legal hover:bg-entity-legal/10"
             >Open PDF</a>
           )}
           <button
@@ -1107,7 +1086,7 @@ function CaseDetailPanel({ cnr, onClose }) {
                         {f.markdownContent && (
                           <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-emerald-700">free</span>
                         )}
-                        <span className={`text-[10px] transition-transform ${isOpen ? 'rotate-90 text-amber-600' : 'text-sap-muted'}`}>▶</span>
+                        <span className={`text-[10px] transition-transform ${isOpen ? 'rotate-90 text-entity-legal' : 'text-sap-muted'}`}>▶</span>
                       </span>
                     </button>
                   </li>
@@ -1170,12 +1149,12 @@ function LiveScreeningSection({ byState, coverage }) {
 
   return (
     <article className="relative bg-sap-surface border border-sap-border rounded-lg overflow-hidden shadow-sm">
-      <CornerMarks color="border-amber-500/40" />
+      <CornerMarks color="border-entity-legal/40" />
       <DocStrip
         code="LIVE · EC-100"
         label="Litigation Screening"
         sublabel="Bounded scope · pick High Courts / Supreme / NCLT / a state"
-        accent="text-amber-600"
+        accent="text-entity-legal"
       />
       <SearchForm form={form} onChange={setForm} onSubmit={submit} onReset={reset} loading={search.loading} byState={byState} coverage={coverage} />
 
@@ -1220,14 +1199,14 @@ export default function EcourtsTab() {
 
   return (
     <div className="space-y-5 animate-fade-in max-w-full">
-      <SectionDivider label="Court Directory" code="// EC" sublabel={`${fmtBigNum(cov.courts || 0)} courts · ${fmtBigNum(cov.case_types || 0)} case types`} />
+      <SectionDivider label="Court Directory" sub={`// EC · ${fmtBigNum(cov.courts || 0)} courts · ${fmtBigNum(cov.case_types || 0)} case types`} accent="text-entity-legal" />
 
       <CoverageHero data={cov} loading={coverage.loading} />
 
-      <SectionDivider label="Live Screening" code="// EC-LIVE" sublabel="Search court records by litigant name" />
+      <SectionDivider label="Live Screening" sub="// EC-LIVE · Search court records by litigant name" accent="text-entity-legal" />
       <LiveScreeningSection byState={stateRows} coverage={cov} />
 
-      <SectionDivider label="Reference / Coverage" code="// EC-REF" />
+      <SectionDivider label="Reference / Coverage" sub="// EC-REF" accent="text-entity-legal" />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         <div className="lg:col-span-7">

@@ -272,10 +272,10 @@ function extractProfile(results) {
 
 const TAG_STAGGER_MS = 80;
 
-export default function SubjectProfile({ results, loading, onFocusEntity, onSwitchTab, aiSummary }) {
+export default function SubjectProfile({ results, loading, onFocusEntity, onSwitchTab, aiSummary, canonical: canonicalProp }) {
   const { profile, totalCount } = useMemo(() => extractProfile(results), [results]);
 
-  const canonical = useMemo(
+  const canonicalLocal = useMemo(
     () => chooseCanonicalIdentity({
       names:     profile.names     || [],
       usernames: profile.usernames || [],
@@ -283,6 +283,8 @@ export default function SubjectProfile({ results, loading, onFocusEntity, onSwit
     }),
     [profile.names, profile.usernames, profile.emails],
   );
+
+  const canonical = canonicalProp || canonicalLocal;
 
   const location = useMemo(() => chooseCanonicalLocation(results), [results]);
 
@@ -432,7 +434,8 @@ function buildCourtStates(location) {
 }
 
 function IdentifiedSubjectBanner({ canonical, location }) {
-  const { canonical: name, anchor, confidence, alternates = [] } = canonical;
+  const { canonical: name, anchor, confidence, alternates = [], source } = canonical;
+  const isInferred = source === 'inferred';
   const locString = formatCanonicalLocation(location);
   const pct = Math.round(confidence * 100);
 
@@ -471,8 +474,9 @@ function IdentifiedSubjectBanner({ canonical, location }) {
         </div>
       </div>
 
-      <p className="text-base sm:text-lg font-semibold text-sap-text leading-tight tracking-tight">
+      <p className={`text-base sm:text-lg leading-tight tracking-tight ${isInferred ? 'font-medium italic text-sap-dim' : 'font-semibold text-sap-text'}`}>
         {name}
+        {isInferred && <span className="ml-2 text-[10px] font-mono not-italic text-sap-muted font-normal">(inferred)</span>}
       </p>
       {locString && (
         <p className="text-xs font-mono text-sap-dim mt-0.5">{locString}</p>
@@ -569,14 +573,17 @@ function CourtSearchSection({ name, location, onSwitchTab }) {
   const [courtError, setCourtError] = useState(null);
   const [courtCounts, setCourtCounts] = useState(null);
 
-  const courtCountsRef = useRef(false);
+  const courtCountsRef = useRef(null);
   useEffect(() => {
-    if (courtCountsRef.current || courtStates.length === 0) return;
-    courtCountsRef.current = true;
+    if (courtStates.length === 0) return;
+    const key = courtStates.map(s => s.code).sort().join(',');
+    if (courtCountsRef.current === key) return;
+    courtCountsRef.current = key;
+    setCourtCounts(null);
     getEcourtsByState()
       .then(res => setCourtCounts(res?.data || []))
       .catch(() => {});
-  }, [courtStates.length]);
+  }, [courtStates]);
 
   const courtCountInfo = useMemo(() => {
     if (!courtCounts) return null;

@@ -97,9 +97,15 @@ export default function ProfileDialog({ onClose }) {
     }
   }
 
-  const daysSincePasswordChange = user?.password_changed_at
-    ? Math.floor((Date.now() - new Date(user.password_changed_at).getTime()) / 86400000)
-    : null;
+  const [daysSincePasswordChange, setDaysSincePasswordChange] = useState(null);
+  /* eslint-disable react-hooks/set-state-in-effect -- computing derived display value from timestamp */
+  useEffect(() => {
+    if (!user?.password_changed_at) { setDaysSincePasswordChange(null); return; }
+    setDaysSincePasswordChange(
+      Math.floor((Date.now() - new Date(user.password_changed_at).getTime()) / 86400000)
+    );
+  }, [user?.password_changed_at]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">

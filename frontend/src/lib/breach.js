@@ -5,7 +5,7 @@
 // Classify breach collection into a type with badge styling
 export function classifyBreach(collectionName, leakName) {
   const name = (collectionName || '').toLowerCase();
-  const leak = (leakName || '').toLowerCase();
+  const _leak = (leakName || '').toLowerCase();
 
   if (name.startsWith('malware_log') || name.includes('malware'))
     return { label: 'MALWARE LOG', color: 'bg-entity-drug/20 text-entity-drug border-entity-drug/30', icon: '⚠', description: 'Data from malware-infected device — contains saved credentials, browser history, autofill data' };
@@ -96,6 +96,14 @@ export function getRecency(fields) {
     color,
     label,
   };
+}
+
+export function recencyScore(fields) {
+  const rec = getRecency(fields);
+  if (!rec || !rec.date) return 0.4;
+  const ageMs = Date.now() - new Date(rec.date).getTime();
+  const ageDays = ageMs / (1000 * 60 * 60 * 24);
+  return Math.max(0.4, Math.exp(-ageDays / 365));
 }
 
 // ── Geo-intelligence: extract location from breach record fields ──

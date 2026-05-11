@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import AdminNav from '../components/AdminNav';
 import { adminGetConfig, adminUpdateConfig } from '../lib/api';
 
@@ -82,9 +82,12 @@ function usePolicyForm(initial) {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
+  const initialKey = useMemo(() => JSON.stringify(initial), [initial]);
+  /* eslint-disable react-hooks/set-state-in-effect -- syncing derived state from parent query result */
   useEffect(() => {
     if (initial) setValues(initial);
-  }, [JSON.stringify(initial)]);
+  }, [initial, initialKey]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function set(key, val) {
     setValues(v => ({ ...v, [key]: val }));
@@ -107,6 +110,31 @@ function usePolicyForm(initial) {
   return { values, set, saving, feedback, save };
 }
 
+function FeedbackLine({ feedback }) {
+  if (!feedback) return null;
+  return (
+    <p className={`text-xs mt-2 ${feedback.ok ? 'text-emerald-600' : 'text-entity-drug'}`}>
+      {feedback.msg}
+    </p>
+  );
+}
+
+function SaveButton({ onSave, saving, feedback }) {
+  return (
+    <div className="flex items-center justify-end gap-3 mt-4">
+      <FeedbackLine feedback={feedback} />
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={saving}
+        className="px-3 py-1.5 rounded-lg bg-sap-accent text-white text-xs font-semibold hover:bg-sap-accent/90 disabled:opacity-50"
+      >
+        {saving ? 'Saving…' : 'Save'}
+      </button>
+    </div>
+  );
+}
+
 export default function AdminConfig({ onClose, onNavigate }) {
   const [config, setConfig] = useState(null);
   const [loadError, setLoadError] = useState('');
@@ -124,31 +152,6 @@ export default function AdminConfig({ onClose, onNavigate }) {
 
   function toggle(key) {
     setOpen(o => ({ ...o, [key]: !o[key] }));
-  }
-
-  function FeedbackLine({ feedback }) {
-    if (!feedback) return null;
-    return (
-      <p className={`text-xs mt-2 ${feedback.ok ? 'text-emerald-600' : 'text-entity-drug'}`}>
-        {feedback.msg}
-      </p>
-    );
-  }
-
-  function SaveButton({ onSave, saving, feedback }) {
-    return (
-      <div className="flex items-center justify-end gap-3 mt-4">
-        <FeedbackLine feedback={feedback} />
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={saving}
-          className="px-3 py-1.5 rounded-lg bg-sap-accent text-white text-xs font-semibold hover:bg-sap-accent/90 disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </button>
-      </div>
-    );
   }
 
   return (

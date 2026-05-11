@@ -1,27 +1,65 @@
 import { useState } from 'react';
 import { searchTelegramMessages } from '../lib/api';
+import Shimmer from '../components/Shimmer';
 
 export default function TelegramTab({ data }) {
   const [msgQuery, setMsgQuery] = useState('');
   const [messages, setMessages] = useState(null);
   const [searching, setSearching] = useState(false);
+  const [error, setError] = useState(null);
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <div className="space-y-4 p-4 animate-fade-in">
+        <div className="flex gap-3">
+          <Shimmer className="h-10 flex-1" />
+          <Shimmer className="h-10 w-24" />
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="bg-sap-surface border border-sap-border rounded-lg p-4 space-y-2">
+              <div className="flex items-center gap-3">
+                <Shimmer className="h-3 w-20" />
+                <Shimmer className="h-3 w-32" />
+              </div>
+              <Shimmer className="h-4 w-full" />
+              <Shimmer className="h-4 w-3/4" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
   const tg = data.threat_intel?.telegram || {};
 
   const handleMsgSearch = async (e) => {
     e?.preventDefault();
     if (!msgQuery.trim()) return;
     setSearching(true);
+    setError(null);
     try {
       const results = await searchTelegramMessages(msgQuery.trim());
       setMessages(results);
-    } catch { setMessages([]); }
+    } catch (err) {
+      setError(err.message || 'Telegram search failed');
+    }
     setSearching(false);
   };
 
   return (
     <div className="space-y-4 animate-fade-in">
+      {error && (
+        <div className="rounded-lg border border-entity-drug/30 bg-entity-drug/5 p-4">
+          <p className="text-entity-drug font-mono text-sm">{error}</p>
+          <button
+            type="button"
+            onClick={() => { setError(null); handleMsgSearch(); }}
+            className="mt-2 text-xs font-mono text-sap-accent hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       {/* Message Search */}
       <form onSubmit={handleMsgSearch} className="flex gap-3 items-center">
         <input

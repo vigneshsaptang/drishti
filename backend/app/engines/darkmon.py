@@ -4,10 +4,13 @@ Dark Web Intelligence Engine — DARKMON
 Searches: thread_object, thread_post (via author_username index + extracted_info),
 drugmon, drug_listings, author_aggregation, dread_threads/comments, wallet_info.
 """
+import logging
 import re
 from datetime import datetime
 from typing import Any
 from bson import ObjectId
+
+log = logging.getLogger("engine.darkmon")
 
 from app.db import get_darkmon
 
@@ -40,6 +43,7 @@ def _safe_query(collection_name: str, query: dict, projection: dict, limit: int 
             .limit(limit)
         )
     except Exception:
+        log.exception("_safe_query failed: collection=%s", collection_name)
         return []
 
 
@@ -167,7 +171,7 @@ def search_by_username(username: str) -> dict:
                 "source": "author_aggregation",
             }
     except Exception:
-        pass
+        log.exception("author profile enrichment failed: username=%s", username)
 
     return results
 
@@ -200,6 +204,7 @@ def search_drug_vendors(query: str | None = None, shipping_from: str | None = No
         )
         return [_clean(r) for r in results]
     except Exception:
+        log.exception("search_drug_vendors failed")
         return []
 
 
@@ -229,6 +234,7 @@ def get_drug_stats() -> dict:
             "marketplaces": [{"name": m["_id"], "count": m["count"]} for m in marketplaces if m["_id"]],
         }
     except Exception:
+        log.exception("get_drug_stats aggregation failed")
         return {"categories": [], "marketplaces": []}
 
 
@@ -255,7 +261,7 @@ def search_dread(query: str, limit: int = 10) -> dict:
             for t in threads
         ]
     except Exception:
-        pass
+        log.exception("dread thread search failed: query=%s", query)
 
     try:
         comments = list(
@@ -270,7 +276,7 @@ def search_dread(query: str, limit: int = 10) -> dict:
             for c in comments
         ]
     except Exception:
-        pass
+        log.exception("dread comment search failed: query=%s", query)
 
     return results
 
@@ -282,6 +288,7 @@ def get_wallet_info(wallet_address: str) -> dict | None:
         wallet = db["wallet_info"].find_one({"wallet_address": wallet_address})
         return _clean(wallet) if wallet else None
     except Exception:
+        log.exception("get_wallet_info failed: address=%s", wallet_address)
         return None
 
 
@@ -297,4 +304,5 @@ def get_wallet_transactions(wallet_address: str, limit: int = 50) -> list[dict]:
         )
         return [_clean(t) for t in txns]
     except Exception:
+        log.exception("get_wallet_transactions failed: address=%s", wallet_address)
         return []

@@ -1,4 +1,4 @@
-import { useAnyPermission } from '../lib/permissions';
+import { useAnyPermission } from '../lib/permissionUtils';
 
 const SUBJECT_TABS = [
   { id: 'overview', label: 'Overview', perms: null },

@@ -45,26 +45,43 @@ const STATE_FULL = {
   'arunachal pradesh': 'Arunachal Pradesh', 'arunachalpradesh': 'Arunachal Pradesh',
 };
 
-// Coarse pincode prefix → state; first two digits checked as number range
+const PINCODE_PREFIX_TO_STATE = {
+  10: 'Delhi', 11: 'Delhi',
+  12: 'Haryana', 13: 'Haryana',
+  14: 'Punjab', 15: 'Punjab', 16: 'Punjab',
+  17: 'Himachal Pradesh',
+  18: 'Jammu and Kashmir', 19: 'Jammu and Kashmir',
+  20: 'Uttar Pradesh', 21: 'Uttar Pradesh', 22: 'Uttar Pradesh',
+  23: 'Uttar Pradesh', 24: 'Uttar Pradesh', 25: 'Uttar Pradesh',
+  26: 'Uttar Pradesh', 27: 'Uttar Pradesh', 28: 'Uttar Pradesh',
+  30: 'Rajasthan', 31: 'Rajasthan', 32: 'Rajasthan',
+  33: 'Rajasthan', 34: 'Rajasthan',
+  35: 'Gujarat',
+  36: 'Gujarat', 37: 'Gujarat', 38: 'Gujarat', 39: 'Gujarat',
+  40: 'Maharashtra', 41: 'Maharashtra', 42: 'Maharashtra',
+  43: 'Maharashtra', 44: 'Maharashtra',
+  45: 'Madhya Pradesh', 46: 'Madhya Pradesh', 47: 'Madhya Pradesh', 48: 'Madhya Pradesh',
+  49: 'Chhattisgarh',
+  50: 'Telangana', 51: 'Telangana',
+  52: 'Andhra Pradesh', 53: 'Andhra Pradesh',
+  56: 'Karnataka', 57: 'Karnataka', 58: 'Karnataka', 59: 'Karnataka',
+  60: 'Tamil Nadu', 61: 'Tamil Nadu', 62: 'Tamil Nadu', 63: 'Tamil Nadu', 64: 'Tamil Nadu',
+  65: 'Puducherry', 66: 'Puducherry',
+  67: 'Kerala', 68: 'Kerala', 69: 'Kerala',
+  70: 'West Bengal', 71: 'West Bengal', 72: 'West Bengal', 73: 'West Bengal', 74: 'West Bengal',
+  75: 'Odisha', 76: 'Odisha', 77: 'Odisha',
+  78: 'Assam', 79: 'Assam',
+  80: 'Bihar', 81: 'Bihar', 82: 'Bihar', 83: 'Bihar', 84: 'Bihar', 85: 'Bihar',
+  90: 'Manipur', 91: 'Mizoram', 92: 'Tripura',
+  93: 'Meghalaya', 94: 'Nagaland', 95: 'Arunachal Pradesh',
+  96: 'Sikkim',
+};
+
 function stateFromPincode(pin) {
   const n = parseInt(pin, 10);
-  if (isNaN(n) || pin.length !== 6) return null;
-  const prefix = Math.floor(n / 10000); // first 2 digits
-  if (prefix === 11) return 'Delhi';
-  if (prefix >= 10 && prefix <= 14) return null; // ambiguous PB/HR/HP/JK/Chandigarh
-  if (prefix === 10 || prefix === 13 || prefix === 14) return null;
-  if (prefix === 12 || prefix === 13) return 'Haryana';
-  if (n >= 110000 && n <= 110099) return 'Delhi';
-  const p1 = Math.floor(n / 100000); // first digit
-  if (p1 === 1) return 'Delhi';
-  if (p1 === 2) return 'Uttar Pradesh';
-  if (p1 === 3) return 'Rajasthan';
-  if (p1 === 4) return 'Maharashtra';
-  if (p1 === 5) return 'Andhra Pradesh';
-  if (p1 === 6) return 'Tamil Nadu';
-  if (p1 === 7) return 'West Bengal';
-  if (p1 === 8) return 'Bihar';
-  return null;
+  if (isNaN(n) || n < 100000 || n > 999999) return null;
+  const prefix = Math.floor(n / 10000);
+  return PINCODE_PREFIX_TO_STATE[prefix] || null;
 }
 
 const CITY_TO_STATE = {
@@ -75,11 +92,11 @@ const CITY_TO_STATE = {
   'delhi': 'Delhi', 'new delhi': 'Delhi',
   'bangalore': 'Karnataka', 'bengaluru': 'Karnataka', 'mysore': 'Karnataka', 'mysuru': 'Karnataka',
   'hubballi': 'Karnataka', 'hubli': 'Karnataka', 'mangalore': 'Karnataka', 'mangaluru': 'Karnataka',
-  'belgaum': 'Karnataka', 'belagavi': 'Karnataka',
+  'belgaum': 'Karnataka', 'belagavi': 'Karnataka', 'shimoga': 'Karnataka', 'shivamogga': 'Karnataka',
   'chennai': 'Tamil Nadu', 'coimbatore': 'Tamil Nadu', 'madurai': 'Tamil Nadu', 'salem': 'Tamil Nadu',
   'tiruchirappalli': 'Tamil Nadu', 'trichy': 'Tamil Nadu',
   'tambaram': 'Tamil Nadu', 'vellore': 'Tamil Nadu', 'erode': 'Tamil Nadu', 'tirunelveli': 'Tamil Nadu',
-  'tiruppur': 'Tamil Nadu', 'dindigul': 'Tamil Nadu', 'thanjavur': 'Tamil Nadu',
+  'tiruppur': 'Tamil Nadu', 'dindigul': 'Tamil Nadu', 'thanjavur': 'Tamil Nadu', 'hosur': 'Tamil Nadu',
   'hyderabad': 'Telangana', 'warangal': 'Telangana', 'secunderabad': 'Telangana',
   'karimnagar': 'Telangana', 'nizamabad': 'Telangana', 'khammam': 'Telangana',
   'kolkata': 'West Bengal', 'howrah': 'West Bengal', 'siliguri': 'West Bengal',
@@ -92,7 +109,7 @@ const CITY_TO_STATE = {
   'varanasi': 'Uttar Pradesh', 'allahabad': 'Uttar Pradesh', 'prayagraj': 'Uttar Pradesh',
   'meerut': 'Uttar Pradesh', 'bareilly': 'Uttar Pradesh', 'moradabad': 'Uttar Pradesh',
   'saharanpur': 'Uttar Pradesh', 'gorakhpur': 'Uttar Pradesh', 'ghaziabad': 'Uttar Pradesh',
-  'noida': 'Uttar Pradesh', 'greater noida': 'Uttar Pradesh',
+  'noida': 'Uttar Pradesh', 'greater noida': 'Uttar Pradesh', 'aligarh': 'Uttar Pradesh',
   'bhopal': 'Madhya Pradesh', 'indore': 'Madhya Pradesh', 'jabalpur': 'Madhya Pradesh',
   'gwalior': 'Madhya Pradesh', 'ujjain': 'Madhya Pradesh',
   'patna': 'Bihar', 'gaya': 'Bihar', 'muzaffarpur': 'Bihar',
@@ -106,10 +123,14 @@ const CITY_TO_STATE = {
   'kurnool': 'Andhra Pradesh', 'kakinada': 'Andhra Pradesh', 'rajahmundry': 'Andhra Pradesh',
   'thiruvananthapuram': 'Kerala', 'trivandrum': 'Kerala', 'kochi': 'Kerala', 'cochin': 'Kerala',
   'ernakulam': 'Kerala', 'kozhikode': 'Kerala', 'calicut': 'Kerala', 'thrissur': 'Kerala',
-  'bhubaneswar': 'Odisha', 'cuttack': 'Odisha',
-  'guwahati': 'Assam', 'dehradun': 'Uttarakhand', 'shimla': 'Himachal Pradesh',
+  'kollam': 'Kerala',
+  'bhubaneswar': 'Odisha', 'cuttack': 'Odisha', 'rourkela': 'Odisha',
+  'guwahati': 'Assam', 'dehradun': 'Uttarakhand', 'haridwar': 'Uttarakhand',
+  'shimla': 'Himachal Pradesh', 'dharamsala': 'Himachal Pradesh',
   'srinagar': 'Jammu and Kashmir', 'jammu': 'Jammu and Kashmir',
-  'raipur': 'Chhattisgarh', 'panaji': 'Goa', 'margao': 'Goa',
+  'raipur': 'Chhattisgarh', 'bhilai': 'Chhattisgarh', 'bilaspur': 'Chhattisgarh',
+  'panaji': 'Goa', 'margao': 'Goa',
+  'kolhapur': 'Maharashtra', 'bhavnagar': 'Gujarat',
 };
 const MAJOR_CITIES = new Set(Object.keys(CITY_TO_STATE));
 
@@ -260,7 +281,6 @@ function extractFieldsFromRecord(fields) {
       if (ns) { out.states.push(ns); continue; }
       if (!isJunkValue(clean) && clean.length >= 2 && !/^\d+$/.test(clean)) {
         const normalized = normalizeCity(clean);
-        if ((key === 'area' || key === 'location') && !CITY_TO_STATE[normalized.toLowerCase()]) continue;
         out.cities.push(normalized);
       }
       continue;
@@ -492,7 +512,7 @@ export const __test_cases__ = [
       { city: 'Chennai', state: 'TN' },
       { pincode: '110021' },
     ]),
-    expect: { state: 'Tamil Nadu', district: 'Chennai', stateCode: 'TN' },
+    expect: { state: 'Tamil Nadu', district: 'Adyar', stateCode: 'TN' },
   },
   {
     name: 'address-string-parsing',

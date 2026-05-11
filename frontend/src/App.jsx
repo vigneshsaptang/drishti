@@ -16,6 +16,7 @@ import FeedbackModal from './components/FeedbackModal';
 import MyTickets from './components/MyTickets';
 import FaqPage from './components/FaqPage';
 import StatusPage from './components/StatusPage';
+import HealthDashboard from './components/HealthDashboard';
 import AdminUsers from './pages/AdminUsers';
 import AdminConfig from './pages/AdminConfig';
 import AdminAuditLog from './pages/AdminAuditLog';
@@ -39,6 +40,7 @@ import { chooseCanonicalIdentity } from './lib/canonicalIdentity';
 import { extractIdentifiers } from './lib/identifierExtract';
 import { openReport } from './lib/reportGenerator';
 import { useNotifications } from './hooks/useNotifications';
+import ErrorBoundary from './components/ErrorBoundary';
 
 
 function v2ToLegacyData(results, searchMeta, darkmonResults) {
@@ -61,14 +63,14 @@ function v2ToLegacyData(results, searchMeta, darkmonResults) {
 
 function renderTab(activeTab, data, results, onPivot, loading, ftiResults, onFocusEntity, focusedEntity, clearFocusedEntity, darkmonResults, darkmonMeta, financialResults, financialMeta) {
   switch (activeTab) {
-    case 'graph': return <GraphTab data={data} onPivot={onPivot} focusedEntity={focusedEntity} onClearFocus={clearFocusedEntity} />;
-    case 'financial': return <FinancialTab financialResults={financialResults} financialMeta={financialMeta} />;
-    case 'telegram': return <TelegramTab data={data} />;
-    case 'breaches': return <BreachesV2Tab results={results} onPivot={onPivot} loading={loading} onFocusEntity={onFocusEntity} />;
-    case 'darkweb': return <DarkwebTab data={data} onPivot={onPivot} darkmonResults={darkmonResults} darkmonMeta={darkmonMeta} />;
-    case 'drugs': return <DrugsTab />;
-    case 'ecourts': return <EcourtsTab />;
-    default: return <OverviewTab data={data} results={results} onPivot={onPivot} ftiResults={ftiResults} />;
+    case 'graph': return <ErrorBoundary name="GraphTab"><GraphTab data={data} onPivot={onPivot} focusedEntity={focusedEntity} onClearFocus={clearFocusedEntity} /></ErrorBoundary>;
+    case 'financial': return <ErrorBoundary name="FinancialTab"><FinancialTab financialResults={financialResults} financialMeta={financialMeta} /></ErrorBoundary>;
+    case 'telegram': return <ErrorBoundary name="TelegramTab"><TelegramTab data={data} /></ErrorBoundary>;
+    case 'breaches': return <ErrorBoundary name="BreachesV2Tab"><BreachesV2Tab results={results} onPivot={onPivot} loading={loading} onFocusEntity={onFocusEntity} /></ErrorBoundary>;
+    case 'darkweb': return <ErrorBoundary name="DarkwebTab"><DarkwebTab data={data} onPivot={onPivot} darkmonResults={darkmonResults} darkmonMeta={darkmonMeta} /></ErrorBoundary>;
+    case 'drugs': return <ErrorBoundary name="DrugsTab"><DrugsTab /></ErrorBoundary>;
+    case 'ecourts': return <ErrorBoundary name="EcourtsTab"><EcourtsTab /></ErrorBoundary>;
+    default: return <ErrorBoundary name="OverviewTab"><OverviewTab data={data} results={results} onPivot={onPivot} ftiResults={ftiResults} /></ErrorBoundary>;
   }
 }
 
@@ -130,10 +132,13 @@ export default function App() {
       .filter(t => t.length >= 3 && !/^\d/.test(t));
   }, [canonical]);
 
-  const handleSearch = useCallback((seeds, engines) => {
+  const [currentEngines, setCurrentEngines] = useState(null);
+
+  const handleSearch = useCallback((seeds, engines = null) => {
+    setCurrentEngines(engines);
     setActiveTab('overview');
     setFocusedEntity(null);
-    doSearch(seeds, 5, engines);
+    doSearch(seeds, 2, engines);
   }, [doSearch]);
 
   const handleExportReport = useCallback(() => {
@@ -142,8 +147,8 @@ export default function App() {
 
   const handlePivot = useCallback((type, value) => {
     CommandBar._setSearch?.(type, value);
-    handleSearch([{ type, value: value.trim() }]);
-  }, [handleSearch]);
+    handleSearch([{ type, value: value.trim() }], currentEngines);
+  }, [handleSearch, currentEngines]);
 
   const renderBody = () => {
     if (error) {
@@ -153,11 +158,11 @@ export default function App() {
         </div>
       );
     }
-    if (activeTab === 'drugs') return <DrugsTab />;
-    if (activeTab === 'financial') return <FinancialTab financialResults={financialResults} financialMeta={financialMeta} />;
-    if (activeTab === 'darkweb') return <DarkwebTab data={data} onPivot={handlePivot} darkmonResults={darkmonResults} darkmonMeta={darkmonMeta} />;
-    if (activeTab === 'ecourts') return <EcourtsTab />;
-    if (activeTab === 'graph') return <GraphTab data={data} onPivot={handlePivot} focusedEntity={focusedEntity} onClearFocus={clearFocusedEntity} />;
+    if (activeTab === 'drugs') return <ErrorBoundary name="DrugsTab"><DrugsTab /></ErrorBoundary>;
+    if (activeTab === 'financial') return <ErrorBoundary name="FinancialTab"><FinancialTab financialResults={financialResults} financialMeta={financialMeta} /></ErrorBoundary>;
+    if (activeTab === 'darkweb') return <ErrorBoundary name="DarkwebTab"><DarkwebTab data={data} onPivot={handlePivot} darkmonResults={darkmonResults} darkmonMeta={darkmonMeta} /></ErrorBoundary>;
+    if (activeTab === 'ecourts') return <ErrorBoundary name="EcourtsTab"><EcourtsTab /></ErrorBoundary>;
+    if (activeTab === 'graph') return <ErrorBoundary name="GraphTab"><GraphTab data={data} onPivot={handlePivot} focusedEntity={focusedEntity} onClearFocus={clearFocusedEntity} /></ErrorBoundary>;
     if (loading && !hasResults) return <ScannerWait />;
     if (!hasResults && !loading) return <DashboardIdle />;
     if (hasResults) return renderTab(activeTab, data, results, handlePivot, loading, ftiResults, handleFocusEntity, focusedEntity, clearFocusedEntity, darkmonResults, darkmonMeta, financialResults, financialMeta);
@@ -202,8 +207,8 @@ export default function App() {
         hasResults={hasResults}
       />
       <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
-        {hasResults && activeTab === 'overview' && <SubjectProfile results={results} loading={loading} onFocusEntity={handleFocusEntity} onSwitchTab={setActiveTab} aiSummary={aiSummary} />}
-        {(ftiResults.length > 0 || ftiMeta) && activeTab === 'overview' && <FtiScreening ftiResults={ftiResults} ftiMeta={ftiMeta} loading={loading} canonicalTokens={watchlistFilterTokens} canonicalName={canonical?.canonical || null} />}
+        {hasResults && activeTab === 'overview' && <ErrorBoundary name="SubjectProfile"><SubjectProfile results={results} loading={loading} onFocusEntity={handleFocusEntity} onSwitchTab={setActiveTab} aiSummary={aiSummary} canonical={canonical} /></ErrorBoundary>}
+        {(ftiResults.length > 0 || ftiMeta) && activeTab === 'overview' && <ErrorBoundary name="FtiScreening"><FtiScreening ftiResults={ftiResults} ftiMeta={ftiMeta} loading={loading} canonicalTokens={watchlistFilterTokens} canonicalName={canonical?.canonical || null} /></ErrorBoundary>}
         {renderBody()}
       </main>
 
@@ -222,6 +227,7 @@ export default function App() {
       {overlay === 'admin-tickets' && <TicketManager />}
       {overlay === 'admin-faq' && <FaqManager />}
       {overlay === 'admin-status' && <StatusManager />}
+      {overlay === 'health' && <ErrorBoundary name="HealthDashboard"><HealthDashboard onClose={() => setOverlay(null)} /></ErrorBoundary>}
 
       <FeedbackFab onClick={() => setFeedbackOpen(true)} unreadCount={unreadCount} />
       <FeedbackModal

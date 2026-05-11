@@ -44,16 +44,17 @@ function bestCasing(existing, candidate) {
 }
 
 export function chooseCanonicalIdentity({ names = [], usernames = [], emails = [] }) {
-  const empty = { canonical: null, anchor: null, confidence: 0,
+  const empty = { canonical: null, anchor: null, confidence: 0, source: 'inferred',
     evidence: { anchor_count: 0, total_inputs: 0, candidates_considered: 0, token_freq: {} },
     alternates: [] };
 
-  // 1. Collect + dedup inputs
-  const rawInputs = [
-    ...names,
-    ...usernames,
-    ...emails.map(e => (e || '').split('@')[0]),
+  // 1. Collect + dedup inputs — real names strongly preferred
+  const nameInputs = names.filter(n => n && typeof n === 'string' && n.trim().length > 1);
+  const fallbackInputs = [
+    ...usernames.filter(u => u && typeof u === 'string' && u.trim().length > 1),
+    ...emails.map(e => (e || '').split('@')[0]).filter(lp => lp && typeof lp === 'string' && lp.trim().length > 1),
   ];
+  const rawInputs = nameInputs.length > 0 ? nameInputs : fallbackInputs;
 
   // dedup case-insensitively, keep best casing
   const seen = new Map(); // lower → best-cased original
@@ -102,8 +103,12 @@ export function chooseCanonicalIdentity({ names = [], usernames = [], emails = [
 
   // 6. Early exit: anchor found in only 1 input
   if (!anchor || anchorFreq <= 1) {
-    const fallback = inputs.reduce((a, b) => (b.length > a.length ? b : a), inputs[0]);
+    const nameFallback = nameInputs.length > 0
+      ? nameInputs.reduce((a, b) => (b.length > a.length ? b : a), nameInputs[0])
+      : null;
+    const fallback = nameFallback || inputs.reduce((a, b) => (b.length > a.length ? b : a), inputs[0]);
     return { ...empty, canonical: fallback,
+      source: nameInputs.length > 0 ? 'name' : 'inferred',
       evidence: { anchor_count: anchorFreq, total_inputs: inputs.length,
         candidates_considered: 0, token_freq: Object.fromEntries(freq) } };
   }
@@ -187,6 +192,7 @@ export function chooseCanonicalIdentity({ names = [], usernames = [], emails = [
     canonical,
     anchor,
     confidence,
+    source: nameInputs.length > 0 ? 'name' : 'inferred',
     evidence: {
       anchor_count: anchorFreq,
       total_inputs: inputs.length,

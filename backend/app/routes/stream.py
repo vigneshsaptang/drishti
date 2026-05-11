@@ -3,10 +3,13 @@ Streaming search endpoint — SSE (Server-Sent Events).
 Returns CREDMON results immediately, then FTI and DARKMON as they complete.
 """
 import json
+import logging
 import time
 import concurrent.futures
 from datetime import datetime
 from bson import ObjectId
+
+log = logging.getLogger("stream")
 from fastapi import APIRouter, Depends, Request
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
@@ -145,6 +148,7 @@ async def stream_search(req: StreamSearchRequest, request: Request, _credits: di
                 fti_result = f_fti.result(timeout=15)
                 yield {"event": "threat_intel", "data": _dumps(fti_result)}
             except Exception:
+                log.error("FTI thread failed or timed out in stream", exc_info=True)
                 yield {"event": "threat_intel", "data": _dumps({})}
 
             # Stream DARKMON when ready (10s max — don't block the user)
@@ -153,6 +157,7 @@ async def stream_search(req: StreamSearchRequest, request: Request, _credits: di
                 dw_result = f_dw.result(timeout=10)
                 yield {"event": "darkweb", "data": _dumps(dw_result)}
             except Exception:
+                log.error("DARKMON thread failed or timed out in stream", exc_info=True)
                 yield {"event": "darkweb", "data": _dumps({"entity_matches": {"threads": [], "posts": []}, "username_matches": []})}
 
         total_time = round((time.time() - t_start) * 1000)

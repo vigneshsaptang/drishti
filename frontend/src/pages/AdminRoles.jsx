@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AdminNav from '../components/AdminNav';
 import { adminGetRoles, adminCreateRole } from '../lib/api';
 
@@ -225,7 +225,7 @@ export default function AdminRoles({ onClose, onNavigate }) {
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -237,9 +237,10 @@ export default function AdminRoles({ onClose, onNavigate }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- data-fetching effect, setState in async callback is intentional
+  useEffect(() => { load(); }, [load]);
 
   return (
     <div className="fixed inset-0 z-50 bg-sap-bg overflow-y-auto">

@@ -226,6 +226,74 @@ class AuditService:
             detail=detail,
         )
 
+    def log_client_error(self, *,
+                         error_type: str,
+                         message: str,
+                         stack: str | None = None,
+                         component: str | None = None,
+                         url: str | None = None,
+                         client_ip: str | None = None,
+                         user_agent: str | None = None,
+                         user_id: str | None = None,
+                         username: str | None = None):
+        self.log(
+            category="client_error",
+            action=f"client_error.{error_type}",
+            severity="error",
+            user_id=user_id,
+            username=username,
+            client_ip=client_ip,
+            user_agent=user_agent,
+            detail={
+                "error_type": error_type,
+                "message": message[:2000],
+                "stack": (stack or "")[:5000],
+                "component": component,
+                "url": url,
+            },
+        )
+
+    def log_slow_query(self, *,
+                       engine: str,
+                       query_type: str,
+                       duration_ms: int,
+                       user_id: str | None = None,
+                       username: str | None = None,
+                       detail: dict | None = None):
+        self.log(
+            category="performance",
+            action=f"slow_query.{engine}",
+            severity="warn",
+            user_id=user_id,
+            username=username,
+            response_time_ms=duration_ms,
+            detail={
+                "engine": engine,
+                "query_type": query_type,
+                "duration_ms": duration_ms,
+                **(detail or {}),
+            },
+        )
+
+    def log_empty_result(self, *,
+                         engine: str,
+                         search_type: str,
+                         user_id: str | None = None,
+                         username: str | None = None,
+                         detail: dict | None = None):
+        self.log(
+            category="diagnostic",
+            action=f"empty_result.{engine}",
+            severity="info",
+            user_id=user_id,
+            username=username,
+            detail={
+                "engine": engine,
+                "search_type": search_type,
+                **(detail or {}),
+            },
+        )
+
     def log_from_request(self, request, *, category: str, action: str,
                          severity: str = "info", detail: dict | None = None,
                          response_time_ms: int | None = None):

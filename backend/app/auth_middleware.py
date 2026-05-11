@@ -17,9 +17,10 @@ from app.platform.rbac import resolve_effective_permissions
 
 log = logging.getLogger("auth_middleware")
 
-_PUBLIC_PREFIXES = ("/api/health", "/api/auth/status", "/api/auth/setup", "/api/auth/login",
+_PUBLIC_PREFIXES = ("/api/auth/status", "/api/auth/setup", "/api/auth/login",
                     "/api/auth/refresh", "/api/auth/change-password/temp", "/api/auth/captcha",
                     "/api/errors")
+_PUBLIC_EXACT = ("/api/health",)
 
 _jti_cache: dict[str, tuple[dict, float]] = {}
 _JTI_CACHE_TTL = 60
@@ -52,6 +53,9 @@ class SaptangAuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
 
         if not path.startswith("/api/"):
+            return await call_next(request)
+
+        if path in _PUBLIC_EXACT:
             return await call_next(request)
 
         for prefix in _PUBLIC_PREFIXES:

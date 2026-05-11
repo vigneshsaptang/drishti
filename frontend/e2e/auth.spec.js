@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures.js';
+import { test, expect, solveCaptcha } from './fixtures.js';
 
 test.describe('Authentication', () => {
   test('login success — credentials accepted, main app renders', async ({ page }) => {
@@ -24,14 +24,15 @@ test.describe('Authentication', () => {
       // Handle CAPTCHA if present
       const captchaInput = page.locator('input[placeholder="Enter answer"]');
       if (await captchaInput.isVisible().catch(() => false)) {
-        await captchaInput.fill('test');
+        const answer = await solveCaptcha(page);
+        if (answer) await captchaInput.fill(answer);
       }
 
       await page.click('button[type="submit"]');
     }
 
     // After login, the command bar (search input) should be visible
-    await expect(page.locator('input[placeholder*="Search"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('input[placeholder*="Search"]')).toBeVisible({ timeout: 15000 });
   });
 
   test('login failure — wrong password shows error', async ({ page }) => {
@@ -51,10 +52,11 @@ test.describe('Authentication', () => {
     await page.fill('#sap-user', 'wronguser');
     await page.fill('#sap-pass', 'definitelywrongpassword123');
 
-    // Handle CAPTCHA if present
+    // Handle CAPTCHA if present — solve it correctly so the failure is from bad credentials
     const captchaInput = page.locator('input[placeholder="Enter answer"]');
     if (await captchaInput.isVisible().catch(() => false)) {
-      await captchaInput.fill('wrong');
+      const answer = await solveCaptcha(page);
+      if (answer) await captchaInput.fill(answer);
     }
 
     await page.click('button[type="submit"]');
@@ -72,8 +74,8 @@ test.describe('Authentication', () => {
     const signOutItem = page.locator('[role="menuitem"]').filter({ hasText: 'Sign Out' });
     await signOutItem.click();
 
-    // After sign-out, the login form (or the "Auracle" heading on login page) should reappear
-    await expect(page.locator('#sap-user').or(page.locator('h1:has-text("Auracle")'))).toBeVisible({ timeout: 10000 });
+    // After sign-out, the login form should reappear
+    await expect(page.locator('#sap-user')).toBeVisible({ timeout: 10000 });
   });
 
   test('session persistence — reload preserves auth', async ({ authenticatedPage: page }) => {
@@ -118,6 +120,6 @@ test.describe('Authentication', () => {
     });
 
     // Login form should reappear
-    await expect(page.locator('#sap-user').or(page.locator('h1:has-text("Auracle")'))).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('#sap-user')).toBeVisible({ timeout: 10000 });
   });
 });

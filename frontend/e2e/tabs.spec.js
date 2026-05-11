@@ -72,16 +72,9 @@ test.describe('Tab Navigation', () => {
     // ProfileDialog renders as an overlay; verify it appeared
     await page.waitForTimeout(500);
 
-    // Close the overlay — look for a close button (X) or click outside
-    const closeBtn = page.locator('button').filter({ hasText: /close|cancel/i }).or(
-      page.locator('[aria-label="Close"]').or(page.locator('button svg').first())
-    );
-    if (await closeBtn.first().isVisible().catch(() => false)) {
-      await closeBtn.first().click();
-    } else {
-      // Press Escape to close
-      await page.keyboard.press('Escape');
-    }
+    // Close the overlay via Escape (overlay backdrop intercepts pointer events)
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
 
     // Main content should be restored
     await expect(page.locator('main')).toBeVisible();

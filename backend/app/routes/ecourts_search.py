@@ -207,16 +207,23 @@ class SearchBody(BaseModel):
     skip_cache: bool = Field(default=False, description="Bypass cache, force fresh paid sweep")
 
 
+MAX_COURT_CODES = 100
+
 @router.post("/search")
 def search(body: SearchBody, request: Request, _credits: dict = Depends(require_credits("ecourts_search"))):
     """Litigant search across the full case corpus.
     Chunks courtCodes at the safe limit, paginates within each chunk, deduplicates by CNR,
     and caches the aggregate keyed by (name, codes-hash, filters).
     """
+    if not body.states and not body.kinds:
+        raise HTTPException(400, "At least one of 'states' or 'kinds' is required to scope the search")
+
     name = body.name.strip()
     codes = _resolve_court_codes(body.states, body.kinds)
     if not codes:
         raise HTTPException(400, "No court codes match the given filters")
+    if len(codes) > MAX_COURT_CODES:
+        raise HTTPException(400, f"Search scope too broad ({len(codes)} courts). Narrow by state or court kind")
 
     cache_key = hashlib.sha1(
         f"{name}|{','.join(sorted(codes))}|{body.case_status or ''}".encode()

@@ -71,8 +71,11 @@ def _cached(coll_name: str, key: str) -> Optional[dict]:
     if not doc:
         return None
     expires = doc.get("_expires_at")
-    if expires and expires < _utc_now():
-        return None
+    if expires:
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if expires < _utc_now():
+            return None
     return doc.get("payload")
 
 

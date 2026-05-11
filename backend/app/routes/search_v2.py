@@ -2,6 +2,7 @@
 CREDMON v2 streaming search endpoint — SSE (Server-Sent Events).
 Streams per-entity breach results as they are discovered via BFS.
 """
+import asyncio
 import concurrent.futures
 import json
 import logging
@@ -286,6 +287,135 @@ def _generate_programmatic_summary(
     return " ".join(parts)
 
 
+def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: list[dict]) -> dict:
+    """FTI screening + financial screening (runs in thread)."""
+    events = []
+    t_fti = time.time()
+    names_screened = 0
+    cd_matches = 0
+    wc_matches = 0
+
+    if "threat_intel" in engines:
+        fullnames = _extract_fullnames(all_results)
+        names_screened = len(fullnames)
+        for name in fullnames:
+            t_q = time.time()
+            cd_results = fti.screen_crimedata(name)
+            cd_time = round((time.time() - t_q) * 1000)
+            cd_found = len(cd_results) > 0
+            if cd_found:
+                cd_matches += 1
+            events.append({"event": "fti:result", "data": _dumps({
+                "query_type": "crimedata", "entity_value": name,
+                "found": cd_found, "results": cd_results, "search_time_ms": cd_time,
+            })})
+
+            t_q = time.time()
+            wc_results = fti.screen_worldcheck(name)
+            wc_time = round((time.time() - t_q) * 1000)
+            wc_found = len(wc_results) > 0
+            if wc_found:
+                wc_matches += 1
+            events.append({"event": "fti:result", "data": _dumps({
+                "query_type": "worldcheck", "entity_value": name,
+                "found": wc_found, "results": wc_results, "search_time_ms": wc_time,
+            })})
+
+    fti_ms = round((time.time() - t_fti) * 1000)
+    events.append({"event": "fti:complete", "data": _dumps({
+        "total_names_screened": names_screened,
+        "crimedata_matches": cd_matches, "worldcheck_matches": wc_matches,
+        "total_time_ms": fti_ms,
+    })})
+
+    t_fin = time.time()
+    phones_screened = 0
+    upi_hits = 0
+
+    if "financial" in engines:
+        phones: set[str] = set()
+        for result in all_results:
+            if result.get("entity_type") == "phone":
+                phones.add(result["entity_value"])
+            for p in result.get("new_phones_found", []):
+                phones.add(p)
+        for seed in seeds_dicts:
+            if seed["type"] == "phone":
+                phones.add(seed["value"])
+
+        for phone in list(phones)[:10]:
+            phones_screened += 1
+            t_q = time.time()
+            upi_results = fti.search_upi_by_phone(phone)
+            q_time = round((time.time() - t_q) * 1000)
+            upi_found = len(upi_results) > 0
+            if upi_found:
+                upi_hits += 1
+            events.append({"event": "financial:result", "data": _dumps({
+                "phone": phone, "found": upi_found,
+                "upi_records": upi_results, "search_time_ms": q_time,
+            })})
+
+    fin_ms = round((time.time() - t_fin) * 1000)
+    events.append({"event": "financial:complete", "data": _dumps({
+        "total_phones_screened": phones_screened,
+        "total_upi_hits": upi_hits, "total_time_ms": fin_ms,
+    })})
+
+    return {
+        "events": events,
+        "names_screened": names_screened,
+        "cd_matches": cd_matches, "wc_matches": wc_matches,
+        "fti_ms": fti_ms,
+        "phones_screened": phones_screened, "upi_hits": upi_hits,
+        "fin_ms": fin_ms,
+    }
+
+
+def _run_darkmon(engines: set, all_results: list[dict]) -> dict:
+    """DARKMON username search (runs in thread)."""
+    events = []
+    t_dm = time.time()
+    unames_searched = 0
+    dm_matches = 0
+
+    if "darkweb" in engines:
+        usernames = _extract_usernames(all_results)
+        for entry in usernames:
+            uname = entry["username"]
+            breach_sources = entry["breach_sources"]
+            unames_searched += 1
+            t_q = time.time()
+            try:
+                uh = darkmon.search_by_username(uname)
+            except Exception:
+                log.warning("darkmon search_by_username failed: uname=%s", uname, exc_info=True)
+                uh = {"threads": [], "posts": [], "author_profile": None}
+            q_time = round((time.time() - t_q) * 1000)
+
+            has_data = bool(uh.get("threads") or uh.get("posts") or uh.get("author_profile"))
+            if has_data:
+                dm_matches += 1
+            events.append({"event": "darkmon:result", "data": _dumps({
+                "username": uname, "breach_sources": breach_sources,
+                "threads": uh.get("threads", []), "posts": uh.get("posts", []),
+                "author_profile": uh.get("author_profile"),
+                "found": has_data, "search_time_ms": q_time,
+            })})
+
+    dm_ms = round((time.time() - t_dm) * 1000)
+    events.append({"event": "darkmon:complete", "data": _dumps({
+        "total_usernames_searched": unames_searched,
+        "total_matches": dm_matches, "total_time_ms": dm_ms,
+    })})
+
+    return {
+        "events": events,
+        "unames_searched": unames_searched,
+        "dm_matches": dm_matches, "dm_ms": dm_ms,
+    }
+
+
 @router.post("/search")
 async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Depends(require_credits("combined_search", use_engine_cost=True))):
     """Stream CREDMON breach search results via SSE, one event per entity."""
@@ -324,16 +454,24 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
                 }),
             }
 
-        # 2. Stream entity:result events from the pipeline generator
+        # 2. BFS — run the blocking generator in a thread, collect results
         total_entities_searched = 0
         total_found = 0
         max_depth_reached = 0
         all_results = []
 
-        for result in credmon.run_pipeline_streaming(
-            seeds=seeds_dicts,
-            max_depth=req.max_depth,
-        ):
+        def _run_bfs():
+            results = []
+            for result in credmon.run_pipeline_streaming(
+                seeds=seeds_dicts,
+                max_depth=req.max_depth,
+            ):
+                results.append(result)
+            return results
+
+        bfs_results = await asyncio.to_thread(_run_bfs)
+
+        for result in bfs_results:
             total_entities_searched += 1
             if result.get("found"):
                 total_found += 1
@@ -348,161 +486,38 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
                 "data": _dumps(result),
             }
 
-        # 3. FTI + Financial + DARKMON — run in parallel with 60s wall timeout
-        t_parallel_start = time.time()
+        # 3. FTI + Financial + DARKMON — run in parallel via asyncio.to_thread
 
-        def _run_fti_and_financial():
-            """FTI screening + financial screening (runs in thread)."""
-            events = []
-            t_fti = time.time()
-            names_screened = 0
-            cd_matches = 0
-            wc_matches = 0
+        def _run_parallel():
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                f_fti = executor.submit(_run_fti_and_financial, engines, all_results, seeds_dicts)
+                f_dm = executor.submit(_run_darkmon, engines, all_results)
 
-            if "threat_intel" in engines:
-                fullnames = _extract_fullnames(all_results)
-                names_screened = len(fullnames)
-                for name in fullnames:
-                    t_q = time.time()
-                    cd_results = fti.screen_crimedata(name)
-                    cd_time = round((time.time() - t_q) * 1000)
-                    cd_found = len(cd_results) > 0
-                    if cd_found:
-                        cd_matches += 1
-                    events.append({"event": "fti:result", "data": _dumps({
-                        "query_type": "crimedata", "entity_value": name,
-                        "found": cd_found, "results": cd_results, "search_time_ms": cd_time,
-                    })})
+                try:
+                    fti_result = f_fti.result(timeout=60)
+                except Exception:
+                    log.error("FTI/financial thread failed or timed out", exc_info=True)
+                    fti_result = {
+                        "events": [
+                            {"event": "fti:complete", "data": _dumps({"total_names_screened": 0, "crimedata_matches": 0, "worldcheck_matches": 0, "total_time_ms": 0})},
+                            {"event": "financial:complete", "data": _dumps({"total_phones_screened": 0, "total_upi_hits": 0, "total_time_ms": 0})},
+                        ],
+                        "names_screened": 0, "cd_matches": 0, "wc_matches": 0, "fti_ms": 0,
+                        "phones_screened": 0, "upi_hits": 0, "fin_ms": 0,
+                    }
 
-                    t_q = time.time()
-                    wc_results = fti.screen_worldcheck(name)
-                    wc_time = round((time.time() - t_q) * 1000)
-                    wc_found = len(wc_results) > 0
-                    if wc_found:
-                        wc_matches += 1
-                    events.append({"event": "fti:result", "data": _dumps({
-                        "query_type": "worldcheck", "entity_value": name,
-                        "found": wc_found, "results": wc_results, "search_time_ms": wc_time,
-                    })})
+                try:
+                    dm_result = f_dm.result(timeout=60)
+                except Exception:
+                    log.error("DARKMON thread failed or timed out", exc_info=True)
+                    dm_result = {
+                        "events": [{"event": "darkmon:complete", "data": _dumps({"total_usernames_searched": 0, "total_matches": 0, "total_time_ms": 0})}],
+                        "unames_searched": 0, "dm_matches": 0, "dm_ms": 0,
+                    }
 
-            fti_ms = round((time.time() - t_fti) * 1000)
-            events.append({"event": "fti:complete", "data": _dumps({
-                "total_names_screened": names_screened,
-                "crimedata_matches": cd_matches, "worldcheck_matches": wc_matches,
-                "total_time_ms": fti_ms,
-            })})
+                return fti_result, dm_result
 
-            t_fin = time.time()
-            phones_screened = 0
-            upi_hits = 0
-
-            if "financial" in engines:
-                phones: set[str] = set()
-                for result in all_results:
-                    if result.get("entity_type") == "phone":
-                        phones.add(result["entity_value"])
-                    for p in result.get("new_phones_found", []):
-                        phones.add(p)
-                for seed in seeds_dicts:
-                    if seed["type"] == "phone":
-                        phones.add(seed["value"])
-
-                for phone in list(phones)[:10]:
-                    phones_screened += 1
-                    t_q = time.time()
-                    upi_results = fti.search_upi_by_phone(phone)
-                    q_time = round((time.time() - t_q) * 1000)
-                    upi_found = len(upi_results) > 0
-                    if upi_found:
-                        upi_hits += 1
-                    events.append({"event": "financial:result", "data": _dumps({
-                        "phone": phone, "found": upi_found,
-                        "upi_records": upi_results, "search_time_ms": q_time,
-                    })})
-
-            fin_ms = round((time.time() - t_fin) * 1000)
-            events.append({"event": "financial:complete", "data": _dumps({
-                "total_phones_screened": phones_screened,
-                "total_upi_hits": upi_hits, "total_time_ms": fin_ms,
-            })})
-
-            return {
-                "events": events,
-                "names_screened": names_screened,
-                "cd_matches": cd_matches, "wc_matches": wc_matches,
-                "fti_ms": fti_ms,
-                "phones_screened": phones_screened, "upi_hits": upi_hits,
-                "fin_ms": fin_ms,
-            }
-
-        def _run_darkmon():
-            """DARKMON username search (runs in thread)."""
-            events = []
-            t_dm = time.time()
-            unames_searched = 0
-            dm_matches = 0
-
-            if "darkweb" in engines:
-                usernames = _extract_usernames(all_results)
-                for entry in usernames:
-                    uname = entry["username"]
-                    breach_sources = entry["breach_sources"]
-                    unames_searched += 1
-                    t_q = time.time()
-                    try:
-                        uh = darkmon.search_by_username(uname)
-                    except Exception:
-                        log.warning("darkmon search_by_username failed: uname=%s", uname, exc_info=True)
-                        uh = {"threads": [], "posts": [], "author_profile": None}
-                    q_time = round((time.time() - t_q) * 1000)
-
-                    has_data = bool(uh.get("threads") or uh.get("posts") or uh.get("author_profile"))
-                    if has_data:
-                        dm_matches += 1
-                    events.append({"event": "darkmon:result", "data": _dumps({
-                        "username": uname, "breach_sources": breach_sources,
-                        "threads": uh.get("threads", []), "posts": uh.get("posts", []),
-                        "author_profile": uh.get("author_profile"),
-                        "found": has_data, "search_time_ms": q_time,
-                    })})
-
-            dm_ms = round((time.time() - t_dm) * 1000)
-            events.append({"event": "darkmon:complete", "data": _dumps({
-                "total_usernames_searched": unames_searched,
-                "total_matches": dm_matches, "total_time_ms": dm_ms,
-            })})
-
-            return {
-                "events": events,
-                "unames_searched": unames_searched,
-                "dm_matches": dm_matches, "dm_ms": dm_ms,
-            }
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            f_fti = executor.submit(_run_fti_and_financial)
-            f_dm = executor.submit(_run_darkmon)
-
-            try:
-                fti_result = f_fti.result(timeout=60)
-            except Exception:
-                log.error("FTI/financial thread failed or timed out", exc_info=True)
-                fti_result = {
-                    "events": [
-                        {"event": "fti:complete", "data": _dumps({"total_names_screened": 0, "crimedata_matches": 0, "worldcheck_matches": 0, "total_time_ms": 0})},
-                        {"event": "financial:complete", "data": _dumps({"total_phones_screened": 0, "total_upi_hits": 0, "total_time_ms": 0})},
-                    ],
-                    "names_screened": 0, "cd_matches": 0, "wc_matches": 0, "fti_ms": 0,
-                    "phones_screened": 0, "upi_hits": 0, "fin_ms": 0,
-                }
-
-            try:
-                dm_result = f_dm.result(timeout=60)
-            except Exception:
-                log.error("DARKMON thread failed or timed out", exc_info=True)
-                dm_result = {
-                    "events": [{"event": "darkmon:complete", "data": _dumps({"total_usernames_searched": 0, "total_matches": 0, "total_time_ms": 0})}],
-                    "unames_searched": 0, "dm_matches": 0, "dm_ms": 0,
-                }
+        fti_result, dm_result = await asyncio.to_thread(_run_parallel)
 
         for evt in fti_result["events"]:
             yield evt

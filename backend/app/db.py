@@ -14,7 +14,7 @@ def _connect(name: str, uri: str) -> MongoClient:
             connectTimeoutMS=20_000,
             socketTimeoutMS=settings.credmon_socket_timeout_ms,
             serverSelectionTimeoutMS=20_000,
-            maxPoolSize=10,
+            maxPoolSize=50,
         )
     return _clients[name]
 

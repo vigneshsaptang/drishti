@@ -1,4 +1,6 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, lazy, Suspense } from 'react';
+
+// Keep static: shell components always visible
 import Header from './components/Header';
 import CommandBar from './components/CommandBar';
 import StatusLine from './components/StatusLine';
@@ -7,40 +9,47 @@ import FtiScreening from './components/FtiScreening';
 import ClassificationBanner from './components/ClassificationBanner';
 import TabStrip from './components/TabStrip';
 import DashboardIdle from './components/DashboardIdle';
-import ProfileDialog from './components/ProfileDialog';
-import SessionList from './components/SessionList';
-import ApiKeyManager from './components/ApiKeyManager';
-import CreditPanel from './components/CreditPanel';
 import FeedbackFab from './components/FeedbackFab';
 import FeedbackModal from './components/FeedbackModal';
-import MyTickets from './components/MyTickets';
-import FaqPage from './components/FaqPage';
-import StatusPage from './components/StatusPage';
-import HealthDashboard from './components/HealthDashboard';
-import AdminUsers from './pages/AdminUsers';
-import AdminConfig from './pages/AdminConfig';
-import AdminAuditLog from './pages/AdminAuditLog';
-import AdminRoles from './pages/AdminRoles';
-import AdminCredits from './pages/AdminCredits';
-import TicketManager from './admin/TicketManager';
-import FaqManager from './admin/FaqManager';
-import StatusManager from './admin/StatusManager';
+import ErrorBoundary from './components/ErrorBoundary';
+
+// Keep static: OverviewTab is the default tab (always shown first)
+import OverviewTab from './tabs/OverviewTab';
+
+// Lazy: tabs loaded on demand
+const BreachesV2Tab = lazy(() => import('./tabs/BreachesV2Tab'));
+const DarkwebTab = lazy(() => import('./tabs/DarkwebTab'));
+const DrugsTab = lazy(() => import('./tabs/DrugsTab'));
+const TelegramTab = lazy(() => import('./tabs/TelegramTab'));
+const FinancialTab = lazy(() => import('./tabs/FinancialTab'));
+const GraphTab = lazy(() => import('./tabs/GraphTab'));
+const EcourtsTab = lazy(() => import('./tabs/EcourtsTab'));
+
+// Lazy: overlays/admin (rarely accessed)
+const ProfileDialog = lazy(() => import('./components/ProfileDialog'));
+const SessionList = lazy(() => import('./components/SessionList'));
+const ApiKeyManager = lazy(() => import('./components/ApiKeyManager'));
+const CreditPanel = lazy(() => import('./components/CreditPanel'));
+const MyTickets = lazy(() => import('./components/MyTickets'));
+const FaqPage = lazy(() => import('./components/FaqPage'));
+const StatusPage = lazy(() => import('./components/StatusPage'));
+const HealthDashboard = lazy(() => import('./components/HealthDashboard'));
+const AdminUsers = lazy(() => import('./pages/AdminUsers'));
+const AdminConfig = lazy(() => import('./pages/AdminConfig'));
+const AdminAuditLog = lazy(() => import('./pages/AdminAuditLog'));
+const AdminRoles = lazy(() => import('./pages/AdminRoles'));
+const AdminCredits = lazy(() => import('./pages/AdminCredits'));
+const TicketManager = lazy(() => import('./admin/TicketManager'));
+const FaqManager = lazy(() => import('./admin/FaqManager'));
+const StatusManager = lazy(() => import('./admin/StatusManager'));
+
 import { PermissionProvider } from './lib/permissions';
 import { getUser } from './lib/auth';
-import OverviewTab from './tabs/OverviewTab';
-import BreachesV2Tab from './tabs/BreachesV2Tab';
-import DarkwebTab from './tabs/DarkwebTab';
-import DrugsTab from './tabs/DrugsTab';
-import TelegramTab from './tabs/TelegramTab';
-import FinancialTab from './tabs/FinancialTab';
-import GraphTab from './tabs/GraphTab';
-import EcourtsTab from './tabs/EcourtsTab';
 import { useSearchV2 } from './hooks/useSearchV2';
 import { chooseCanonicalIdentity } from './lib/canonicalIdentity';
 import { extractIdentifiers } from './lib/identifierExtract';
 import { openReport } from './lib/reportGenerator';
 import { useNotifications } from './hooks/useNotifications';
-import ErrorBoundary from './components/ErrorBoundary';
 
 
 function v2ToLegacyData(results, searchMeta, darkmonResults) {
@@ -61,17 +70,28 @@ function v2ToLegacyData(results, searchMeta, darkmonResults) {
   };
 }
 
+function LazyFallback() {
+  return (
+    <div className="flex items-center justify-center p-12">
+      <div className="h-2 w-2 rounded-full bg-sap-accent animate-pulse" />
+      <span className="ml-3 text-xs font-mono text-sap-dim">Loading module...</span>
+    </div>
+  );
+}
+
 function renderTab(activeTab, data, results, onPivot, loading, ftiResults, onFocusEntity, focusedEntity, clearFocusedEntity, darkmonResults, darkmonMeta, financialResults, financialMeta) {
+  let tab;
   switch (activeTab) {
-    case 'graph': return <ErrorBoundary name="GraphTab"><GraphTab data={data} onPivot={onPivot} focusedEntity={focusedEntity} onClearFocus={clearFocusedEntity} /></ErrorBoundary>;
-    case 'financial': return <ErrorBoundary name="FinancialTab"><FinancialTab financialResults={financialResults} financialMeta={financialMeta} /></ErrorBoundary>;
-    case 'telegram': return <ErrorBoundary name="TelegramTab"><TelegramTab data={data} /></ErrorBoundary>;
-    case 'breaches': return <ErrorBoundary name="BreachesV2Tab"><BreachesV2Tab results={results} onPivot={onPivot} loading={loading} onFocusEntity={onFocusEntity} /></ErrorBoundary>;
-    case 'darkweb': return <ErrorBoundary name="DarkwebTab"><DarkwebTab data={data} onPivot={onPivot} darkmonResults={darkmonResults} darkmonMeta={darkmonMeta} /></ErrorBoundary>;
-    case 'drugs': return <ErrorBoundary name="DrugsTab"><DrugsTab /></ErrorBoundary>;
-    case 'ecourts': return <ErrorBoundary name="EcourtsTab"><EcourtsTab /></ErrorBoundary>;
-    default: return <ErrorBoundary name="OverviewTab"><OverviewTab data={data} results={results} onPivot={onPivot} ftiResults={ftiResults} /></ErrorBoundary>;
+    case 'graph': tab = <ErrorBoundary name="GraphTab"><GraphTab data={data} onPivot={onPivot} focusedEntity={focusedEntity} onClearFocus={clearFocusedEntity} /></ErrorBoundary>; break;
+    case 'financial': tab = <ErrorBoundary name="FinancialTab"><FinancialTab financialResults={financialResults} financialMeta={financialMeta} /></ErrorBoundary>; break;
+    case 'telegram': tab = <ErrorBoundary name="TelegramTab"><TelegramTab data={data} /></ErrorBoundary>; break;
+    case 'breaches': tab = <ErrorBoundary name="BreachesV2Tab"><BreachesV2Tab results={results} onPivot={onPivot} loading={loading} onFocusEntity={onFocusEntity} /></ErrorBoundary>; break;
+    case 'darkweb': tab = <ErrorBoundary name="DarkwebTab"><DarkwebTab data={data} onPivot={onPivot} darkmonResults={darkmonResults} darkmonMeta={darkmonMeta} /></ErrorBoundary>; break;
+    case 'drugs': tab = <ErrorBoundary name="DrugsTab"><DrugsTab /></ErrorBoundary>; break;
+    case 'ecourts': tab = <ErrorBoundary name="EcourtsTab"><EcourtsTab /></ErrorBoundary>; break;
+    default: tab = <ErrorBoundary name="OverviewTab"><OverviewTab data={data} results={results} onPivot={onPivot} ftiResults={ftiResults} /></ErrorBoundary>; break;
   }
+  return <Suspense fallback={<LazyFallback />}>{tab}</Suspense>;
 }
 
 function ScannerWait() {
@@ -158,11 +178,11 @@ export default function App() {
         </div>
       );
     }
-    if (activeTab === 'drugs') return <ErrorBoundary name="DrugsTab"><DrugsTab /></ErrorBoundary>;
-    if (activeTab === 'financial') return <ErrorBoundary name="FinancialTab"><FinancialTab financialResults={financialResults} financialMeta={financialMeta} /></ErrorBoundary>;
-    if (activeTab === 'darkweb') return <ErrorBoundary name="DarkwebTab"><DarkwebTab data={data} onPivot={handlePivot} darkmonResults={darkmonResults} darkmonMeta={darkmonMeta} /></ErrorBoundary>;
-    if (activeTab === 'ecourts') return <ErrorBoundary name="EcourtsTab"><EcourtsTab /></ErrorBoundary>;
-    if (activeTab === 'graph') return <ErrorBoundary name="GraphTab"><GraphTab data={data} onPivot={handlePivot} focusedEntity={focusedEntity} onClearFocus={clearFocusedEntity} /></ErrorBoundary>;
+    if (activeTab === 'drugs') return <Suspense fallback={<LazyFallback />}><ErrorBoundary name="DrugsTab"><DrugsTab /></ErrorBoundary></Suspense>;
+    if (activeTab === 'financial') return <Suspense fallback={<LazyFallback />}><ErrorBoundary name="FinancialTab"><FinancialTab financialResults={financialResults} financialMeta={financialMeta} /></ErrorBoundary></Suspense>;
+    if (activeTab === 'darkweb') return <Suspense fallback={<LazyFallback />}><ErrorBoundary name="DarkwebTab"><DarkwebTab data={data} onPivot={handlePivot} darkmonResults={darkmonResults} darkmonMeta={darkmonMeta} /></ErrorBoundary></Suspense>;
+    if (activeTab === 'ecourts') return <Suspense fallback={<LazyFallback />}><ErrorBoundary name="EcourtsTab"><EcourtsTab /></ErrorBoundary></Suspense>;
+    if (activeTab === 'graph') return <Suspense fallback={<LazyFallback />}><ErrorBoundary name="GraphTab"><GraphTab data={data} onPivot={handlePivot} focusedEntity={focusedEntity} onClearFocus={clearFocusedEntity} /></ErrorBoundary></Suspense>;
     if (loading && !hasResults) return <ScannerWait />;
     if (!hasResults && !loading) return <DashboardIdle />;
     if (hasResults) return renderTab(activeTab, data, results, handlePivot, loading, ftiResults, handleFocusEntity, focusedEntity, clearFocusedEntity, darkmonResults, darkmonMeta, financialResults, financialMeta);
@@ -212,22 +232,24 @@ export default function App() {
         {renderBody()}
       </main>
 
-      {overlay === 'profile' && <ProfileDialog onClose={() => setOverlay(null)} />}
-      {overlay === 'sessions' && <SessionList onClose={() => setOverlay(null)} />}
-      {overlay === 'apikeys' && <ApiKeyManager onClose={() => setOverlay(null)} />}
-      {overlay === 'admin-users' && <AdminUsers onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
-      {overlay === 'admin-config' && <AdminConfig onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
-      {overlay === 'admin-audit' && <AdminAuditLog onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
-      {overlay === 'admin-roles' && <AdminRoles onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
-      {overlay === 'admin-credits' && <AdminCredits onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
-      {overlay === 'credits' && <CreditPanel onClose={() => setOverlay(null)} />}
-      {overlay === 'my-tickets' && <MyTickets isOpen onClose={() => setOverlay(null)} />}
-      {overlay === 'faq' && <FaqPage isOpen onClose={() => setOverlay(null)} onOpenFeedback={() => { setOverlay(null); setFeedbackOpen(true); }} />}
-      {overlay === 'status' && <StatusPage isOpen onClose={() => setOverlay(null)} />}
-      {overlay === 'admin-tickets' && <TicketManager />}
-      {overlay === 'admin-faq' && <FaqManager />}
-      {overlay === 'admin-status' && <StatusManager />}
-      {overlay === 'health' && <ErrorBoundary name="HealthDashboard"><HealthDashboard onClose={() => setOverlay(null)} /></ErrorBoundary>}
+      <Suspense fallback={<LazyFallback />}>
+        {overlay === 'profile' && <ProfileDialog onClose={() => setOverlay(null)} />}
+        {overlay === 'sessions' && <SessionList onClose={() => setOverlay(null)} />}
+        {overlay === 'apikeys' && <ApiKeyManager onClose={() => setOverlay(null)} />}
+        {overlay === 'admin-users' && <AdminUsers onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
+        {overlay === 'admin-config' && <AdminConfig onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
+        {overlay === 'admin-audit' && <AdminAuditLog onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
+        {overlay === 'admin-roles' && <AdminRoles onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
+        {overlay === 'admin-credits' && <AdminCredits onClose={() => setOverlay(null)} onNavigate={setOverlay} />}
+        {overlay === 'credits' && <CreditPanel onClose={() => setOverlay(null)} />}
+        {overlay === 'my-tickets' && <MyTickets isOpen onClose={() => setOverlay(null)} />}
+        {overlay === 'faq' && <FaqPage isOpen onClose={() => setOverlay(null)} onOpenFeedback={() => { setOverlay(null); setFeedbackOpen(true); }} />}
+        {overlay === 'status' && <StatusPage isOpen onClose={() => setOverlay(null)} />}
+        {overlay === 'admin-tickets' && <TicketManager />}
+        {overlay === 'admin-faq' && <FaqManager />}
+        {overlay === 'admin-status' && <StatusManager />}
+        {overlay === 'health' && <ErrorBoundary name="HealthDashboard"><HealthDashboard onClose={() => setOverlay(null)} /></ErrorBoundary>}
+      </Suspense>
 
       <FeedbackFab onClick={() => setFeedbackOpen(true)} unreadCount={unreadCount} />
       <FeedbackModal

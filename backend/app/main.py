@@ -49,9 +49,23 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Platform init failed (DB auth?): %s — platform features may be unavailable", e)
     audit.start()
+    _warm_caches()
     yield
     audit.stop()
     close_all()
+
+
+def _warm_caches():
+    """Preload dashboard + stats caches in background threads so first requests are instant."""
+    import threading
+    def _warm():
+        try:
+            from app.routes.stats import _build_stats
+            _build_stats()
+            logger.info("Stats cache warmed")
+        except Exception as e:
+            logger.warning("Stats cache warm failed: %s", e)
+    threading.Thread(target=_warm, daemon=True).start()
 
 
 def _validate_jwt_secret():

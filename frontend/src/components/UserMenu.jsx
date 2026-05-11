@@ -20,6 +20,7 @@ export default function UserMenu({ onShowProfile, onShowSessions, onShowApiKeys,
   const [open, setOpen] = useState(false);
   const user = getUser();
   const ref = useRef(null);
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   const hasAdminAccess = useAnyPermission(
     'admin.users.list', 'admin.roles.list', 'admin.audit.read', 'admin.settings.read',
   );
@@ -90,31 +91,35 @@ export default function UserMenu({ onShowProfile, onShowSessions, onShowApiKeys,
             Profile
           </div>
 
-          <div
-            role="menuitem"
-            tabIndex={0}
-            onClick={handle(onShowSessions)}
-            onKeyDown={e => e.key === 'Enter' && handle(onShowSessions)()}
-            className="px-3 py-2 text-xs text-sap-text hover:bg-sap-accent/5 cursor-pointer flex items-center gap-2"
-          >
-            <svg className="w-3.5 h-3.5 shrink-0 text-sap-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-            Active Sessions
-          </div>
+          {isAdmin && (
+            <div
+              role="menuitem"
+              tabIndex={0}
+              onClick={handle(onShowSessions)}
+              onKeyDown={e => e.key === 'Enter' && handle(onShowSessions)()}
+              className="px-3 py-2 text-xs text-sap-text hover:bg-sap-accent/5 cursor-pointer flex items-center gap-2"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0 text-sap-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              Active Sessions
+            </div>
+          )}
 
-          <div
-            role="menuitem"
-            tabIndex={0}
-            onClick={handle(onShowApiKeys)}
-            onKeyDown={e => e.key === 'Enter' && handle(onShowApiKeys)()}
-            className="px-3 py-2 text-xs text-sap-text hover:bg-sap-accent/5 cursor-pointer flex items-center gap-2"
-          >
-            <svg className="w-3.5 h-3.5 shrink-0 text-sap-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-            </svg>
-            API Keys
-          </div>
+          {isAdmin && (
+            <div
+              role="menuitem"
+              tabIndex={0}
+              onClick={handle(onShowApiKeys)}
+              onKeyDown={e => e.key === 'Enter' && handle(onShowApiKeys)()}
+              className="px-3 py-2 text-xs text-sap-text hover:bg-sap-accent/5 cursor-pointer flex items-center gap-2"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0 text-sap-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+              API Keys
+            </div>
+          )}
 
           {/* Admin section */}
           {hasAdminAccess && (

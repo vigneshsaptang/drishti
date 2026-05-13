@@ -4,6 +4,7 @@ const tabs = [
   { key: 'admin-credits', label: 'Credits' },
   { key: 'admin-config', label: 'Settings' },
   { key: 'admin-audit', label: 'Audit Log' },
+  { key: 'admin-tickets', label: 'Tickets' },
   { key: 'health', label: 'Health' },
 ];
 

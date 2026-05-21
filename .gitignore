@@ -28,3 +28,8 @@ frontend/dist/
 
 # Test artifacts
 frontend/test-results/
+
+# One-off investigation artifacts
+OntoAMLAuracle/
+uapa_ats_output/
+uapa_ats_search_results.json

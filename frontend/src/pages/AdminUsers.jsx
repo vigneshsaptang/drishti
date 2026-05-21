@@ -250,7 +250,7 @@ function ResetPasswordModal({ user, onClose }) {
 
   useEffect(() => {
     adminResetPassword(user.id || user._id)
-      .then(data => setTempPassword(data.temporary_password || data.password || ''))
+      .then(data => setTempPassword(data.temp_password || ''))
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   }, [user]);

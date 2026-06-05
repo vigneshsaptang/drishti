@@ -48,6 +48,14 @@ html, body, #root {
   --animate-blip: blip 1.4s ease-in-out infinite;
   --animate-blink-cursor: blink-cursor 1.06s steps(2, start) infinite;
   --animate-slide-in-right: slideInRight 0.25s ease-out;
+  --animate-shake: shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-3px); }
+  40%, 60% { transform: translateX(3px); }
 }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auracle v3 Risk Ontology — Factor × Domain Heatmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0c14;
+    --surface: #0f1117;
+    --surface2: #13161f;
+    --border: #1e2030;
+    --border2: #252840;
+    --accent: #7c3aed;
+    --accent-glow: rgba(124,58,237,0.35);
+    --cyan: #06b6d4;
+    --cyan-glow: rgba(6,182,212,0.3);
+    --text-primary: #f1f3f8;
+    --text-secondary: #8b95a8;
+    --text-muted: #4a5170;
+    --cell-zero: #12141e;
+    --font-display: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(124,58,237,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124,58,237,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page-wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 48px 40px 80px;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    margin-bottom: 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .header-eyebrow {
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .header-eyebrow::before {
+    content: '';
+    display: inline-block;
+    width: 32px;
+    height: 2px;
+    background: var(--accent);
+    border-radius: 1px;
+  }
+
+  .header-title {
+    font-family: var(--font-display);
+    font-size: clamp(32px, 4vw, 56px);
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    background: linear-gradient(135deg, #f1f3f8 0%, #a78bfa 50%, #06b6d4 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .header-subtitle {
+    font-family: var(--font-body);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0.03em;
+    margin-top: 4px;
+  }
+
+  /* ── STATS BAR ── */
+  .stats-bar {
+    display: flex;
+    gap: 1px;
+    margin-bottom: 36px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .stat-item {
+    flex: 1;
+    background: var(--surface);
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: background 0.2s;
+    position: relative;
+  }
+
+  .stat-item::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+  }
+
+  .stat-item:hover { background: var(--surface2); }
+  .stat-item:hover::after { transform: scaleX(1); }
+
+  .stat-value {
+    font-family: var(--font-display);
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  .stat-item.accent .stat-value { color: var(--accent); }
+  .stat-item.cyan .stat-value   { color: var(--cyan); }
+  .stat-item.green .stat-value  { color: #4ade80; }
+
+  /* ── FILTER BAR ── */
+  .filter-bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .filter-label {
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .chip {
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border2);
+    background: var(--surface);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+
+  .chip:hover { border-color: var(--accent); color: var(--text-primary); }
+  .chip.active { background: rgba(124,58,237,0.2); border-color: var(--accent); color: #c4b5fd; }
+  .chip.mitigating.active { background: rgba(6,182,212,0.15); border-color: var(--cyan); color: var(--cyan); }
+
+  .filter-sep {
+    width: 1px; height: 20px;
+    background: var(--border2);
+  }
+
+  .sev-filter { display: flex; align-items: center; gap: 8px; }
+  .sev-range-label { font-size: 11px; font-weight: 500; color: var(--text-muted); letter-spacing: 0.03em; }
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 80px; height: 3px;
+    background: var(--border2);
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+
+  /* ── SECTION CARD ── */
+  .section-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 36px;
+  }
+
+  .section-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(90deg, rgba(124,58,237,0.06) 0%, transparent 60%);
+  }
+
+  .section-title {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-title::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 16px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+
+  .section-badge {
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    padding: 5px 12px;
+    border-radius: 6px;
+  }
+
+  .collapse-btn {
+    background: none;
+    border: 1px solid var(--border2);
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+
+  .collapse-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent);
+    background: rgba(124,58,237,0.1);
+  }
+
+  /* ── LEGEND ── */
+  .legend {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+  }
+
+  .legend-scale {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .legend-gradient {
+    width: 80px;
+    height: 8px;
+    border-radius: 4px;
+  }
+
+  .legend-tick {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+  .sev-dots {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .sev-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+
+  /* ── HEATMAP TABLE ── */
+  .heatmap-scroll {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 820px;
+  }
+
+  .heatmap-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+  .heatmap-scroll::-webkit-scrollbar-track { background: var(--surface); }
+  .heatmap-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  .heatmap-scroll::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 1000px;
+  }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #0d0f1a;
+    padding: 14px 6px;
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    text-align: center;
+    border-bottom: 1px solid var(--border2);
+    white-space: nowrap;
+  }
+
+  thead th.col-name {
+    text-align: left;
+    padding-left: 24px;
+    min-width: 280px;
+    width: 280px;
+  }
+
+  thead th.col-sev {
+    min-width: 48px;
+    width: 48px;
+  }
+
+  thead th.col-domain {
+    min-width: 76px;
+    width: 76px;
+  }
+
+  /* Group separator row */
+  .group-row td {
+    background: linear-gradient(90deg, rgba(124,58,237,0.12) 0%, rgba(124,58,237,0.03) 100%);
+    padding: 10px 24px;
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border-top: 1px solid rgba(124,58,237,0.2);
+    border-bottom: 1px solid rgba(124,58,237,0.1);
+  }
+
+  .group-row.mitigating td {
+    background: linear-gradient(90deg, rgba(6,182,212,0.1) 0%, rgba(6,182,212,0.02) 100%);
+    color: var(--cyan);
+    border-top: 1px solid rgba(6,182,212,0.2);
+    border-bottom: 1px solid rgba(6,182,212,0.1);
+  }
+
+  .group-row.courtrecords td {
+    background: linear-gradient(90deg, rgba(251,146,60,0.1) 0%, rgba(251,146,60,0.02) 100%);
+    color: #fb923c;
+    border-top: 1px solid rgba(251,146,60,0.2);
+    border-bottom: 1px solid rgba(251,146,60,0.1);
+  }
+
+  .group-row.screening td {
+    background: linear-gradient(90deg, rgba(168,85,247,0.12) 0%, rgba(168,85,247,0.02) 100%);
+    color: #c084fc;
+    border-top: 1px solid rgba(168,85,247,0.25);
+    border-bottom: 1px solid rgba(168,85,247,0.1);
+  }
+
+  .group-row.underground td {
+    background: linear-gradient(90deg, rgba(239,68,68,0.1) 0%, rgba(239,68,68,0.02) 100%);
+    color: #f87171;
+    border-top: 1px solid rgba(239,68,68,0.2);
+    border-bottom: 1px solid rgba(239,68,68,0.1);
+  }
+
+  .group-row.crosssource td {
+    background: linear-gradient(90deg, rgba(34,197,94,0.1) 0%, rgba(34,197,94,0.02) 100%);
+    color: #4ade80;
+    border-top: 1px solid rgba(34,197,94,0.2);
+    border-bottom: 1px solid rgba(34,197,94,0.1);
+  }
+
+  .group-row.corporate td {
+    background: linear-gradient(90deg, rgba(240,180,41,0.12) 0%, rgba(240,180,41,0.02) 100%);
+    color: #f0b429;
+    border-top: 1px solid rgba(240,180,41,0.25);
+    border-bottom: 1px solid rgba(240,180,41,0.1);
+  }
+
+  /* Factor rows */
+  .factor-row {
+    transition: background 0.15s;
+  }
+
+  .factor-row:hover {
+    background: rgba(255,255,255,0.025);
+  }
+
+  .factor-row td {
+    border-bottom: 1px solid rgba(30,32,48,0.6);
+    padding: 0;
+  }
+
+  .factor-row.hidden { display: none; }
+
+  .cell-name {
+    padding: 8px 20px 8px 24px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    min-width: 280px;
+  }
+
+  .cell-name .factor-label {
+    opacity: 0.85;
+  }
+
+  .cell-sev {
+    text-align: center;
+    padding: 6px 4px;
+  }
+
+  .sev-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .sev-low    { background: rgba(34,197,94,0.15);  color: #4ade80; border: 1px solid rgba(34,197,94,0.25); }
+  .sev-med    { background: rgba(234,179,8,0.15);   color: #facc15; border: 1px solid rgba(234,179,8,0.25); }
+  .sev-high   { background: rgba(249,115,22,0.15);  color: #fb923c; border: 1px solid rgba(249,115,22,0.3); }
+  .sev-crit   { background: rgba(239,68,68,0.15);   color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+
+  .cell-heat {
+    padding: 3px 3px;
+    text-align: center;
+  }
+
+  .heat-cell {
+    width: 68px;
+    height: 32px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: default;
+    transition: transform 0.15s, filter 0.15s, box-shadow 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .heat-cell:hover {
+    transform: scale(1.15);
+    z-index: 5;
+    filter: brightness(1.25);
+  }
+
+  .heat-cell.glow-high {
+    box-shadow: 0 0 8px rgba(239,68,68,0.4);
+  }
+
+  .heat-cell.glow-crit {
+    box-shadow: 0 0 12px rgba(239,68,68,0.6), 0 0 24px rgba(239,68,68,0.2);
+  }
+
+  .heat-cell.glow-mitig {
+    box-shadow: 0 0 8px rgba(6,182,212,0.4);
+  }
+
+  /* ── TOOLTIP ── */
+  #tooltip {
+    position: fixed;
+    z-index: 1000;
+    pointer-events: none;
+    background: #0d0f1a;
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    line-height: 1.6;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(124,58,237,0.15);
+    max-width: 300px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  #tooltip.visible { opacity: 1; }
+
+  .tt-factor { color: var(--text-primary); font-weight: 700; margin-bottom: 6px; font-size: 14px; }
+  .tt-domain { color: var(--cyan); font-size: 12px; font-weight: 500; }
+  .tt-weight { color: #f1f3f8; font-size: 13px; }
+  .tt-weight span { font-size: 18px; font-family: var(--font-display); font-weight: 800; }
+  .tt-weight.positive span { color: #fb923c; }
+  .tt-weight.negative span { color: #22d3ee; }
+  .tt-weight.zero span { color: var(--text-muted); }
+  .tt-cat { color: var(--text-muted); font-size: 11px; font-weight: 500; margin-bottom: 3px; }
+
+  /* ── PURPOSE HEATMAP ── */
+  .purpose-scroll {
+    overflow-x: auto;
+    padding: 24px;
+  }
+
+  .purpose-scroll::-webkit-scrollbar { height: 6px; }
+  .purpose-scroll::-webkit-scrollbar-track { background: var(--surface); }
+  .purpose-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  #purpose-svg {
+    display: block;
+  }
+
+  /* ── SECTION TOGGLE ── */
+  .collapsible-body {
+    transition: max-height 0.4s ease, opacity 0.3s ease;
+    overflow: hidden;
+  }
+
+  .collapsible-body.collapsed {
+    max-height: 0 !important;
+    opacity: 0;
+  }
+
+  /* ── HIDDEN ROW NOTICE ── */
+  #hidden-notice {
+    padding: 10px 24px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    border-top: 1px solid var(--border);
+    background: var(--surface2);
+    display: none;
+  }
+
+  /* ── FOOTER ── */
+  .footer {
+    text-align: center;
+    padding: 32px;
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+  }
+
+  /* Scan line animation */
+  @keyframes scanline {
+    0%  { transform: translateY(-100%); }
+    100%{ transform: translateY(100vh); }
+  }
+
+  .scanline {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(124,58,237,0.15), rgba(6,182,212,0.1), transparent);
+    animation: scanline 8s linear infinite;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .header    { animation: fadeUp 0.6s ease both; animation-delay: 0.1s; opacity: 0; }
+  .stats-bar { animation: fadeUp 0.6s ease both; animation-delay: 0.2s; opacity: 0; }
+  .section-card:nth-of-type(1) { animation: fadeUp 0.6s ease both; animation-delay: 0.35s; opacity: 0; }
+  .section-card:nth-of-type(2) { animation: fadeUp 0.6s ease both; animation-delay: 0.5s; opacity: 0; }
+</style>
+</head>
+<body>
+
+<div class="scanline"></div>
+<div id="tooltip"></div>
+
+<div class="page-wrap">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-eyebrow">Saptang Intelligence · Internal</div>
+    <h1 class="header-title">Auracle v3 Risk Ontology — Factor × Domain Heatmap</h1>
+    <p class="header-subtitle">109 factors · 10 risk domains · 14 purpose profiles · 13 categories</p>
+  </div>
+
+  <!-- STATS BAR -->
+  <div class="stats-bar">
+    <div class="stat-item accent">
+      <div class="stat-value" id="stat-visible">109</div>
+      <div class="stat-label">Factors Shown</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">13</div>
+      <div class="stat-label">Categories</div>
+    </div>
+    <div class="stat-item green">
+      <div class="stat-value">10</div>
+      <div class="stat-label">Mitigating</div>
+    </div>
+    <div class="stat-item cyan">
+      <div class="stat-value">10</div>
+      <div class="stat-label">Risk Domains</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">14</div>
+      <div class="stat-label">Purpose Profiles</div>
+    </div>
+  </div>
+
+  <!-- MAIN HEATMAP CARD -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-title">Factor × Domain Weight Matrix</div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <div class="section-badge" id="factor-badge">109 factors · 10 domains</div>
+        <button class="collapse-btn" onclick="toggleSection('main-body', this)">Collapse</button>
+      </div>
+    </div>
+
+    <div id="main-body" class="collapsible-body" style="max-height:1200px">
+      <!-- FILTER BAR -->
+      <div class="filter-bar">
+        <span class="filter-label">Category</span>
+        <div class="filter-chips" id="cat-chips"></div>
+        <div class="filter-sep"></div>
+        <div class="sev-filter">
+          <span class="sev-range-label">Min Sev</span>
+          <input type="range" id="sev-min" min="1" max="10" value="1" step="1">
+          <span id="sev-min-val" style="font-size:10px;color:var(--text-secondary);min-width:14px">1</span>
+          <span class="sev-range-label" style="margin-left:8px">Max</span>
+          <input type="range" id="sev-max" min="1" max="10" value="10" step="1">
+          <span id="sev-max-val" style="font-size:10px;color:var(--text-secondary);min-width:14px">10</span>
+        </div>
+        <button class="chip" id="reset-filters" onclick="resetFilters()">Reset</button>
+      </div>
+
+      <!-- LEGEND -->
+      <div class="legend">
+        <div class="legend-item">
+          <span style="color:var(--text-muted)">RISK WEIGHT</span>
+          <div class="legend-scale">
+            <span class="legend-tick">0</span>
+            <div class="legend-gradient" id="risk-gradient"></div>
+            <span class="legend-tick">2.5</span>
+          </div>
+        </div>
+        <div class="legend-item">
+          <span style="color:var(--text-muted)">MITIGATING</span>
+          <div class="legend-scale">
+            <span class="legend-tick">0</span>
+            <div class="legend-gradient" id="mitig-gradient"></div>
+            <span class="legend-tick">−2.5</span>
+          </div>
+        </div>
+        <div class="legend-item" style="margin-left:auto">
+          <span style="color:var(--text-muted)">SEVERITY</span>
+          <div class="sev-dots">
+            <div class="sev-dot sev-low">2</div>
+            <span style="font-size:9px;color:var(--text-muted)">Low</span>
+            <div class="sev-dot sev-med">5</div>
+            <span style="font-size:9px;color:var(--text-muted)">Med</span>
+            <div class="sev-dot sev-high">7</div>
+            <span style="font-size:9px;color:var(--text-muted)">High</span>
+            <div class="sev-dot sev-crit">10</div>
+            <span style="font-size:9px;color:var(--text-muted)">Crit</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABLE -->
+      <div class="heatmap-scroll">
+        <table id="main-table">
+          <thead>
+            <tr id="thead-row">
+              <th class="col-name">Factor</th>
+              <th class="col-sev">Sev</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div id="hidden-notice"></div>
+    </div>
+  </div>
+
+  <!-- PURPOSE PROFILES CARD -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-title">Purpose Profile Weights</div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <div class="section-badge">14 purposes · 10 domains</div>
+        <button class="collapse-btn" onclick="toggleSection('purpose-body', this)">Collapse</button>
+      </div>
+    </div>
+
+    <div id="purpose-body" class="collapsible-body" style="max-height:700px">
+      <div class="purpose-scroll">
+        <svg id="purpose-svg"></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">Auracle Risk Ontology v3 · Saptang Intelligence · Company Confidential</div>
+
+</div><!-- /page-wrap -->
+
+<script>
+// ─────────────────────────────────────────────
+// DOMAINS
+// domain_weights order: CreditRisk, ComplianceRisk, CriminalRisk,
+//   NarcoTerrorNexusRisk, BenamiRisk, PoliticalExposureRisk,
+//   MatrimonialRisk, EmploymentBGVRisk, ReputationalRisk, CyberAccountTakeoverRisk
+// ─────────────────────────────────────────────
+const DOMAINS = [
+  {id:"CreditRisk",              label:"Credit"},
+  {id:"ComplianceRisk",          label:"Compliance"},
+  {id:"CriminalRisk",            label:"Criminal"},
+  {id:"NarcoTerrorNexusRisk",    label:"Narco-Terror"},
+  {id:"BenamiRisk",              label:"Benami"},
+  {id:"PoliticalExposureRisk",   label:"Political"},
+  {id:"MatrimonialRisk",         label:"Matrimonial"},
+  {id:"EmploymentBGVRisk",       label:"Employment"},
+  {id:"ReputationalRisk",        label:"Reputational"},
+  {id:"CyberAccountTakeoverRisk",label:"Cyber"},
+];
+
+// ─────────────────────────────────────────────
+// FACTOR GROUPS — 109 factors · 13 categories
+// Weights follow DOMAINS order above
+// ─────────────────────────────────────────────
+const GROUPS = [
+  // ── 1. IDENTITY (6 factors) ──────────────────────────────────
+  {
+    name: "Identity", style: "default", mitigating: false,
+    factors: [
+      {id:"PANDiscrepancy",            severity:7,  w:[1.5, 2.0, 0.3, 0.4, 1.6, 0.5, 1.0, 1.2, 0.8, 0.0]},
+      {id:"MultiplePANSuspicion",      severity:8,  w:[1.5, 2.0, 0.7, 0.8, 2.2, 0.7, 1.5, 1.2, 1.0, 0.0]},
+      {id:"AadhaarUnverified",         severity:4,  w:[0.8, 1.5, 0.2, 0.2, 0.8, 0.2, 0.4, 0.7, 0.2, 0.0]},
+      {id:"AliasIdentity",             severity:4,  w:[0.5, 0.8, 0.5, 0.6, 1.2, 0.5, 1.2, 0.8, 0.6, 0.0]},
+      {id:"UnreportedSecondaryMobile", severity:3,  w:[0.3, 0.6, 0.3, 0.5, 0.5, 0.3, 0.8, 0.5, 0.2, 0.0]},
+      {id:"AddressInconsistency",      severity:3,  w:[0.5, 0.7, 0.2, 0.2, 0.4, 0.1, 0.5, 0.6, 0.2, 0.0]},
+    ]
+  },
+  // ── 2. BREACH / CYBER (8 factors) ───────────────────────────
+  {
+    name: "Breach/Cyber", style: "default", mitigating: false,
+    factors: [
+      {id:"ActiveCredentialExposure",       severity:7, w:[0.3, 0.5, 0.0, 0.0, 0.0, 0.8, 0.2, 1.2, 0.3, 2.2]},
+      {id:"PlaintextPasswordExposure",      severity:5, w:[0.2, 0.3, 0.0, 0.0, 0.0, 0.5, 0.2, 0.8, 0.3, 1.8]},
+      {id:"ReusedCredentialAcrossBreaches", severity:6, w:[0.2, 0.4, 0.0, 0.0, 0.0, 0.7, 0.2, 1.0, 0.3, 2.0]},
+      {id:"GovernmentIDExposure",           severity:8, w:[1.5, 2.0, 0.8, 0.3, 1.5, 0.5, 0.8, 1.5, 1.2, 0.8]},
+      {id:"FinancialDataInBreach",          severity:7, w:[2.0, 1.5, 0.5, 0.3, 1.0, 0.3, 0.5, 0.8, 0.8, 1.5]},
+      {id:"HealthDataExposure",             severity:6, w:[0.2, 1.5, 0.2, 0.0, 0.0, 0.3, 1.0, 0.8, 1.2, 0.5]},
+      {id:"DateOfBirthExposure",            severity:5, w:[0.8, 0.8, 0.3, 0.2, 0.5, 0.2, 0.5, 0.8, 0.3, 1.0]},
+      {id:"WeakPasswordPattern",            severity:5, w:[0.2, 0.3, 0.0, 0.0, 0.0, 0.3, 0.2, 0.8, 0.3, 2.0]},
+    ]
+  },
+  // ── 3. FINANCIAL (10 factors) ────────────────────────────────
+  {
+    name: "Financial", style: "default", mitigating: false,
+    factors: [
+      {id:"IncomeInconsistency",      severity:6, w:[1.8, 1.5, 0.4, 0.4, 1.5, 0.6, 1.5, 1.0, 0.6, 0.0]},
+      {id:"ChequeDishonourHistory",   severity:7, w:[2.0, 1.5, 0.8, 0.0, 0.4, 0.5, 1.2, 0.8, 1.0, 0.0]},
+      {id:"FraudLinkedPaymentAccount",           severity:9, w:[2.2, 2.0, 2.0, 0.5, 1.5, 0.5, 1.5, 2.0, 1.8, 0.5]},
+      {id:"FraudDomainLinkedPayment",     severity:7, w:[1.8, 1.5, 1.5, 0.3, 0.8, 0.3, 0.8, 1.5, 1.2, 0.8]},
+      {id:"BettingSiteLinkedPayment",     severity:7, w:[1.5, 1.5, 1.0, 0.3, 0.8, 0.4, 1.2, 1.5, 1.5, 0.3]},
+      {id:"CryptoExchangeLinkedPayment",  severity:5, w:[0.8, 1.2, 0.3, 0.4, 1.0, 0.3, 0.3, 0.5, 0.5, 0.5]},
+      {id:"FlaggedBankAccount",       severity:8, w:[2.0, 2.0, 1.5, 0.5, 1.5, 0.5, 1.2, 1.8, 1.5, 0.3]},
+      {id:"CryptoWalletExposure",     severity:6, w:[0.8, 1.2, 0.5, 0.6, 1.2, 0.4, 0.3, 0.6, 0.6, 0.8]},
+      {id:"HighValueCryptoTransaction",severity:7,w:[1.0, 1.5, 0.8, 1.0, 1.5, 0.5, 0.3, 0.5, 0.8, 0.5]},
+      {id:"MultiplePaymentAccountsPerPhone",      severity:5, w:[1.0, 1.0, 0.5, 0.3, 1.2, 0.3, 0.3, 0.5, 0.5, 0.3]},
+      {id:"PaymentAccountRecentlyCreated",       severity:6, w:[1.5, 1.2, 1.0, 0.5, 1.2, 0.3, 0.3, 0.5, 0.8, 0.5]},
+      {id:"CryptoHighFrequencyTrader",severity:7, w:[1.2, 1.8, 1.0, 1.2, 1.5, 0.5, 0.3, 0.5, 1.0, 0.8]},
+    ]
+  },
+  // ── 4. CRIMINAL (13 factors) ─────────────────────────────────
+  {
+    name: "Criminal", style: "default", mitigating: false,
+    factors: [
+      {id:"PendingCriminalMatter_Violent",  severity:9,  w:[1.5, 1.5, 2.4, 0.8, 0.5, 1.5, 2.4, 2.4, 2.0, 0.0]},
+      {id:"PendingCriminalMatter_Sexual",   severity:10, w:[1.5, 1.8, 2.5, 0.5, 0.3, 1.8, 2.5, 2.5, 2.5, 0.0]},
+      {id:"PendingCriminalMatter_General",  severity:7,  w:[1.0, 1.2, 2.0, 0.5, 0.5, 1.2, 1.8, 1.8, 1.5, 0.0]},
+      {id:"DisposedCriminalMatter",         severity:4,  w:[0.4, 0.5, 1.0, 0.2, 0.2, 0.5, 0.8, 0.8, 0.6, 0.0]},
+      {id:"MotorVehicleMatter_Disposed",    severity:2,  w:[0.1, 0.1, 0.3, 0.0, 0.0, 0.1, 0.3, 0.3, 0.2, 0.0]},
+      {id:"NDPSMatter_Pending",             severity:10, w:[1.5, 2.0, 2.4, 2.5, 1.0, 2.0, 2.5, 2.4, 2.4, 0.0]},
+      {id:"UAPAMatter",                     severity:10, w:[2.0, 2.5, 2.5, 2.5, 1.5, 2.5, 2.5, 2.5, 2.5, 0.0]},
+      {id:"PMLAMatter_Pending",             severity:9,  w:[2.0, 2.5, 1.5, 1.5, 2.0, 1.8, 2.0, 2.0, 2.2, 0.0]},
+      {id:"CorruptionMatter",               severity:8,  w:[1.5, 2.2, 1.8, 0.6, 1.5, 2.0, 1.8, 2.0, 2.2, 0.0]},
+      {id:"DomesticViolenceMatter",         severity:7,  w:[0.4, 0.5, 1.5, 0.0, 0.0, 0.5, 2.4, 1.0, 1.5, 0.0]},
+      {id:"UndisclosedExistingMarriage",    severity:10, w:[0.2, 0.5, 1.5, 0.0, 0.5, 0.3, 2.5, 0.5, 2.0, 0.0]},
+      {id:"DowryHarassmentMatter",          severity:9,  w:[0.3, 0.5, 1.8, 0.0, 0.0, 0.4, 2.5, 1.0, 1.8, 0.0]},
+      {id:"CriminalNetworkProximity",       severity:7,  w:[0.8, 1.5, 2.0, 1.5, 1.0, 0.8, 1.2, 1.5, 1.5, 0.3]},
+    ]
+  },
+  // ── 5. SCREENING (7 factors) ─────────────────────────────────
+  {
+    name: "Screening", style: "screening", mitigating: false,
+    factors: [
+      {id:"PEPStatus",              severity:6,  w:[0.8, 1.8, 0.3, 0.5, 1.2, 2.5, 1.0, 1.0, 1.0, 0.5]},
+      {id:"GlobalAdverseScreeningStatus",             severity:5,  w:[0.5, 1.5, 0.2, 0.4, 1.0, 2.0, 0.8, 1.2, 1.2, 0.6]},
+      {id:"SanctionsMatch",         severity:10, w:[2.5, 2.5, 2.0, 2.5, 2.0, 2.5, 2.0, 2.5, 2.5, 0.0]},
+      {id:"ConflictOfInterest",     severity:6,  w:[0.4, 1.5, 0.4, 0.2, 1.0, 1.8, 0.4, 0.8, 1.2, 0.0]},
+      {id:"SanctionedEntityNetwork",severity:8,  w:[1.5, 2.2, 1.5, 2.0, 1.5, 2.0, 1.0, 1.8, 2.0, 0.3]},
+      {id:"HighRiskCountryNexus",   severity:7,  w:[1.0, 2.0, 1.2, 2.0, 1.5, 1.8, 0.5, 1.0, 1.2, 0.3]},
+      {id:"EntityTypeOrganization", severity:5,  w:[1.2, 1.5, 0.8, 0.8, 1.5, 1.0, 0.3, 0.8, 1.2, 0.0]},
+    ]
+  },
+  // ── 6. COURT RECORDS (21 factors) ─────────────────────────────
+  {
+    name: "CourtRecords", style: "courtrecords", mitigating: false,
+    factors: [
+      {id:"ActiveCivilDispute",           severity:4,  w:[0.8, 0.6, 0.2, 0.0, 0.3, 0.4, 0.8, 0.4, 0.6, 0.0]},
+      {id:"ActiveLitigationAsRespondent", severity:5,  w:[0.8, 1.0, 0.5, 0.1, 0.4, 0.4, 0.6, 1.0, 1.4, 0.0]},
+      {id:"HCStayedProceedings",          severity:6,  w:[0.6, 1.2, 1.4, 0.3, 0.4, 0.4, 0.7, 1.3, 1.4, 0.0]},
+      {id:"InsolvencyProceeding",         severity:8,  w:[2.2, 1.8, 0.5, 0.3, 1.5, 0.5, 1.0, 1.8, 1.8, 0.0]},
+      {id:"FamilyCourtMatter",            severity:5,  w:[0.3, 0.3, 0.3, 0.0, 0.2, 0.2, 2.2, 0.5, 0.8, 0.0]},
+      {id:"ConsumerComplaint",            severity:3,  w:[0.5, 0.5, 0.1, 0.0, 0.2, 0.1, 0.2, 0.3, 0.8, 0.0]},
+      {id:"LaborDispute",                 severity:4,  w:[0.4, 0.8, 0.2, 0.0, 0.2, 0.3, 0.1, 1.8, 0.8, 0.0]},
+      {id:"LandPropertyDispute",          severity:5,  w:[1.0, 0.6, 0.3, 0.0, 1.5, 0.3, 0.5, 0.4, 0.6, 0.0]},
+      {id:"CommercialCourtCase",          severity:6,  w:[1.5, 1.2, 0.3, 0.2, 1.0, 0.4, 0.2, 0.8, 1.2, 0.0]},
+      {id:"HighCourtLitigation",          severity:6,  w:[0.8, 1.2, 0.8, 0.3, 0.5, 0.6, 0.5, 1.0, 1.2, 0.0]},
+      {id:"DivisionBenchMatter",          severity:7,  w:[0.8, 1.5, 1.2, 0.5, 0.6, 0.8, 0.5, 1.2, 1.5, 0.0]},
+      {id:"LongPendingLitigation",        severity:5,  w:[0.8, 0.8, 0.5, 0.2, 0.4, 0.3, 0.5, 0.6, 0.8, 0.0]},
+      {id:"HighlyContestedCase",          severity:5,  w:[0.6, 0.8, 0.5, 0.2, 0.4, 0.4, 0.5, 0.6, 0.8, 0.0]},
+      {id:"CriminalRespondent",           severity:8,  w:[1.2, 1.5, 2.2, 0.8, 0.6, 1.2, 2.0, 2.2, 1.8, 0.0]},
+      {id:"SerialLitigant",               severity:5,  w:[0.8, 0.8, 0.5, 0.2, 0.5, 0.4, 0.8, 0.6, 1.2, 0.0]},
+      {id:"MultiJurisdictionExposure",    severity:5,  w:[0.6, 0.8, 0.5, 0.4, 0.6, 0.4, 0.4, 0.5, 0.8, 0.0]},
+      {id:"CriminalConviction",           severity:10, w:[2.0, 2.5, 2.5, 1.5, 1.2, 2.0, 2.5, 2.5, 2.5, 0.0]},
+      {id:"AdverseCourtOrder",            severity:6,  w:[0.8, 1.0, 0.5, 0.2, 0.5, 0.4, 0.6, 0.8, 1.0, 0.0]},
+      {id:"FIRLinkedCase",                severity:6,  w:[0.5, 1.0, 1.5, 0.5, 0.3, 0.5, 1.0, 1.5, 1.2, 0.0]},
+      {id:"RecentFilingSpike",            severity:5,  w:[0.8, 0.8, 0.6, 0.3, 0.5, 0.4, 0.6, 0.8, 1.0, 0.0]},
+      {id:"NegotiableInstrumentDishonour",            severity:7,  w:[2.0, 1.5, 0.8, 0.0, 0.4, 0.3, 1.0, 0.8, 1.0, 0.0]},
+    ]
+  },
+  // ── 7. UNDERGROUND (12 factors) ──────────────────────────────
+  {
+    name: "Underground", style: "underground", mitigating: false,
+    factors: [
+      {id:"UndergroundForumAuthor",      severity:7, w:[0.5, 1.0, 1.5, 1.0, 0.5, 0.5, 1.0, 1.5, 1.5, 1.5]},
+      {id:"UndergroundHighActivity",     severity:8, w:[0.6, 1.2, 1.8, 1.2, 0.6, 0.6, 1.2, 1.8, 2.0, 2.0]},
+      {id:"UndergroundRegionalTargeting",   severity:6, w:[0.5, 1.0, 1.2, 1.5, 0.8, 0.6, 0.5, 1.0, 1.2, 1.2]},
+      {id:"DrugMarketplaceLinkage",  severity:9, w:[1.5, 2.0, 2.2, 2.5, 1.0, 1.5, 2.0, 2.2, 2.2, 0.5]},
+      {id:"UndergroundVendorStatus",     severity:9, w:[0.8, 1.5, 2.2, 2.0, 0.8, 0.8, 1.5, 2.2, 2.2, 1.8]},
+      {id:"UndergroundRecentActivity",   severity:6, w:[0.4, 0.8, 1.2, 0.8, 0.4, 0.4, 0.8, 1.2, 1.5, 1.0]},
+      {id:"UndergroundLongTermPresence", severity:7, w:[0.5, 1.0, 1.5, 1.2, 0.5, 0.5, 1.0, 1.5, 1.8, 1.5]},
+      {id:"UndergroundHighInfluence",    severity:6, w:[0.3, 0.8, 1.0, 0.8, 0.3, 0.4, 0.6, 1.0, 1.5, 1.2]},
+      {id:"UndergroundCryptoWallet",     severity:7, w:[0.8, 1.2, 1.2, 1.0, 1.0, 0.5, 0.3, 0.8, 1.0, 1.2]},
+      {id:"UndergroundCyberThreats",     severity:8, w:[0.5, 1.2, 1.8, 1.0, 0.3, 0.5, 0.8, 1.8, 1.8, 2.2]},
+      {id:"UndergroundContactExposure",  severity:5, w:[0.3, 0.5, 0.8, 0.5, 0.2, 0.3, 0.5, 0.8, 1.0, 1.0]},
+      {id:"UndergroundForumDiversity",   severity:5, w:[0.3, 0.6, 0.8, 0.5, 0.3, 0.3, 0.5, 0.8, 1.0, 0.8]},
+    ]
+  },
+  // ── 8. MESSAGING (2 factors) ─────────────────────────────────
+  {
+    name: "Messaging", style: "default", mitigating: false,
+    factors: [
+      {id:"MessagingGroupMention", severity:5, w:[0.3, 0.5, 0.5, 0.5, 0.3, 0.3, 0.5, 0.8, 1.2, 0.3]},
+      {id:"MessagingHighExposure",    severity:7, w:[0.5, 0.8, 1.0, 0.8, 0.5, 0.5, 0.8, 1.2, 1.8, 0.5]},
+    ]
+  },
+  // ── 9. PHONE (1 factor) ──────────────────────────────────────
+  {
+    name: "Phone", style: "default", mitigating: false,
+    factors: [
+      {id:"PhoneFraudDatabaseFlag", severity:7, w:[1.5, 1.5, 1.8, 0.5, 0.8, 0.5, 1.0, 1.8, 1.5, 1.0]},
+    ]
+  },
+  // ── 10. BREACH (4 factors) ───────────────────────────────────
+  {
+    name: "Breach", style: "default", mitigating: false,
+    factors: [
+      {id:"MassBreachExposure",      severity:6, w:[0.5, 0.5, 0.0, 0.0, 0.0, 0.3, 0.3, 1.0, 0.5, 2.0]},
+      {id:"GovernmentEmailExposure", severity:6, w:[0.3, 1.5, 0.2, 0.3, 0.3, 1.2, 0.3, 1.5, 1.2, 1.5]},
+      {id:"CorporateEmailExposure",  severity:4, w:[0.2, 0.5, 0.0, 0.0, 0.0, 0.3, 0.2, 1.0, 0.5, 1.2]},
+      {id:"BreachRecencyRisk",       severity:5, w:[0.3, 0.5, 0.0, 0.0, 0.0, 0.3, 0.2, 0.8, 0.3, 1.8]},
+    ]
+  },
+  // ── 11. CROSS-SOURCE (3 factors) ─────────────────────────────
+  {
+    name: "CrossSource", style: "crosssource", mitigating: false,
+    factors: [
+      {id:"MultiSourceAdverseConvergence", severity:7, w:[1.0, 1.2, 1.5, 0.8, 0.8, 0.6, 1.0, 1.5, 1.5, 0.5]},
+      {id:"AdverseMediaHit",               severity:5, w:[0.4, 0.6, 0.6, 0.3, 0.4, 0.8, 1.0, 0.8, 2.0, 0.0]},
+      {id:"AdverseCharacterSignal",        severity:5, w:[0.2, 0.3, 0.4, 0.0, 0.0, 0.4, 1.5, 0.6, 1.2, 0.0]},
+    ]
+  },
+  // ── 12. CORPORATE (10 factors) ────────────────────────────────
+  {
+    name: "Corporate", style: "corporate", mitigating: false,
+    factors: [
+      {id:"CompanyDissolved",               severity:8, w:[2.0, 1.8, 0.8, 0.5, 2.0, 0.5, 0.3, 1.5, 1.5, 0.0]},
+      {id:"CompanyUnderStrikeOff",           severity:7, w:[1.8, 1.5, 0.6, 0.3, 1.8, 0.3, 0.2, 1.2, 1.2, 0.0]},
+      {id:"ShellCompanyIndicators",          severity:9, w:[2.2, 2.5, 1.5, 1.2, 2.5, 1.0, 0.5, 1.0, 2.0, 0.0]},
+      {id:"CompanyNonCompliant",             severity:6, w:[1.5, 2.0, 0.3, 0.2, 1.2, 0.3, 0.2, 0.8, 1.0, 0.0]},
+      {id:"RecentlyIncorporatedEntity",      severity:5, w:[1.2, 0.8, 0.5, 0.3, 1.5, 0.3, 0.2, 0.5, 0.8, 0.0]},
+      {id:"HighRiskIndustryCompany",         severity:6, w:[1.5, 1.8, 0.8, 0.5, 1.5, 0.5, 0.3, 0.8, 1.0, 0.0]},
+      {id:"ForeignCompanyPresence",          severity:5, w:[0.8, 1.5, 0.5, 0.8, 1.0, 0.8, 0.3, 0.5, 0.8, 0.0]},
+      {id:"ZeroPaidupCapital",               severity:8, w:[2.2, 2.0, 1.0, 0.5, 2.5, 0.5, 0.3, 1.0, 1.5, 0.0]},
+      {id:"CapitalStructureAnomaly",         severity:7, w:[1.8, 1.5, 0.8, 0.5, 2.0, 0.5, 0.3, 0.8, 1.2, 0.0]},
+      {id:"DisqualifiedDirectorAssociation", severity:9, w:[2.0, 2.5, 1.8, 1.0, 2.0, 1.5, 0.5, 2.0, 2.2, 0.0]},
+    ]
+  },
+  // ── 13. MITIGATING (10 factors — all negative weights) ───────
+  {
+    name: "Mitigating", style: "mitigating", mitigating: true,
+    factors: [
+      {id:"IdentityCorroborated",    severity:5, w:[-1.0,-1.5,-0.5,-0.5,-0.8,-0.5,-0.8,-1.0,-0.5, 0.0]},
+      {id:"EmployerVerified",        severity:5, w:[-1.0,-1.0,-0.5,-0.3,-0.5,-0.5,-1.0,-2.0,-0.5, 0.0]},
+      {id:"CleanLitigationScreen",   severity:5, w:[-0.6,-0.8,-2.2,-1.5,-0.5,-0.6,-1.5,-1.5,-1.0, 0.0]},
+      {id:"StableLocationFootprint", severity:3, w:[-0.4,-0.5,-0.2,-0.3,-0.3,-0.1,-0.4,-0.5,-0.2, 0.0]},
+      {id:"CleanFinancialScreen",    severity:4, w:[-1.5,-1.0,-0.5,-0.3,-0.8,-0.2,-0.4,-0.5,-0.3, 0.0]},
+      {id:"CleanUndergroundScreen",      severity:4, w:[-0.3,-0.5,-1.0,-1.0,-0.3,-0.3,-0.5,-0.8,-0.8,-1.0]},
+      {id:"CleanMessagingScreen",     severity:3, w:[-0.2,-0.3,-0.3,-0.3,-0.2,-0.2,-0.3,-0.4,-0.5,-0.2]},
+      {id:"CleanCourtRecordsScreen",      severity:5, w:[-0.8,-1.0,-2.0,-1.0,-0.5,-0.5,-1.2,-1.5,-1.0, 0.0]},
+      {id:"CriminalAcquittal",       severity:5, w:[-0.3,-0.5,-1.5,-0.5,-0.2,-0.3,-0.8,-1.0,-0.8, 0.0]},
+      {id:"CleanCorporateRegistryScreen",          severity:5, w:[-0.6,-0.8,-0.2,-0.1,-0.6,-0.2,-0.1,-0.4,-0.4, 0.0]},
+    ]
+  },
+];
+
+const PURPOSE_DATA = [
+  {id:"Lending",                   w:[2.0,1.8,1.0,0.6,1.4,0.6,0.0,0.4,1.0,0.2]},
+  {id:"Investment",                w:[1.6,1.8,1.2,1.0,1.8,1.0,0.0,0.4,1.2,0.0]},
+  {id:"VendorOnboarding",          w:[1.4,2.0,1.0,0.8,1.5,1.2,0.0,0.6,1.0,0.5]},
+  {id:"Employment",                w:[0.5,1.2,2.0,0.8,0.4,0.6,0.0,2.5,1.0,1.0]},
+  {id:"Matrimonial",               w:[0.6,0.4,2.0,1.0,0.8,0.5,2.5,0.8,1.4,0.0]},
+  {id:"GovernmentContract",        w:[1.0,2.0,1.6,1.5,1.5,2.0,0.0,0.6,1.2,0.6]},
+  {id:"SecurityClearance",         w:[0.6,1.4,2.4,2.4,0.8,1.4,0.0,1.0,1.2,1.8]},
+  {id:"InsuranceUnderwriting",     w:[1.6,1.4,1.4,0.4,1.0,0.6,0.0,0.6,0.8,0.2]},
+  {id:"GeneralDueDiligence",       w:[1.0,1.2,1.2,0.8,1.0,0.8,0.0,0.8,1.0,0.6]},
+  {id:"TenantScreening",           w:[2.0,0.8,2.2,1.2,0.6,0.3,0.0,1.4,1.0,0.2]},
+  {id:"BoardDirectorDueDiligence", w:[1.8,2.2,2.0,1.2,2.0,2.0,0.0,1.2,2.0,0.8]},
+  {id:"AMLCompliance",             w:[1.5,2.5,1.5,2.0,2.2,1.8,0.0,0.4,1.0,0.4]},
+  {id:"ThirdPartyRiskManagement",  w:[1.4,1.8,1.2,0.8,1.4,1.0,0.0,0.8,1.2,1.2]},
+  {id:"PartnershipDueDiligence",   w:[1.8,2.0,1.8,1.2,1.8,1.5,0.0,0.6,1.8,0.6]},
+];
+
+// ─────────────────────────────────────────────
+// COLOR SCALES
+// ─────────────────────────────────────────────
+const riskScale = d3.scaleSequential()
+  .domain([0, 2.5])
+  .interpolator(d3.interpolateRgb("#1a1c2a", "#ef4444"));
+
+const mitigScale = d3.scaleSequential()
+  .domain([0, 2.5])
+  .interpolator(d3.interpolateRgb("#1a1c2a", "#06b6d4"));
+
+function cellColor(w) {
+  if (w === 0) return "#12141e";
+  if (w > 0)  return riskScale(Math.min(w, 2.5));
+  return mitigScale(Math.min(Math.abs(w), 2.5));
+}
+
+function cellTextColor(w) {
+  if (Math.abs(w) < 0.3) return "transparent";
+  return "rgba(255,255,255,0.75)";
+}
+
+function severityClass(s) {
+  if (s <= 3) return "sev-low";
+  if (s <= 6) return "sev-med";
+  if (s <= 8) return "sev-high";
+  return "sev-crit";
+}
+
+function glowClass(w) {
+  if (w <= -1.0) return "glow-mitig";
+  if (w >= 2.2)  return "glow-crit";
+  if (w >= 1.6)  return "glow-high";
+  return "";
+}
+
+// ─────────────────────────────────────────────
+// LEGEND GRADIENTS
+// ─────────────────────────────────────────────
+function buildLegendGradient(elementId, scale) {
+  const el = document.getElementById(elementId);
+  const steps = 20;
+  const stops = Array.from({length: steps}, (_, i) => scale(i/(steps-1) * 2.5));
+  el.style.background = `linear-gradient(90deg, ${stops.join(',')})`;
+}
+buildLegendGradient('risk-gradient',  riskScale);
+buildLegendGradient('mitig-gradient', mitigScale);
+
+// ─────────────────────────────────────────────
+// BUILD MAIN TABLE
+// ─────────────────────────────────────────────
+const theadRow = document.getElementById('thead-row');
+DOMAINS.forEach(d => {
+  const th = document.createElement('th');
+  th.className = 'col-domain';
+  th.textContent = d.label;
+  theadRow.appendChild(th);
+});
+
+const tbody = document.getElementById('tbody');
+const tooltip = document.getElementById('tooltip');
+
+// Track total visible factor count
+let totalFactorCount = 0;
+
+GROUPS.forEach(group => {
+  totalFactorCount += group.factors.length;
+
+  // Group separator row
+  const sepRow = document.createElement('tr');
+  let rowCls = 'group-row';
+  if (group.style === 'mitigating') rowCls += ' mitigating';
+  else if (group.style === 'courtrecords') rowCls += ' courtrecords';
+  else if (group.style === 'screening') rowCls += ' screening';
+  else if (group.style === 'underground') rowCls += ' underground';
+  else if (group.style === 'crosssource') rowCls += ' crosssource';
+  else if (group.style === 'corporate') rowCls += ' corporate';
+  sepRow.className = rowCls;
+  sepRow.dataset.group = group.name;
+
+  const sepTd = document.createElement('td');
+  sepTd.colSpan = 2 + DOMAINS.length;
+  const factorCount = group.factors.length;
+
+  const groupLabel = group.mitigating
+    ? `\u2193 ${group.name} \u2014 risk-reducing signals`
+    : `\u2014 ${group.name} \u2014`;
+
+  sepTd.innerHTML = `${groupLabel}&nbsp;<span style="font-size:8px;opacity:0.6">${factorCount} factors</span>`;
+  sepRow.appendChild(sepTd);
+  tbody.appendChild(sepRow);
+
+  // Factor rows
+  group.factors.forEach(factor => {
+    const tr = document.createElement('tr');
+    tr.className = 'factor-row';
+    tr.dataset.group = group.name;
+    tr.dataset.severity = factor.severity;
+
+    // Name cell
+    const nameTd = document.createElement('td');
+    nameTd.className = 'cell-name';
+    nameTd.innerHTML = `<span class="factor-label">${factor.id.replace(/_/g, '_\u200b')}</span>`;
+    tr.appendChild(nameTd);
+
+    // Severity badge
+    const sevTd = document.createElement('td');
+    sevTd.className = 'cell-sev';
+    sevTd.innerHTML = `<div class="sev-badge ${severityClass(factor.severity)}">${factor.severity}</div>`;
+    tr.appendChild(sevTd);
+
+    // Heat cells
+    factor.w.forEach((w, i) => {
+      const td = document.createElement('td');
+      td.className = 'cell-heat';
+
+      const div = document.createElement('div');
+      div.className = 'heat-cell ' + glowClass(w);
+      div.style.background = cellColor(w);
+      div.style.color = cellTextColor(w);
+      if (w !== 0) div.textContent = w.toFixed(1);
+
+      // Tooltip
+      div.addEventListener('mousemove', e => {
+        const sign = w > 0 ? '+' : '';
+        const cls  = w > 0 ? 'positive' : (w < 0 ? 'negative' : 'zero');
+        tooltip.innerHTML = `
+          <div class="tt-cat">${group.name}</div>
+          <div class="tt-factor">${factor.id}</div>
+          <div class="tt-domain">${DOMAINS[i].label}</div>
+          <div class="tt-weight ${cls}">weight <span>${sign}${w.toFixed(2)}</span></div>
+        `;
+        positionTooltip(e);
+        tooltip.classList.add('visible');
+      });
+      div.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+
+      td.appendChild(div);
+      tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+  });
+});
+
+// Update stat display with actual count
+document.getElementById('stat-visible').textContent = totalFactorCount;
+document.getElementById('factor-badge').textContent = `${totalFactorCount} factors · 10 domains`;
+
+// ─────────────────────────────────────────────
+// FILTER CONTROLS
+// ─────────────────────────────────────────────
+const catChips = document.getElementById('cat-chips');
+const activeCategories = new Set();
+
+GROUPS.forEach(group => {
+  const chip = document.createElement('button');
+  chip.className = 'chip' + (group.mitigating ? ' mitigating' : '');
+  chip.textContent = group.name;
+  chip.dataset.group = group.name;
+  chip.addEventListener('click', () => {
+    if (activeCategories.has(group.name)) {
+      activeCategories.delete(group.name);
+      chip.classList.remove('active');
+    } else {
+      activeCategories.add(group.name);
+      chip.classList.add('active');
+    }
+    applyFilters();
+  });
+  catChips.appendChild(chip);
+});
+
+const sevMin = document.getElementById('sev-min');
+const sevMax = document.getElementById('sev-max');
+const sevMinVal = document.getElementById('sev-min-val');
+const sevMaxVal = document.getElementById('sev-max-val');
+
+sevMin.addEventListener('input', () => {
+  if (parseInt(sevMin.value) > parseInt(sevMax.value)) sevMin.value = sevMax.value;
+  sevMinVal.textContent = sevMin.value;
+  applyFilters();
+});
+sevMax.addEventListener('input', () => {
+  if (parseInt(sevMax.value) < parseInt(sevMin.value)) sevMax.value = sevMin.value;
+  sevMaxVal.textContent = sevMax.value;
+  applyFilters();
+});
+
+function applyFilters() {
+  const minSev = parseInt(sevMin.value);
+  const maxSev = parseInt(sevMax.value);
+  const filterByCat = activeCategories.size > 0;
+
+  let visible = 0;
+  let hiddenCount = 0;
+
+  document.querySelectorAll('.factor-row').forEach(row => {
+    const grp = row.dataset.group;
+    const sev = parseInt(row.dataset.severity);
+    const catOk = !filterByCat || activeCategories.has(grp);
+    const sevOk = sev >= minSev && sev <= maxSev;
+    if (catOk && sevOk) {
+      row.classList.remove('hidden');
+      visible++;
+    } else {
+      row.classList.add('hidden');
+      hiddenCount++;
+    }
+  });
+
+  // Show/hide group separator rows based on whether they have visible children
+  document.querySelectorAll('.group-row').forEach(sepRow => {
+    const grp = sepRow.dataset.group;
+    const catOk = !filterByCat || activeCategories.has(grp);
+    const hasVisible = catOk && [...document.querySelectorAll(`.factor-row[data-group="${grp}"]`)]
+      .some(r => !r.classList.contains('hidden'));
+    sepRow.style.display = hasVisible ? '' : 'none';
+  });
+
+  document.getElementById('stat-visible').textContent = visible;
+  document.getElementById('factor-badge').textContent = `${visible} factors · 10 domains`;
+
+  const notice = document.getElementById('hidden-notice');
+  if (hiddenCount > 0) {
+    notice.style.display = 'block';
+    notice.textContent = `${hiddenCount} factor${hiddenCount > 1 ? 's' : ''} hidden by filter`;
+  } else {
+    notice.style.display = 'none';
+  }
+}
+
+function resetFilters() {
+  activeCategories.clear();
+  document.querySelectorAll('.chip.active').forEach(c => c.classList.remove('active'));
+  sevMin.value = 1; sevMinVal.textContent = '1';
+  sevMax.value = 10; sevMaxVal.textContent = '10';
+  applyFilters();
+}
+
+// ─────────────────────────────────────────────
+// PURPOSE HEATMAP (SVG via D3)
+// ─────────────────────────────────────────────
+(function buildPurposeHeatmap() {
+  const margin = { top: 20, right: 20, bottom: 20, left: 228 };
+  const cellW = 72, cellH = 32, gap = 3;
+
+  const W = margin.left + DOMAINS.length * (cellW + gap) + margin.right;
+  const H = margin.top + PURPOSE_DATA.length * (cellH + gap) + 56;
+
+  const svg = d3.select('#purpose-svg')
+    .attr('width', W)
+    .attr('height', H)
+    .style('font-family', "'Space Mono', monospace");
+
+  // Domain header labels
+  DOMAINS.forEach((d, i) => {
+    const x = margin.left + i * (cellW + gap) + cellW / 2;
+    svg.append('text')
+      .attr('x', x)
+      .attr('y', margin.top + 10)
+      .attr('text-anchor', 'middle')
+      .attr('fill', '#6b7280')
+      .attr('font-size', 9)
+      .attr('letter-spacing', '0.08em')
+      .text(d.label.toUpperCase());
+
+    svg.append('line')
+      .attr('x1', x).attr('y1', margin.top + 15)
+      .attr('x2', x).attr('y2', margin.top + 21)
+      .attr('stroke', '#1e2030')
+      .attr('stroke-width', 1);
+  });
+
+  const rowTop = margin.top + 28;
+
+  PURPOSE_DATA.forEach((purpose, ri) => {
+    const y = rowTop + ri * (cellH + gap);
+
+    svg.append('text')
+      .attr('x', margin.left - 12)
+      .attr('y', y + cellH / 2 + 4)
+      .attr('text-anchor', 'end')
+      .attr('fill', '#9ca3b0')
+      .attr('font-size', 10)
+      .text(purpose.id);
+
+    purpose.w.forEach((w, ci) => {
+      const x = margin.left + ci * (cellW + gap);
+      const isZero = w === 0;
+
+      const g = svg.append('g')
+        .attr('transform', `translate(${x},${y})`)
+        .style('cursor', 'default');
+
+      const rect = g.append('rect')
+        .attr('width', cellW)
+        .attr('height', cellH)
+        .attr('rx', 4)
+        .attr('fill', isZero ? '#12141e' : riskScale(Math.min(w, 2.5)))
+        .style('transition', 'filter 0.15s');
+
+      if (!isZero) {
+        g.append('text')
+          .attr('x', cellW / 2)
+          .attr('y', cellH / 2 + 4)
+          .attr('text-anchor', 'middle')
+          .attr('fill', 'rgba(255,255,255,0.8)')
+          .attr('font-size', 10)
+          .attr('font-weight', '700')
+          .text(w.toFixed(1));
+      }
+
+      g.append('rect')
+        .attr('width', cellW).attr('height', cellH).attr('rx', 4)
+        .attr('fill', 'transparent')
+        .on('mousemove', function(event) {
+          rect.style('filter', 'brightness(1.3)');
+          tooltip.innerHTML = `
+            <div class="tt-cat">Purpose Profile</div>
+            <div class="tt-factor">${purpose.id}</div>
+            <div class="tt-domain">${DOMAINS[ci].label}</div>
+            <div class="tt-weight positive">profile weight <span>${w.toFixed(2)}</span></div>
+          `;
+          positionTooltip(event);
+          tooltip.classList.add('visible');
+        })
+        .on('mouseleave', function() {
+          rect.style('filter', '');
+          tooltip.classList.remove('visible');
+        });
+    });
+  });
+})();
+
+// ─────────────────────────────────────────────
+// TOOLTIP POSITIONING
+// ─────────────────────────────────────────────
+function positionTooltip(e) {
+  const tw = tooltip.offsetWidth  || 220;
+  const th = tooltip.offsetHeight || 80;
+  let lx = e.clientX + 16, ly = e.clientY - 12;
+  if (lx + tw > window.innerWidth  - 8) lx = e.clientX - tw - 16;
+  if (ly + th > window.innerHeight - 8) ly = e.clientY - th + 12;
+  tooltip.style.left = lx + 'px';
+  tooltip.style.top  = ly + 'px';
+}
+
+document.addEventListener('mousemove', function(e) {
+  if (tooltip.classList.contains('visible')) positionTooltip(e);
+});
+
+// ─────────────────────────────────────────────
+// COLLAPSE TOGGLE
+// ─────────────────────────────────────────────
+function toggleSection(id, btn) {
+  const el = document.getElementById(id);
+  const collapsed = el.classList.toggle('collapsed');
+  btn.textContent = collapsed ? 'Expand' : 'Collapse';
+}
+</script>
+</body>
+</html>

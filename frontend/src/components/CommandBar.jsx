@@ -19,6 +19,20 @@ const ENGINE_META = [
 
 const ALL_ENGINE_KEYS = ENGINE_META.map(e => e.key);
 
+const ENGINES_BY_TYPE = {
+  phone:    ['breach', 'threat_intel', 'darkweb', 'financial'],
+  email:    ['breach', 'threat_intel', 'darkweb', 'financial'],
+  username: ['breach', 'darkweb'],
+  fullname: ['threat_intel'],
+};
+
+const TYPE_HINTS = {
+  phone:    'Breach records, watchlists, dark web, financial',
+  email:    'Breach records, watchlists, dark web, financial',
+  username: 'Breach records, dark web forums',
+  fullname: 'Watchlist & sanctions screening',
+};
+
 function detectType(value) {
   const v = value.trim();
   if (!v) return 'username';
@@ -48,10 +62,20 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
   const meta = TYPE_META[detectedType];
   const hasValue = value.trim().length > 0;
 
+  const applicableEngines = useMemo(
+    () => new Set(ENGINES_BY_TYPE[detectedType] || ALL_ENGINE_KEYS),
+    [detectedType]
+  );
+
+  const effectiveEngines = useMemo(() => {
+    const filtered = new Set([...selectedEngines].filter(e => applicableEngines.has(e)));
+    return filtered.size > 0 ? filtered : new Set(applicableEngines);
+  }, [selectedEngines, applicableEngines]);
+
   const totalCost = useMemo(() => {
     if (!engineCosts || Object.keys(engineCosts).length === 0) return 0;
-    return [...selectedEngines].reduce((sum, e) => sum + (engineCosts[e] || 0), 0);
-  }, [selectedEngines, engineCosts]);
+    return [...effectiveEngines].reduce((sum, e) => sum + (engineCosts[e] || 0), 0);
+  }, [effectiveEngines, engineCosts]);
 
   const canAfford = isAdmin || remaining === null || remaining >= totalCost || overage !== 'hard';
 
@@ -77,9 +101,9 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
     e?.preventDefault();
     const v = value.trim();
     if (!v) return;
-    const engines = selectedEngines.size === ALL_ENGINE_KEYS.length ? null : [...selectedEngines];
+    const engines = effectiveEngines.size === ALL_ENGINE_KEYS.length ? null : [...effectiveEngines];
     onSearch([{ type: detectedType, value: v }], engines);
-  }, [value, detectedType, onSearch, selectedEngines]);
+  }, [value, detectedType, onSearch, effectiveEngines]);
 
   const handleClear = useCallback(() => {
     setValue('');
@@ -216,28 +240,38 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
         )}
       </form>
 
+      {hasValue && (
+        <p className="text-[10px] text-sap-muted px-1 font-mono">
+          {TYPE_HINTS[detectedType]}
+        </p>
+      )}
+
       {showCostBar && (
         <div className="flex items-center gap-1.5 px-1">
           {ENGINE_META.map(eng => {
-            const active = selectedEngines.has(eng.key);
+            const isApplicable = applicableEngines.has(eng.key);
+            const active = isApplicable && effectiveEngines.has(eng.key);
             const cost = engineCosts[eng.key] || 0;
             return (
               <button
                 key={eng.key}
                 type="button"
-                onClick={() => toggleEngine(eng.key)}
+                onClick={() => isApplicable && toggleEngine(eng.key)}
+                disabled={!isApplicable}
                 className={`
                   inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium
-                  transition-all duration-150 border cursor-pointer select-none
-                  ${active
-                    ? 'bg-sap-accent/10 border-sap-accent/30 text-sap-accent'
-                    : 'bg-sap-bg border-sap-border text-sap-muted line-through decoration-sap-muted/40'
+                  transition-all duration-150 border select-none
+                  ${!isApplicable
+                    ? 'bg-sap-bg border-sap-border text-sap-muted/30 cursor-not-allowed opacity-40'
+                    : active
+                      ? 'bg-sap-accent/10 border-sap-accent/30 text-sap-accent cursor-pointer'
+                      : 'bg-sap-bg border-sap-border text-sap-muted line-through decoration-sap-muted/40 cursor-pointer'
                   }
                 `}
               >
                 <span className="text-[11px]">{eng.icon}</span>
                 <span>{eng.label}</span>
-                {cost > 0 && (
+                {cost > 0 && isApplicable && (
                   <span className={`font-mono tabular-nums ${active ? 'text-sap-accent/70' : 'text-sap-muted/50'}`}>
                     {cost}
                   </span>

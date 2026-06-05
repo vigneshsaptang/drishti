@@ -1,20 +1,12 @@
 import { useAnyPermission } from '../lib/permissionUtils';
 
-const SUBJECT_TABS = [
-  { id: 'overview', label: 'Overview', perms: null },
-  { id: 'breaches', label: 'Breaches', perms: ['engine.credmon.read'] },
-  { id: 'darkweb', label: 'Dark Web', perms: ['engine.darkmon.read'] },
-  { id: 'telegram', label: 'Social Intel', perms: ['feature.telegram.mentions', 'feature.telegram.search'] },
-  { id: 'graph', label: 'Network', perms: ['feature.graph.view'] },
+const TABS = [
+  { id: 'report',   label: 'Report',   perms: null },
+  { id: 'evidence', label: 'Evidence',  perms: ['engine.credmon.read'] },
+  { id: 'tools',    label: 'Tools',     perms: null },
 ];
 
-const TOOL_TABS = [
-  { id: 'drugs', label: 'Drug Markets', perms: ['feature.drugs.view'] },
-  { id: 'financial', label: 'Financial', perms: ['feature.financial.upi', 'feature.financial.bank', 'feature.financial.crypto', 'feature.financial.screen'] },
-  { id: 'ecourts', label: 'Courts', perms: ['feature.ecourts.cached'] },
-];
-
-function Tab({ id, label, badge, active, disabled, muted, onClick }) {
+function Tab({ id, label, active, disabled, onClick }) {
   return (
     <button
       type="button"
@@ -25,13 +17,10 @@ function Tab({ id, label, badge, active, disabled, muted, onClick }) {
           ? 'border-sap-accent text-sap-accent'
           : disabled
             ? 'border-transparent text-sap-muted cursor-default'
-            : muted
-              ? 'border-transparent text-sap-muted hover:text-sap-dim cursor-pointer'
-              : 'border-transparent text-sap-dim hover:text-sap-text cursor-pointer'
+            : 'border-transparent text-sap-dim hover:text-sap-text cursor-pointer'
       }`}
     >
       {label}
-      {badge && <span className="text-xs font-mono text-sap-muted">{badge}</span>}
     </button>
   );
 }
@@ -42,47 +31,32 @@ function useTabVisible(perms) {
   return match;
 }
 
-function PermissionTab({ tab, active, disabled, muted, badge, onClick }) {
+function PermissionTab({ tab, active, disabled, onClick }) {
   const visible = useTabVisible(tab.perms);
   if (!visible) return null;
   return (
     <Tab
       id={tab.id}
       label={tab.label}
-      badge={badge}
       active={active}
       disabled={disabled}
-      muted={muted}
       onClick={onClick}
     />
   );
 }
 
-export default function TabStrip({ activeTab, onTabChange, results = [], hasResults = false }) {
-  const breachCount = results.filter(r => r.found).length;
+export default function TabStrip({ activeTab, onTabChange, results = [], darkmonResults = [] }) {
+  const hasBreachOrDarkmon = results.some(r => r.found && !r.skipped) || darkmonResults.some(r => r.found);
 
   return (
     <div className="flex items-stretch h-10 border-b border-sap-border overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
       <div className="flex items-stretch shrink-0">
-        {SUBJECT_TABS.map(tab => (
-          <PermissionTab
-            key={tab.id}
-            tab={tab}
-            badge={tab.id === 'breaches' && hasResults && breachCount > 0 ? `(${breachCount})` : null}
-            active={activeTab === tab.id}
-            disabled={tab.id !== 'overview' && !hasResults}
-            onClick={onTabChange}
-          />
-        ))}
-      </div>
-      <div className="w-px bg-sap-border my-2 mx-1.5 shrink-0" />
-      <div className="flex items-stretch shrink-0">
-        {TOOL_TABS.map(tab => (
+        {TABS.map(tab => (
           <PermissionTab
             key={tab.id}
             tab={tab}
             active={activeTab === tab.id}
-            muted
+            disabled={tab.id === 'evidence' && !hasBreachOrDarkmon}
             onClick={onTabChange}
           />
         ))}

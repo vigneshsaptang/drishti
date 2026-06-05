@@ -27,6 +27,7 @@ export function useSearchV2() {
   const [financialResults, setFinancialResults] = useState([]);
   const [financialMeta, setFinancialMeta] = useState(null);
   const [aiSummary, setAiSummary] = useState(null);
+  const [riskScore, setRiskScore] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchMeta, setSearchMeta] = useState(null);
@@ -99,6 +100,7 @@ export function useSearchV2() {
     setFinancialResults([]);
     setFinancialMeta(null);
     setAiSummary(null);
+    setRiskScore(null);
     setLoading(true);
     setError(null);
     setSearchMeta(null);
@@ -200,6 +202,10 @@ export function useSearchV2() {
                   setDarkmonMeta(parsed);
                   break;
 
+                case 'risk:score':
+                  setRiskScore(parsed);
+                  break;
+
                 case 'summary':
                   setAiSummary(parsed.text || null);
                   break;
@@ -261,8 +267,9 @@ export function useSearchV2() {
     setFinancialResults([]);
     setFinancialMeta(null);
     setAiSummary(null);
+    setRiskScore(null);
     setSearchMeta(null);
   }, [cancelSearch]);
 
-  return { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, loading, error, searchMeta, doSearch, cancelSearch, clearResults };
+  return { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults };
 }

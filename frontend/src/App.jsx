@@ -4,8 +4,6 @@ import { useState, useCallback, useMemo, lazy, Suspense } from 'react';
 import Header from './components/Header';
 import CommandBar from './components/CommandBar';
 import StatusLine from './components/StatusLine';
-import SubjectProfile from './components/SubjectProfile';
-import FtiScreening from './components/FtiScreening';
 import ClassificationBanner from './components/ClassificationBanner';
 import TabStrip from './components/TabStrip';
 import DashboardIdle from './components/DashboardIdle';
@@ -13,17 +11,12 @@ import FeedbackFab from './components/FeedbackFab';
 import FeedbackModal from './components/FeedbackModal';
 import ErrorBoundary from './components/ErrorBoundary';
 
-// Keep static: OverviewTab is the default tab (always shown first)
-import OverviewTab from './tabs/OverviewTab';
+// Keep static: ReportView is the default view (always shown first)
+import ReportView from './views/ReportView';
 
-// Lazy: tabs loaded on demand
-const BreachesV2Tab = lazy(() => import('./tabs/BreachesV2Tab'));
-const DarkwebTab = lazy(() => import('./tabs/DarkwebTab'));
-const DrugsTab = lazy(() => import('./tabs/DrugsTab'));
-const TelegramTab = lazy(() => import('./tabs/TelegramTab'));
-const FinancialTab = lazy(() => import('./tabs/FinancialTab'));
-const GraphTab = lazy(() => import('./tabs/GraphTab'));
-const EcourtsTab = lazy(() => import('./tabs/EcourtsTab'));
+// Lazy: views loaded on demand
+const EvidenceView = lazy(() => import('./views/EvidenceView'));
+const ToolsView = lazy(() => import('./views/ToolsView'));
 
 // Lazy: overlays/admin (rarely accessed)
 const ProfileDialog = lazy(() => import('./components/ProfileDialog'));
@@ -79,21 +72,6 @@ function LazyFallback() {
   );
 }
 
-function renderTab(activeTab, data, results, onPivot, loading, ftiResults, onFocusEntity, focusedEntity, clearFocusedEntity, darkmonResults, darkmonMeta, financialResults, financialMeta) {
-  let tab;
-  switch (activeTab) {
-    case 'graph': tab = <ErrorBoundary name="GraphTab"><GraphTab data={data} onPivot={onPivot} focusedEntity={focusedEntity} onClearFocus={clearFocusedEntity} /></ErrorBoundary>; break;
-    case 'financial': tab = <ErrorBoundary name="FinancialTab"><FinancialTab financialResults={financialResults} financialMeta={financialMeta} /></ErrorBoundary>; break;
-    case 'telegram': tab = <ErrorBoundary name="TelegramTab"><TelegramTab data={data} /></ErrorBoundary>; break;
-    case 'breaches': tab = <ErrorBoundary name="BreachesV2Tab"><BreachesV2Tab results={results} onPivot={onPivot} loading={loading} onFocusEntity={onFocusEntity} /></ErrorBoundary>; break;
-    case 'darkweb': tab = <ErrorBoundary name="DarkwebTab"><DarkwebTab data={data} onPivot={onPivot} darkmonResults={darkmonResults} darkmonMeta={darkmonMeta} /></ErrorBoundary>; break;
-    case 'drugs': tab = <ErrorBoundary name="DrugsTab"><DrugsTab /></ErrorBoundary>; break;
-    case 'ecourts': tab = <ErrorBoundary name="EcourtsTab"><EcourtsTab /></ErrorBoundary>; break;
-    default: tab = <ErrorBoundary name="OverviewTab"><OverviewTab data={data} results={results} onPivot={onPivot} ftiResults={ftiResults} /></ErrorBoundary>; break;
-  }
-  return <Suspense fallback={<LazyFallback />}>{tab}</Suspense>;
-}
-
 function ScannerWait() {
   return (
     <div className="rounded-lg border border-sap-accent/25 p-8 max-w-xl">
@@ -107,9 +85,9 @@ function ScannerWait() {
 }
 
 export default function App() {
-  const { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, loading, error, searchMeta, doSearch, cancelSearch, clearResults } = useSearchV2();
-  const [activeTab, setActiveTab] = useState('overview');
-  const [focusedEntity, setFocusedEntity] = useState(null);   // { type, value } | null
+  const { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults } = useSearchV2();
+  const [activeTab, setActiveTab] = useState('report');
+  const [focusedEntity, setFocusedEntity] = useState(null);
   const [overlay, setOverlay] = useState(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const { unreadCount, notifications: notifList, loading: notifLoading, fetchNotifications, markRead, markAllRead } = useNotifications();
@@ -117,7 +95,7 @@ export default function App() {
   const handleFocusEntity = useCallback((type, value) => {
     if (!type || !value) return;
     setFocusedEntity({ type, value });
-    setActiveTab('graph');
+    setActiveTab('evidence');
   }, []);
 
   const clearFocusedEntity = useCallback(() => setFocusedEntity(null), []);
@@ -137,13 +115,6 @@ export default function App() {
     });
   }, [results]);
 
-  // Watchlist filter: every significant token of the canonical name (e.g.
-  // ["saikrishna", "budamgunta"]) must appear in both the search term and
-  // the matched record's name. Substring-on-first-name-only leaks namesakes
-  // from the same regional community (DASARI, Saikrishna · MUMMALANENI,
-  // Saikrishna · REDDY, Budamgunta Ravi Kumar). All-tokens-present is the
-  // closest we get to exact-name-match without breaking on "LAST, FIRST"
-  // ordering vs "First Last" ordering — order-independent intersection.
   const watchlistFilterTokens = useMemo(() => {
     const src = canonical?.canonical || canonical?.anchor || '';
     return String(src)
@@ -156,7 +127,7 @@ export default function App() {
 
   const handleSearch = useCallback((seeds, engines = null) => {
     setCurrentEngines(engines);
-    setActiveTab('overview');
+    setActiveTab('report');
     setFocusedEntity(null);
     doSearch(seeds, 2, engines);
   }, [doSearch]);
@@ -170,6 +141,8 @@ export default function App() {
     handleSearch([{ type, value: value.trim() }], currentEngines);
   }, [handleSearch, currentEngines]);
 
+  const hasBreachData = results.some(r => r.found && !r.skipped);
+
   const renderBody = () => {
     if (error) {
       return (
@@ -178,15 +151,62 @@ export default function App() {
         </div>
       );
     }
-    if (activeTab === 'drugs') return <Suspense fallback={<LazyFallback />}><ErrorBoundary name="DrugsTab"><DrugsTab /></ErrorBoundary></Suspense>;
-    if (activeTab === 'financial') return <Suspense fallback={<LazyFallback />}><ErrorBoundary name="FinancialTab"><FinancialTab financialResults={financialResults} financialMeta={financialMeta} /></ErrorBoundary></Suspense>;
-    if (activeTab === 'darkweb') return <Suspense fallback={<LazyFallback />}><ErrorBoundary name="DarkwebTab"><DarkwebTab data={data} onPivot={handlePivot} darkmonResults={darkmonResults} darkmonMeta={darkmonMeta} /></ErrorBoundary></Suspense>;
-    if (activeTab === 'ecourts') return <Suspense fallback={<LazyFallback />}><ErrorBoundary name="EcourtsTab"><EcourtsTab /></ErrorBoundary></Suspense>;
-    if (activeTab === 'graph') return <Suspense fallback={<LazyFallback />}><ErrorBoundary name="GraphTab"><GraphTab data={data} onPivot={handlePivot} focusedEntity={focusedEntity} onClearFocus={clearFocusedEntity} /></ErrorBoundary></Suspense>;
+
+    if (activeTab === 'tools') {
+      return (
+        <Suspense fallback={<LazyFallback />}>
+          <ToolsView
+            data={data}
+            onPivot={handlePivot}
+            financialResults={financialResults}
+            financialMeta={financialMeta}
+            darkmonResults={darkmonResults}
+            darkmonMeta={darkmonMeta}
+          />
+        </Suspense>
+      );
+    }
+
     if (loading && !hasResults) return <ScannerWait />;
     if (!hasResults && !loading) return <DashboardIdle />;
-    if (hasResults) return renderTab(activeTab, data, results, handlePivot, loading, ftiResults, handleFocusEntity, focusedEntity, clearFocusedEntity, darkmonResults, darkmonMeta, financialResults, financialMeta);
-    return null;
+
+    if (activeTab === 'evidence') {
+      return (
+        <Suspense fallback={<LazyFallback />}>
+          <EvidenceView
+            results={results}
+            data={data}
+            loading={loading}
+            onPivot={handlePivot}
+            onFocusEntity={handleFocusEntity}
+            focusedEntity={focusedEntity}
+            clearFocusedEntity={clearFocusedEntity}
+            hasBreachData={hasBreachData}
+          />
+        </Suspense>
+      );
+    }
+
+    // Default: Report view
+    return (
+      <ReportView
+        results={results}
+        data={data}
+        loading={loading}
+        aiSummary={aiSummary}
+        riskScore={riskScore}
+        canonical={canonical}
+        watchlistFilterTokens={watchlistFilterTokens}
+        ftiResults={ftiResults}
+        ftiMeta={ftiMeta}
+        darkmonResults={darkmonResults}
+        darkmonMeta={darkmonMeta}
+        financialResults={financialResults}
+        onPivot={handlePivot}
+        onFocusEntity={handleFocusEntity}
+        onSwitchTab={setActiveTab}
+      />
+    );
   };
 
   const currentUser = useMemo(() => getUser(), []);
@@ -224,11 +244,9 @@ export default function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         results={results}
-        hasResults={hasResults}
+        darkmonResults={darkmonResults}
       />
       <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
-        {hasResults && activeTab === 'overview' && <ErrorBoundary name="SubjectProfile"><SubjectProfile results={results} loading={loading} onFocusEntity={handleFocusEntity} onSwitchTab={setActiveTab} aiSummary={aiSummary} canonical={canonical} /></ErrorBoundary>}
-        {(ftiResults.length > 0 || ftiMeta) && activeTab === 'overview' && <ErrorBoundary name="FtiScreening"><FtiScreening ftiResults={ftiResults} ftiMeta={ftiMeta} loading={loading} canonicalTokens={watchlistFilterTokens} canonicalName={canonical?.canonical || null} /></ErrorBoundary>}
         {renderBody()}
       </main>
 

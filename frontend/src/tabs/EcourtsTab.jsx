@@ -550,10 +550,10 @@ function CourtDirectoryTable({ stateFilter, onStateChange, byState }) {
         <span className="text-sap-muted">Showing {((page - 1) * limit) + (rows.length ? 1 : 0)}–{(page - 1) * limit + rows.length} of {fmtExact(total)}</span>
         <div className="flex gap-2">
           <button type="button" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}
-            className="px-3 py-1 rounded-sm border border-sap-border text-sap-text disabled:opacity-30 disabled:cursor-not-allowed hover:bg-sap-panel uppercase tracking-wider">Prev</button>
+            className="px-3 py-1.5 rounded-lg border border-sap-border text-sap-text disabled:opacity-30 disabled:cursor-not-allowed hover:bg-sap-panel uppercase tracking-wider">Previous</button>
           <span className="px-3 py-1 text-sap-text">page {page}</span>
           <button type="button" disabled={!hasNext} onClick={() => setPage(p => p + 1)}
-            className="px-3 py-1 rounded-sm border border-sap-border text-sap-text disabled:opacity-30 disabled:cursor-not-allowed hover:bg-sap-panel uppercase tracking-wider">Next</button>
+            className="px-3 py-1.5 rounded-lg border border-sap-border text-sap-text disabled:opacity-30 disabled:cursor-not-allowed hover:bg-sap-panel uppercase tracking-wider">Next</button>
         </div>
       </div>
     </article>
@@ -824,7 +824,7 @@ function SearchForm({ form, onChange, onSubmit, onReset, loading, byState, cover
           <button
             type="submit"
             disabled={!canSubmit}
-            className="px-4 py-1.5 rounded-sm text-[11px] font-mono uppercase tracking-[0.16em] bg-entity-legal text-white border border-entity-legal hover:bg-entity-legal/90 hover:border-entity-legal/90 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-entity-legal/10 hover:bg-entity-legal/20 text-entity-legal border border-entity-legal/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >{loading ? 'Searching…' : 'Run Search'}</button>
         </div>
       </div>

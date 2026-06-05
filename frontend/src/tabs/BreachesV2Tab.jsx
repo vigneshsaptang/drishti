@@ -4,17 +4,10 @@ import { fieldClass, redactPassword } from '../lib/utils';
 import { classifyBreach, getRecency, recencyScore, extractGeoIntel } from '../lib/breach';
 import { extractIdentifiers } from '../lib/identifierExtract';
 
-const DEPTH_LABELS = {
-  0: 'Seed Entities',
-  1: 'Discovered',
-  2: 'Second Degree',
-  3: 'Third Degree',
-  4: 'Fourth Degree',
-  5: 'Fifth Degree',
-};
-
 function depthLabel(depth) {
-  return DEPTH_LABELS[depth] ?? `Degree ${depth}`;
+  if (depth === 0) return 'Direct Matches';
+  if (depth === 1) return 'Linked \u2014 1 hop';
+  return `Linked \u2014 ${depth} hops`;
 }
 
 const REVEAL_DELAY_MS = 80;
@@ -259,7 +252,7 @@ function DepthSection({ depth, entities, onPivot, onFocusEntity }) {
     <div>
       <div className="flex items-center gap-3 mb-3 animate-fade-in">
         <span className="text-xs font-mono tracking-[3px] uppercase text-sap-accent font-semibold">
-          Layer {depth} — {depthLabel(depth)}
+          {depthLabel(depth)}
         </span>
         <span className="text-xs font-mono text-sap-dim">
           {foundCount}/{entities.length} found

@@ -261,36 +261,38 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
 
   return (
     <div className="space-y-5 animate-fade-in">
-      {error && (
-        <div className="rounded-lg border border-entity-drug/30 bg-entity-drug/5 p-4">
-          <p className="text-entity-drug font-mono text-sm">{error}</p>
-          <button
-            type="button"
-            onClick={() => { setError(null); loadInitialData(); }}
-            className="mt-2 text-xs font-mono text-sap-accent hover:underline"
-          >
-            Retry
-          </button>
-        </div>
-      )}
+      {error && (() => {
+        const ec = { upi: 'entity-drug', banks: 'entity-breach', crypto: 'entity-crypto' }[subTab] || 'entity-drug';
+        const borderCls = ec === 'entity-breach' ? 'border-entity-breach/30 bg-entity-breach/5' : ec === 'entity-crypto' ? 'border-entity-crypto/30 bg-entity-crypto/5' : 'border-entity-drug/30 bg-entity-drug/5';
+        const textCls = ec === 'entity-breach' ? 'text-entity-breach' : ec === 'entity-crypto' ? 'text-entity-crypto' : 'text-entity-drug';
+        return (
+          <div className={`rounded-lg border ${borderCls} p-4`}>
+            <p className={`${textCls} font-mono text-sm`}>{error}</p>
+            <button
+              type="button"
+              onClick={() => { setError(null); loadInitialData(); }}
+              className="mt-2 text-xs font-mono text-sap-accent hover:underline"
+            >
+              Retry
+            </button>
+          </div>
+        );
+      })()}
 
       {/* ── Sub-tab navigation ── */}
-      <div className="flex items-center gap-1 border-b border-sap-border">
+      <div className="flex items-stretch h-8 border-b border-sap-border overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
         {SUB_TABS.map(tab => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setSubTab(tab.id)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors relative ${
+            className={`px-3 text-xs font-medium whitespace-nowrap outline-none transition-colors -mb-px border-b-2 ${
               subTab === tab.id
-                ? 'text-sap-accent'
-                : 'text-sap-dim hover:text-sap-text'
+                ? 'border-sap-accent text-sap-accent'
+                : 'border-transparent text-sap-dim hover:text-sap-text cursor-pointer'
             }`}
           >
             {tab.label}
-            {subTab === tab.id && (
-              <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-sap-accent rounded-t" />
-            )}
           </button>
         ))}
       </div>
@@ -360,7 +362,7 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
         <div className="bg-sap-surface rounded-lg border border-entity-drug/20 p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <div>
-              <h3 className="text-base font-bold text-entity-drug">Fraud UPI Identifiers</h3>
+              <h3 className="text-sm font-bold text-entity-drug">Fraud UPI Identifiers</h3>
               <p className="text-sm text-sap-dim mt-0.5">{(upis || []).length} tracked payment accounts linked to betting, gambling, and fraud sites</p>
             </div>
             <input
@@ -456,7 +458,7 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
       {subTab === 'banks' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2 bg-sap-surface rounded-lg border border-entity-breach/20 p-5 shadow-sm">
-            <h3 className="text-base font-bold text-entity-breach mb-1">Flagged Bank Accounts</h3>
+            <h3 className="text-sm font-bold text-entity-breach mb-1">Flagged Bank Accounts</h3>
             <p className="text-sm text-sap-dim mb-4">{(banks || []).length} accounts linked to fraud / betting sites with IFSC resolution</p>
             {banks && banks.length > 0 ? (
               <>
@@ -534,14 +536,14 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
       {/* ── Crypto Wallet Trace ── */}
       {subTab === 'crypto' && (
         <div className="bg-sap-surface rounded-lg border border-entity-crypto/20 p-5 shadow-sm">
-          <h3 className="text-base font-bold text-entity-crypto mb-1">Crypto Wallet Trace</h3>
+          <h3 className="text-sm font-bold text-entity-crypto mb-1">Crypto Wallet Trace</h3>
           <p className="text-sm text-sap-dim mb-4">Enter a BTC or ETH wallet address to trace transaction history</p>
-          <form onSubmit={handleWalletSearch} className="flex gap-3 items-center mb-4">
+          <form onSubmit={handleWalletSearch} className="flex gap-3 items-center max-w-2xl mb-4">
             <input type="text" value={walletQuery} onChange={e => setWalletQuery(e.target.value)}
               placeholder="Enter BTC/ETH wallet address..."
-              className="flex-1 bg-sap-panel border border-sap-border rounded-lg px-4 py-3 text-base font-mono text-sap-text outline-none focus:border-entity-crypto placeholder:text-sap-muted" />
+              className="flex-1 bg-sap-panel border border-sap-border rounded-lg px-4 py-2.5 text-sm font-mono text-sap-text outline-none focus:border-entity-crypto placeholder:text-sap-muted" />
             <button type="submit" disabled={walletLoading}
-              className="bg-entity-crypto/10 hover:bg-entity-crypto/20 text-entity-crypto border border-entity-crypto/30 px-5 py-3 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40">
+              className="bg-entity-crypto/10 hover:bg-entity-crypto/20 text-entity-crypto border border-entity-crypto/30 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40">
               {walletLoading ? 'Tracing...' : 'Trace Wallet'}
             </button>
           </form>

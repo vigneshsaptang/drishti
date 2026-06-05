@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { searchTelegramMessages } from '../lib/api';
-import Shimmer from '../components/Shimmer';
 
 export default function TelegramTab({ data }) {
   const [msgQuery, setMsgQuery] = useState('');
@@ -8,29 +7,7 @@ export default function TelegramTab({ data }) {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState(null);
 
-  if (!data) {
-    return (
-      <div className="space-y-4 p-4 animate-fade-in">
-        <div className="flex gap-3">
-          <Shimmer className="h-10 flex-1" />
-          <Shimmer className="h-10 w-24" />
-        </div>
-        <div className="space-y-3">
-          {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} className="bg-sap-surface border border-sap-border rounded-lg p-4 space-y-2">
-              <div className="flex items-center gap-3">
-                <Shimmer className="h-3 w-20" />
-                <Shimmer className="h-3 w-32" />
-              </div>
-              <Shimmer className="h-4 w-full" />
-              <Shimmer className="h-4 w-3/4" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  const tg = data.threat_intel?.telegram || {};
+  const tg = data?.threat_intel?.telegram || {};
 
   const handleMsgSearch = async (e) => {
     e?.preventDefault();
@@ -47,10 +24,10 @@ export default function TelegramTab({ data }) {
   };
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="space-y-5 animate-fade-in">
       {error && (
-        <div className="rounded-lg border border-entity-drug/30 bg-entity-drug/5 p-4">
-          <p className="text-entity-drug font-mono text-sm">{error}</p>
+        <div className="rounded-lg border border-entity-telegram/30 bg-entity-telegram/5 p-4">
+          <p className="text-entity-telegram font-mono text-sm">{error}</p>
           <button
             type="button"
             onClick={() => { setError(null); handleMsgSearch(); }}
@@ -61,20 +38,20 @@ export default function TelegramTab({ data }) {
         </div>
       )}
       {/* Message Search */}
-      <form onSubmit={handleMsgSearch} className="flex gap-3 items-center">
+      <form onSubmit={handleMsgSearch} className="flex gap-3 items-center max-w-2xl">
         <input
           type="text"
           value={msgQuery}
           onChange={e => setMsgQuery(e.target.value)}
           placeholder="Search Telegram messages..."
-          className="flex-1 bg-sap-panel border border-sap-border rounded px-4 py-2 text-sm font-mono text-sap-text outline-none focus:border-entity-telegram placeholder:text-sap-muted"
+          className="flex-1 bg-sap-panel border border-sap-border rounded-lg px-4 py-2.5 text-sm font-mono text-sap-text outline-none focus:border-entity-telegram placeholder:text-sap-muted"
         />
         <button
           type="submit"
           disabled={searching}
-          className="bg-entity-telegram/20 hover:bg-entity-telegram/30 text-entity-telegram border border-entity-telegram/30 px-4 py-2 rounded text-sm font-mono font-semibold transition-colors disabled:opacity-40"
+          className="bg-entity-telegram/20 hover:bg-entity-telegram/30 text-entity-telegram border border-entity-telegram/30 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40"
         >
-          {searching ? 'SEARCHING...' : 'SEARCH MESSAGES'}
+          {searching ? 'Searching...' : 'Search Messages'}
         </button>
       </form>
 
@@ -101,13 +78,13 @@ export default function TelegramTab({ data }) {
 
       {/* Mention stats below search */}
       {!tg.found && !messages && (
-        <p className="text-sap-dim text-sm py-4 text-center">No Telegram activity detected for this entity. Use the search above to query the message corpus directly.</p>
+        <p className="text-sap-dim text-sm py-10 text-center">No Telegram activity detected for this entity. Use the search above to query the message corpus directly.</p>
       )}
 
       {tg.found && <>
       {/* Headline stats */}
       <div className="bg-sap-surface border border-entity-telegram/30 rounded-lg p-5">
-        <h3 className="text-xs font-mono tracking-[3px] uppercase text-entity-telegram mb-4">Telegram Intelligence</h3>
+        <h3 className="text-xs font-mono tracking-widest uppercase text-entity-telegram mb-4">Telegram Intelligence</h3>
         <div className="grid grid-cols-3 gap-4 text-center">
           <BigStat value={tg.total_mentions?.toLocaleString()} label="Mentions" color="text-entity-telegram" />
           <BigStat value={tg.unique_groups} label="Groups" color="text-entity-telegram" />

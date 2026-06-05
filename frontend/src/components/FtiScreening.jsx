@@ -520,7 +520,14 @@ function WorldcheckCard({ result, index }) {
 /**
  * Empty state when a section has no matches.
  */
-function ClearSection({ label }) {
+function ClearSection({ label, muted }) {
+  if (muted) {
+    return (
+      <div className="flex items-center gap-2 py-4 px-3 bg-sap-panel/30 border border-sap-border/50 rounded-md">
+        <span className="text-sm text-sap-muted">No {label} matches</span>
+      </div>
+    );
+  }
   return (
     <div className="flex items-center gap-2 py-4 px-3 bg-emerald-500/5 border border-emerald-500/20 rounded-md">
       <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/20 text-emerald-500">CLEAR</span>
@@ -718,7 +725,7 @@ export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTo
             {crimedataMatches.length > 0
               ? crimedataMatches.map((m, i) => <CrimedataCard key={`cd-${m._id}-${i}`} result={m} index={i} />)
               : (isComplete || crimedataResults.length > 0)
-                ? <ClearSection label="crime database" />
+                ? <ClearSection label="crime database" muted={worldcheckMatches.length > 0} />
                 : loading
                   ? <ScanningPlaceholder />
                   : null
@@ -741,7 +748,7 @@ export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTo
             {worldcheckMatches.length > 0
               ? worldcheckMatches.map((m, i) => <WorldcheckCard key={`wc-${m._id}-${i}`} result={m} index={i} />)
               : (isComplete || worldcheckResults.length > 0)
-                ? <ClearSection label="sanctions/PEP" />
+                ? <ClearSection label="sanctions/PEP" muted={crimedataMatches.length > 0} />
                 : loading
                   ? <ScanningPlaceholder />
                   : null

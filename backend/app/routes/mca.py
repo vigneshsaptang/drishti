@@ -14,7 +14,7 @@ router = APIRouter(tags=["mca"])
 log = logging.getLogger("mca")
 
 _DB = "AURACLE"
-_COL = "MCA_PRELIM_08052026"
+_COL = "MCA_FULL"
 _CACHE_DB = "mca_cache"
 _CACHE_COL = "lookups"
 _USAGE_COL = "usage_log"

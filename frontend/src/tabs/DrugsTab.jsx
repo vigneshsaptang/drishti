@@ -80,7 +80,7 @@ export default function DrugsTab() {
   });
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="space-y-5 animate-fade-in">
       {error && (
         <div className="rounded-lg border border-entity-drug/30 bg-entity-drug/5 p-4">
           <p className="text-entity-drug font-mono text-sm">{error}</p>
@@ -94,20 +94,20 @@ export default function DrugsTab() {
         </div>
       )}
       {/* Drug Search */}
-      <form onSubmit={handleDrugSearch} className="flex gap-3 items-center">
+      <form onSubmit={handleDrugSearch} className="flex gap-3 items-center max-w-2xl">
         <input
           type="text"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           placeholder="Search drugs, vendors, categories..."
-          className="flex-1 bg-sap-panel border border-sap-border rounded px-4 py-2 text-sm font-mono text-sap-text outline-none focus:border-entity-drug placeholder:text-sap-muted"
+          className="flex-1 bg-sap-panel border border-sap-border rounded-lg px-4 py-2.5 text-sm font-mono text-sap-text outline-none focus:border-entity-drug placeholder:text-sap-muted"
         />
         <button
           type="submit"
           disabled={searching}
-          className="bg-entity-drug/20 hover:bg-entity-drug/30 text-entity-drug border border-entity-drug/30 px-4 py-2 rounded text-sm font-mono font-semibold transition-colors disabled:opacity-40"
+          className="bg-entity-drug/20 hover:bg-entity-drug/30 text-entity-drug border border-entity-drug/30 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40"
         >
-          {searching ? 'SEARCHING...' : 'SEARCH DRUGS'}
+          {searching ? 'Searching...' : 'Search Drugs'}
         </button>
       </form>
 
@@ -164,7 +164,7 @@ export default function DrugsTab() {
           )}
           {stats.marketplaces?.length > 0 && (
             <div className="bg-sap-surface border border-sap-border rounded-lg p-4">
-              <h4 className="text-xs font-mono tracking-widest text-entity-darkweb mb-3 uppercase">Marketplaces</h4>
+              <h4 className="text-xs font-mono tracking-widest text-entity-drug mb-3 uppercase">Marketplaces</h4>
               <div className="space-y-1.5">
                 {stats.marketplaces.slice(0, 15).map(m => {
                   const pct = Math.round((m.count / (stats.marketplaces[0]?.count || 1)) * 100);
@@ -172,7 +172,7 @@ export default function DrugsTab() {
                     <div key={m.name} className="flex items-center gap-2 text-xs font-mono">
                       <span className="w-32 truncate text-sap-dim">{m.name}</span>
                       <div className="flex-1 h-1.5 bg-sap-panel rounded-full overflow-hidden">
-                        <div className="h-full bg-entity-darkweb/60 rounded-full" style={{ width: `${pct}%` }} />
+                        <div className="h-full bg-entity-drug/60 rounded-full" style={{ width: `${pct}%` }} />
                       </div>
                       <span className="w-12 text-right text-sap-dim">{m.count.toLocaleString()}</span>
                     </div>
@@ -196,7 +196,7 @@ export default function DrugsTab() {
 
       {/* India Vendors */}
       <div className="flex items-center gap-3 mb-4">
-        <h3 className="text-xs font-mono tracking-[3px] uppercase text-entity-drug">India-Origin Dark Web Drug Vendors</h3>
+        <h3 className="text-xs font-mono tracking-widest uppercase text-entity-drug">India-Origin Dark Web Drug Vendors</h3>
         <div className="flex-1 h-px bg-sap-border" />
         <span className="text-xs text-sap-dim font-mono">{listings.length} listings</span>
       </div>

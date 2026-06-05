@@ -36,7 +36,7 @@ const TYPE_HINTS = {
 function detectType(value) {
   const v = value.trim();
   if (!v) return 'username';
-  if (/^\+?[\d\s\-() ]{7,15}$/.test(v)) return 'phone';
+  if (/^\+?[\d\s\-() ]{7,15}$/.test(v)) return 'phone';
   if (v.includes('@')) return 'email';
   if (v.includes(' ') && v.length > 3) return 'fullname';
   return 'username';
@@ -56,7 +56,7 @@ function Kbd({ children, tone = 'light' }) {
     ? 'border-white/25 bg-white/10 text-white/85'
     : 'border-sap-border-light bg-sap-bg text-sap-muted';
   return (
-    <kbd className={`inline-flex items-center justify-center h-[15px] min-w-[15px] px-1 rounded-[3px] border ${cls} text-[10px] font-mono leading-none`}>
+    <kbd className={`inline-flex items-center justify-center h-[15px] min-w-[15px] px-1 rounded-[3px] border ${cls} text-11 font-mono leading-none`}>
       {children}
     </kbd>
   );
@@ -166,12 +166,12 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
     return (
       <div className="flex items-center gap-2 h-9 px-2.5 rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         <span
-          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-medium tracking-tight shrink-0"
+          className="inline-flex items-center px-1.5 py-0.5 rounded text-11 font-medium tracking-tight shrink-0"
           style={{ color: seedMeta.color, background: seedMeta.bg, border: `1px solid ${seedMeta.border}` }}
         >
           {seedMeta.label}
         </span>
-        <span className="font-mono text-[13px] text-sap-text truncate flex-1 min-w-0">{seed.value}</span>
+        <span className="font-mono text-13 text-sap-text truncate flex-1 min-w-0">{seed.value}</span>
         {loading && (
           <span className="text-sap-accent"><Spinner /></span>
         )}
@@ -179,7 +179,7 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
           <button
             type="button"
             onClick={onCancel}
-            className="shrink-0 h-7 px-2.5 rounded-md text-[12px] font-medium text-white bg-entity-drug hover:bg-entity-drug/80 transition-colors"
+            className="shrink-0 h-7 px-2.5 rounded-md text-12 font-medium text-white bg-sap-danger-filled hover:bg-sap-danger transition-colors"
           >
             Cancel
           </button>
@@ -188,14 +188,14 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
             <button
               type="button"
               onClick={handleEdit}
-              className="shrink-0 h-7 px-2.5 rounded-md text-[12px] font-medium text-sap-dim hover:text-sap-text border border-sap-border-light bg-sap-bg hover:bg-sap-surface transition-colors"
+              className="shrink-0 h-7 px-2.5 rounded-md text-12 font-medium text-sap-dim hover:text-sap-text border border-sap-border-light bg-sap-bg hover:bg-sap-surface transition-colors"
             >
               Edit
             </button>
             <button
               type="button"
               onClick={handleClear}
-              className="shrink-0 h-7 px-2.5 rounded-md text-[12px] font-medium text-sap-dim hover:text-sap-text border border-sap-border-light bg-sap-bg hover:bg-sap-surface transition-colors"
+              className="shrink-0 h-7 px-2.5 rounded-md text-12 font-medium text-sap-dim hover:text-sap-text border border-sap-border-light bg-sap-bg hover:bg-sap-surface transition-colors"
             >
               Clear
             </button>
@@ -221,11 +221,11 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
           onKeyDown={e => e.key === 'Escape' && (setValue(''), setManualType(null))}
           placeholder="Search phone, email, name, or username…"
           autoFocus
-          className="flex-1 min-w-0 bg-transparent outline-none text-[14px] text-sap-text placeholder:text-sap-muted"
+          className="flex-1 min-w-0 bg-transparent outline-none text-14 text-sap-text placeholder:text-sap-muted"
         />
 
         {!hasValue && (
-          <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-sap-muted shrink-0 pr-1">
+          <span className="hidden sm:inline-flex items-center gap-1 text-11 text-sap-muted shrink-0 pr-1">
             <Kbd>/</Kbd>
             <span>to focus</span>
           </span>
@@ -239,14 +239,14 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
             className="shrink-0 inline-flex items-center px-2 h-6 rounded-md cursor-pointer transition-colors hover:opacity-80 active:scale-95"
             style={{ color: meta.color, background: meta.bg, border: `1px solid ${meta.border}` }}
           >
-            <span className="text-[11px] font-medium tracking-tight">{meta.label}</span>
+            <span className="text-11 font-medium tracking-tight">{meta.label}</span>
           </button>
         )}
         {loading ? (
           <button
             type="button"
             onClick={onCancel}
-            className="shrink-0 h-8 px-3 rounded-md bg-entity-drug hover:bg-entity-drug/80 text-white text-[13px] font-medium transition-colors flex items-center gap-1.5"
+            className="shrink-0 h-8 px-3 rounded-md bg-sap-danger-filled hover:bg-sap-danger text-white text-13 font-medium transition-colors flex items-center gap-1.5"
           >
             <Spinner />
             Cancel
@@ -255,7 +255,7 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
           <button
             type="submit"
             disabled={!hasValue || !canAfford}
-            className="shrink-0 h-8 px-3 rounded-md bg-sap-accent hover:bg-sap-accent-glow disabled:opacity-40 disabled:cursor-not-allowed text-white text-[13px] font-medium transition-colors inline-flex items-center gap-2"
+            className="shrink-0 h-8 px-3 rounded-md bg-sap-accent hover:bg-sap-accent-glow disabled:opacity-40 disabled:cursor-not-allowed text-white text-13 font-medium transition-colors inline-flex items-center gap-2"
             style={{
               boxShadow:
                 'inset 0 -1px 0 rgba(0,0,0,0.16), 0 1px 2px color-mix(in srgb, var(--color-sap-accent) 25%, transparent)',
@@ -268,7 +268,7 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
       </form>
 
       {hasValue && (
-        <p className="text-[11.5px] text-sap-dim px-1">
+        <p className="text-11 text-sap-dim px-1">
           {TYPE_HINTS[detectedType]}
         </p>
       )}
@@ -286,7 +286,7 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
                 onClick={() => isApplicable && toggleEngine(eng.key)}
                 disabled={!isApplicable}
                 className={`
-                  inline-flex items-center gap-1 px-2 h-6 rounded-md text-[11px] font-medium tracking-tight
+                  inline-flex items-center gap-1 px-2 h-6 rounded-md text-11 font-medium tracking-tight
                   transition-colors duration-150 border select-none
                   ${!isApplicable
                     ? 'bg-sap-bg border-sap-border-light text-sap-muted/40 cursor-not-allowed opacity-50'
@@ -296,10 +296,10 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
                   }
                 `}
               >
-                <span className="text-[10.5px] opacity-70">{eng.icon}</span>
+                <span className="text-11 opacity-70">{eng.icon}</span>
                 <span>{eng.label}</span>
                 {cost > 0 && isApplicable && (
-                  <span className={`font-mono tabular-nums ml-0.5 ${active ? 'text-sap-accent/70' : 'text-sap-muted/60'}`}>
+                  <span className={`tabular-nums ml-0.5 ${active ? 'text-sap-accent/70' : 'text-sap-muted/60'}`}>
                     {cost}
                   </span>
                 )}
@@ -308,12 +308,12 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
           })}
 
           <span className="ml-auto flex items-center gap-1">
-            <span className={`text-[11px] font-medium tabular-nums px-1.5 py-0.5 rounded-md border ${
+            <span className={`text-11 font-medium tabular-nums px-1.5 py-0.5 rounded-md border ${
               canAfford
                 ? 'text-sap-dim bg-sap-bg border-sap-border-light'
-                : 'text-rose-700 bg-rose-50 border-rose-200'
+                : 'text-sap-danger bg-sap-danger-soft border-sap-danger/30'
             }`}>
-              <span className="font-mono">{totalCost}</span>
+              <span>{totalCost}</span>
               <span className="text-sap-muted ml-0.5">cr</span>
             </span>
           </span>

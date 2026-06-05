@@ -81,9 +81,9 @@ export default function LoginPage({ onSuccess }) {
     }
   };
 
-  const fieldBorder = shaking ? 'border-rose-300' : 'border-sap-border-light';
+  const fieldBorder = shaking ? 'border-sap-danger/40' : 'border-sap-border-light';
   const fieldClass =
-    `w-full h-9 rounded-md border ${fieldBorder} bg-sap-surface px-3 text-[13.5px] text-sap-text ` +
+    `w-full h-9 rounded-md border ${fieldBorder} bg-sap-surface px-3 text-13 text-sap-text ` +
     'placeholder:text-sap-muted outline-none transition-[border-color,box-shadow] duration-150 ' +
     'focus:border-sap-accent focus:ring-4 focus:ring-sap-accent/10';
 
@@ -114,16 +114,16 @@ export default function LoginPage({ onSuccess }) {
             <img src="/saptang-logo.svg" alt="" className="h-5 w-auto" />
           </div>
           <div className="flex flex-col leading-none">
-            <span className="text-[14.5px] font-semibold tracking-tight text-sap-text">Auracle</span>
-            <span className="mt-1 text-[11.5px] text-sap-dim">Saptang Intelligence</span>
+            <span className="text-14 font-semibold tracking-tight text-sap-text">Auracle</span>
+            <span className="mt-1 text-11 text-sap-dim">Saptang Intelligence</span>
           </div>
         </div>
 
         <div className="mb-7">
-          <h1 className="text-[26px] font-semibold tracking-[-0.02em] leading-[1.15] text-sap-text">
+          <h1 className="text-26 font-semibold tracking-[-0.02em] leading-[1.15] text-sap-text">
             Sign in to your workspace
           </h1>
-          <p className="mt-1.5 text-[13.5px] text-sap-dim">
+          <p className="mt-1.5 text-13 text-sap-dim">
             Continue to the intelligence console.
           </p>
         </div>
@@ -132,14 +132,14 @@ export default function LoginPage({ onSuccess }) {
           {err && (
             <div
               role="alert"
-              className="rounded-md border border-rose-200 bg-rose-50/70 px-3 py-2 text-[12.5px] text-rose-700"
+              className="rounded-md border border-sap-danger/30 bg-sap-danger-soft/60 px-3 py-2 text-12 text-sap-danger"
             >
               {err}
             </div>
           )}
 
           <div className="space-y-1.5">
-            <label htmlFor="sap-user" className="block text-[12px] font-medium text-sap-text">
+            <label htmlFor="sap-user" className="block text-12 font-medium text-sap-text">
               Username
             </label>
             <input
@@ -154,11 +154,11 @@ export default function LoginPage({ onSuccess }) {
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label htmlFor="sap-pass" className="block text-[12px] font-medium text-sap-text">
+              <label htmlFor="sap-pass" className="block text-12 font-medium text-sap-text">
                 Password
               </label>
               {capsLockOn && (
-                <span className="flex items-center gap-1 text-[11px] text-amber-600">
+                <span className="flex items-center gap-1 text-11 text-sap-warning">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                     <path d="M12 4l8 8h-5v6H9v-6H4z" />
                   </svg>
@@ -192,13 +192,13 @@ export default function LoginPage({ onSuccess }) {
           {captchaImg && (
             <div className="space-y-1.5 pt-0.5">
               <div className="flex items-center justify-between">
-                <label htmlFor="sap-captcha" className="block text-[12px] font-medium text-sap-text">
+                <label htmlFor="sap-captcha" className="block text-12 font-medium text-sap-text">
                   Verification
                 </label>
                 <button
                   type="button"
                   onClick={fetchCaptcha}
-                  className="text-[11.5px] text-sap-dim hover:text-sap-text transition-colors"
+                  className="text-11 text-sap-dim hover:text-sap-text transition-colors"
                 >
                   Refresh
                 </button>
@@ -225,7 +225,7 @@ export default function LoginPage({ onSuccess }) {
           <button
             type="submit"
             disabled={busy}
-            className="group relative w-full h-9 mt-1 rounded-md bg-sap-accent text-[13px] font-medium text-white transition-[background-color,box-shadow,opacity] duration-150 hover:bg-sap-accent-glow focus:outline-none focus:ring-4 focus:ring-sap-accent/25 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+            className="group relative w-full h-9 mt-1 rounded-md bg-sap-accent text-13 font-medium text-white transition-[background-color,box-shadow,opacity] duration-150 hover:bg-sap-accent-glow focus:outline-none focus:ring-4 focus:ring-sap-accent/25 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
             style={{
               boxShadow:
                 'inset 0 -1px 0 rgba(0,0,0,0.16), 0 1px 2px color-mix(in srgb, var(--color-sap-accent) 25%, transparent)',
@@ -233,17 +233,17 @@ export default function LoginPage({ onSuccess }) {
           >
             <span>{busy ? 'Signing in…' : 'Access'}</span>
             {!busy && (
-              <kbd className="hidden sm:inline-flex items-center justify-center h-[15px] min-w-[15px] px-1 rounded-[3px] border border-white/25 bg-white/10 text-[10px] font-mono text-white/85 leading-none">
+              <kbd className="hidden sm:inline-flex items-center justify-center h-[15px] min-w-[15px] px-1 rounded-[3px] border border-white/25 bg-white/10 text-11 font-mono text-white/85 leading-none">
                 ↵
               </kbd>
             )}
           </button>
         </form>
 
-        <div className="mt-9 flex items-center justify-center gap-1.5 text-[11px] text-sap-muted">
+        <div className="mt-9 flex items-center justify-center gap-1.5 text-11 text-sap-muted">
           <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500/40 animate-ping" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className="absolute inline-flex h-full w-full rounded-full bg-sap-success-filled/40 animate-ping" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sap-success-filled" />
           </span>
           <span>secure session · saptanglabs.com</span>
         </div>

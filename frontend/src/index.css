@@ -49,6 +49,31 @@ html, body, #root {
   --animate-blink-cursor: blink-cursor 1.06s steps(2, start) infinite;
   --animate-slide-in-right: slideInRight 0.25s ease-out;
   --animate-shake: shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+
+  /* Type scale — 6-step disciplined ramp. Arbitrary text-[Xpx] is banned. */
+  --text-11: 11px;
+  --text-11--line-height: 14px;
+  --text-12: 12px;
+  --text-12--line-height: 16px;
+  --text-13: 13px;
+  --text-13--line-height: 18px;
+  --text-14: 14px;
+  --text-14--line-height: 20px;
+  --text-17: 17px;
+  --text-17--line-height: 22px;
+  --text-26: 26px;
+  --text-26--line-height: 30px;
+
+  /* Semantic status — 3 families × 3 intensities. Raw amber-/rose-/emerald- shades banned in redesigned screens. */
+  --color-sap-success-soft:   #d1fae5;
+  --color-sap-success:        #047857;
+  --color-sap-success-filled: #059669;
+  --color-sap-warning-soft:   #fef3c7;
+  --color-sap-warning:        #b45309;
+  --color-sap-warning-filled: #d97706;
+  --color-sap-danger-soft:    #ffe4e6;
+  --color-sap-danger:         #be123c;
+  --color-sap-danger-filled:  #e11d48;
 }
 
 @keyframes shake {

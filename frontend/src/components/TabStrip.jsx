@@ -12,15 +12,21 @@ function Tab({ id, label, active, disabled, onClick }) {
       type="button"
       onClick={() => !disabled && onClick(id)}
       disabled={disabled}
-      className={`relative flex items-center gap-1 px-3.5 h-full text-sm font-medium whitespace-nowrap outline-none transition-colors -mb-px border-b-2 ${
+      className={`relative flex items-center gap-1 px-3 h-full text-13 font-medium tracking-tight whitespace-nowrap outline-none transition-colors ${
         active
-          ? 'border-sap-accent text-sap-accent'
+          ? 'text-sap-accent'
           : disabled
-            ? 'border-transparent text-sap-muted cursor-default'
-            : 'border-transparent text-sap-dim hover:text-sap-text cursor-pointer'
+            ? 'text-sap-muted cursor-default'
+            : 'text-sap-dim hover:text-sap-text hover:bg-sap-text/[0.04] cursor-pointer'
       }`}
     >
       {label}
+      {active && (
+        <span
+          aria-hidden
+          className="absolute left-3 right-3 -bottom-px h-[1.5px] bg-sap-accent rounded-full"
+        />
+      )}
     </button>
   );
 }
@@ -49,7 +55,7 @@ export default function TabStrip({ activeTab, onTabChange, results = [], darkmon
   const hasBreachOrDarkmon = results.some(r => r.found && !r.skipped) || darkmonResults.some(r => r.found);
 
   return (
-    <div className="flex items-stretch h-10 border-b border-sap-border overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+    <div className="flex items-stretch h-9 border-b border-sap-border-light overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
       <div className="flex items-stretch shrink-0">
         {TABS.map(tab => (
           <PermissionTab

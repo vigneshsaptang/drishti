@@ -12,7 +12,7 @@ const TYPES = ['phone', 'email', 'fullname', 'username'];
 
 const ENGINE_META = [
   { key: 'breach',       label: 'Breaches',    icon: '⛊' },
-  { key: 'threat_intel', label: 'Watchlist',    icon: '⚑' },
+  { key: 'threat_intel', label: 'Watchlist',   icon: '⚑' },
   { key: 'darkweb',      label: 'Dark Web',    icon: '◑' },
   { key: 'financial',    label: 'Financial',   icon: '₹' },
 ];
@@ -36,7 +36,7 @@ const TYPE_HINTS = {
 function detectType(value) {
   const v = value.trim();
   if (!v) return 'username';
-  if (/^\+?[\d\s\-()\u00A0]{7,15}$/.test(v)) return 'phone';
+  if (/^\+?[\d\s\-() ]{7,15}$/.test(v)) return 'phone';
   if (v.includes('@')) return 'email';
   if (v.includes(' ') && v.length > 3) return 'fullname';
   return 'username';
@@ -48,6 +48,17 @@ function Spinner() {
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>
+  );
+}
+
+function Kbd({ children, tone = 'light' }) {
+  const cls = tone === 'dark'
+    ? 'border-white/25 bg-white/10 text-white/85'
+    : 'border-sap-border-light bg-sap-bg text-sap-muted';
+  return (
+    <kbd className={`inline-flex items-center justify-center h-[15px] min-w-[15px] px-1 rounded-[3px] border ${cls} text-[10px] font-mono leading-none`}>
+      {children}
+    </kbd>
   );
 }
 
@@ -153,22 +164,22 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
     const seed = activeSeeds[0];
     const seedMeta = TYPE_META[seed.type] ?? TYPE_META.username;
     return (
-      <div className="flex items-center gap-2 h-9 px-3 rounded-lg border border-sap-border bg-sap-surface shadow-sm">
+      <div className="flex items-center gap-2 h-9 px-2.5 rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         <span
-          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase tracking-wider shrink-0"
+          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-medium tracking-tight shrink-0"
           style={{ color: seedMeta.color, background: seedMeta.bg, border: `1px solid ${seedMeta.border}` }}
         >
           {seedMeta.label}
         </span>
-        <span className="font-mono text-sm text-sap-text truncate flex-1 min-w-0">{seed.value}</span>
+        <span className="font-mono text-[13px] text-sap-text truncate flex-1 min-w-0">{seed.value}</span>
         {loading && (
-          <span style={{ color: '#4f46e5' }}><Spinner /></span>
+          <span className="text-sap-accent"><Spinner /></span>
         )}
         {loading ? (
           <button
             type="button"
             onClick={onCancel}
-            className="shrink-0 px-2.5 py-1 rounded text-xs font-semibold font-mono text-white bg-entity-drug hover:bg-entity-drug/80 transition-colors"
+            className="shrink-0 h-7 px-2.5 rounded-md text-[12px] font-medium text-white bg-entity-drug hover:bg-entity-drug/80 transition-colors"
           >
             Cancel
           </button>
@@ -177,14 +188,14 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
             <button
               type="button"
               onClick={handleEdit}
-              className="shrink-0 px-2.5 py-1 rounded text-xs font-medium text-sap-dim hover:text-sap-text border border-sap-border bg-sap-panel hover:bg-sap-surface transition-colors"
+              className="shrink-0 h-7 px-2.5 rounded-md text-[12px] font-medium text-sap-dim hover:text-sap-text border border-sap-border-light bg-sap-bg hover:bg-sap-surface transition-colors"
             >
               Edit
             </button>
             <button
               type="button"
               onClick={handleClear}
-              className="shrink-0 px-2.5 py-1 rounded text-xs font-medium text-sap-dim hover:text-sap-text border border-sap-border bg-sap-panel hover:bg-sap-surface transition-colors"
+              className="shrink-0 h-7 px-2.5 rounded-md text-[12px] font-medium text-sap-dim hover:text-sap-text border border-sap-border-light bg-sap-bg hover:bg-sap-surface transition-colors"
             >
               Clear
             </button>
@@ -198,33 +209,44 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
 
   return (
     <div className="space-y-1.5">
-      <form onSubmit={handleSubmit} className="flex items-center gap-2 h-12 px-2 rounded-lg border border-sap-border bg-sap-surface shadow-sm focus-within:border-sap-accent focus-within:ring-2 focus-within:ring-sap-accent/10 transition-all">
+      <form
+        onSubmit={handleSubmit}
+        className="flex items-center gap-2 h-11 pl-3 pr-1.5 rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-within:border-sap-accent focus-within:ring-4 focus-within:ring-sap-accent/10 transition-[border-color,box-shadow] duration-150"
+      >
         <input
           ref={inputRef}
           type="text"
           value={value}
           onChange={e => { setValue(e.target.value); setManualType(null); }}
           onKeyDown={e => e.key === 'Escape' && (setValue(''), setManualType(null))}
-          placeholder="Search phone, email, name, or username..."
+          placeholder="Search phone, email, name, or username…"
           autoFocus
-          className="flex-1 min-w-0 bg-transparent outline-none font-mono text-sm text-sap-text placeholder:text-sap-muted px-2"
+          className="flex-1 min-w-0 bg-transparent outline-none text-[14px] text-sap-text placeholder:text-sap-muted"
         />
+
+        {!hasValue && (
+          <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-sap-muted shrink-0 pr-1">
+            <Kbd>/</Kbd>
+            <span>to focus</span>
+          </span>
+        )}
+
         {hasValue && (
           <button
             type="button"
             onClick={cycleType}
             title="Click to change type"
-            className="shrink-0 inline-flex items-center px-2 py-1 rounded cursor-pointer transition-colors hover:opacity-80 active:scale-95"
+            className="shrink-0 inline-flex items-center px-2 h-6 rounded-md cursor-pointer transition-colors hover:opacity-80 active:scale-95"
             style={{ color: meta.color, background: meta.bg, border: `1px solid ${meta.border}` }}
           >
-            <span className="text-[10px] font-mono font-semibold uppercase tracking-wider">{meta.label}</span>
+            <span className="text-[11px] font-medium tracking-tight">{meta.label}</span>
           </button>
         )}
         {loading ? (
           <button
             type="button"
             onClick={onCancel}
-            className="shrink-0 h-8 px-3.5 rounded-md bg-entity-drug hover:bg-entity-drug/80 text-white text-xs font-semibold font-mono uppercase tracking-wider transition-colors flex items-center gap-1.5"
+            className="shrink-0 h-8 px-3 rounded-md bg-entity-drug hover:bg-entity-drug/80 text-white text-[13px] font-medium transition-colors flex items-center gap-1.5"
           >
             <Spinner />
             Cancel
@@ -233,15 +255,20 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
           <button
             type="submit"
             disabled={!hasValue || !canAfford}
-            className="shrink-0 h-8 px-4 rounded-md bg-sap-accent hover:bg-sap-accent-glow disabled:opacity-35 disabled:cursor-not-allowed text-white text-xs font-semibold font-mono uppercase tracking-wider transition-colors"
+            className="shrink-0 h-8 px-3 rounded-md bg-sap-accent hover:bg-sap-accent-glow disabled:opacity-40 disabled:cursor-not-allowed text-white text-[13px] font-medium transition-colors inline-flex items-center gap-2"
+            style={{
+              boxShadow:
+                'inset 0 -1px 0 rgba(0,0,0,0.16), 0 1px 2px color-mix(in srgb, var(--color-sap-accent) 25%, transparent)',
+            }}
           >
-            Search
+            <span>Search</span>
+            <Kbd tone="dark">↵</Kbd>
           </button>
         )}
       </form>
 
       {hasValue && (
-        <p className="text-[10px] text-sap-muted px-1 font-mono">
+        <p className="text-[11.5px] text-sap-dim px-1">
           {TYPE_HINTS[detectedType]}
         </p>
       )}
@@ -259,20 +286,20 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
                 onClick={() => isApplicable && toggleEngine(eng.key)}
                 disabled={!isApplicable}
                 className={`
-                  inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium
-                  transition-all duration-150 border select-none
+                  inline-flex items-center gap-1 px-2 h-6 rounded-md text-[11px] font-medium tracking-tight
+                  transition-colors duration-150 border select-none
                   ${!isApplicable
-                    ? 'bg-sap-bg border-sap-border text-sap-muted/30 cursor-not-allowed opacity-40'
+                    ? 'bg-sap-bg border-sap-border-light text-sap-muted/40 cursor-not-allowed opacity-50'
                     : active
-                      ? 'bg-sap-accent/10 border-sap-accent/30 text-sap-accent cursor-pointer'
-                      : 'bg-sap-bg border-sap-border text-sap-muted line-through decoration-sap-muted/40 cursor-pointer'
+                      ? 'bg-sap-accent/[0.08] border-sap-accent/25 text-sap-accent cursor-pointer hover:bg-sap-accent/[0.12]'
+                      : 'bg-sap-bg border-sap-border-light text-sap-muted line-through decoration-sap-muted/40 cursor-pointer hover:text-sap-dim'
                   }
                 `}
               >
-                <span className="text-[11px]">{eng.icon}</span>
+                <span className="text-[10.5px] opacity-70">{eng.icon}</span>
                 <span>{eng.label}</span>
                 {cost > 0 && isApplicable && (
-                  <span className={`font-mono tabular-nums ${active ? 'text-sap-accent/70' : 'text-sap-muted/50'}`}>
+                  <span className={`font-mono tabular-nums ml-0.5 ${active ? 'text-sap-accent/70' : 'text-sap-muted/60'}`}>
                     {cost}
                   </span>
                 )}
@@ -281,12 +308,13 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
           })}
 
           <span className="ml-auto flex items-center gap-1">
-            <span className={`text-[10px] font-mono font-semibold tabular-nums px-1.5 py-0.5 rounded ${
+            <span className={`text-[11px] font-medium tabular-nums px-1.5 py-0.5 rounded-md border ${
               canAfford
-                ? 'text-sap-dim bg-sap-bg border border-sap-border'
-                : 'text-rose-700 bg-rose-50 border border-rose-200'
+                ? 'text-sap-dim bg-sap-bg border-sap-border-light'
+                : 'text-rose-700 bg-rose-50 border-rose-200'
             }`}>
-              {totalCost} cr
+              <span className="font-mono">{totalCost}</span>
+              <span className="text-sap-muted ml-0.5">cr</span>
             </span>
           </span>
         </div>

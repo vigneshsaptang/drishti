@@ -37,7 +37,10 @@ export default function Header({ data, onExportPDF, onShowProfile, onShowSession
       <div className="flex items-center gap-3 min-w-0">
         <img src="/saptang-logo.svg" alt="" className="h-6 w-auto opacity-80" onError={e => e.target.style.display='none'} />
         <div className="h-4 w-px bg-sap-border" />
-        <h1 className="text-sm font-bold tracking-tight text-sap-text">Auracle</h1>
+        <h1 className="flex items-baseline gap-1.5">
+          <span className="text-13 font-semibold tracking-tight text-sap-text">Auracle</span>
+          <span className="text-11 text-sap-muted hidden sm:inline">by Saptang Labs</span>
+        </h1>
 
         {hasTarget && (
           <>

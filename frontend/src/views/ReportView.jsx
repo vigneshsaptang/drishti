@@ -311,92 +311,91 @@ function FinancialSummary({ financialResults, onSwitchView }) {
 // subject identity then takes its place via SubjectProfile fade-in.
 // ───────────────────────────────────────────────────────────────────────────
 
-// Hand-picked node layout. Center is index 0. Nodes 1-6 = inner ring;
-// 7-16 = outer ring; 17-28 = outermost scatter (smallest, dimmest, edges).
-// Positions in % of the 100x100 viewBox.
-const NEURAL_NODES = [
-  // Center
-  { x: 50, y: 50, r: 2.4, delay:    0, center: true },
-  // Inner ring
-  { x: 30, y: 32, r: 1.1, delay:   80 },
-  { x: 70, y: 32, r: 1.2, delay:  160 },
-  { x: 22, y: 56, r: 1.0, delay:  240 },
-  { x: 78, y: 56, r: 1.1, delay:  320 },
-  { x: 38, y: 74, r: 1.0, delay:  400 },
-  { x: 62, y: 74, r: 1.1, delay:  480 },
-  // Outer ring
-  { x: 14, y: 38, r: 0.8, delay:  560 },
-  { x: 86, y: 38, r: 0.8, delay:  640 },
-  { x: 50, y: 18, r: 0.9, delay:  720 },
-  { x: 50, y: 86, r: 0.9, delay:  800 },
-  { x: 28, y: 18, r: 0.7, delay:  880 },
-  { x: 72, y: 18, r: 0.7, delay:  960 },
-  { x: 12, y: 72, r: 0.7, delay: 1040 },
-  { x: 88, y: 72, r: 0.7, delay: 1120 },
-  { x: 26, y: 86, r: 0.6, delay: 1200 },
-  { x: 74, y: 86, r: 0.6, delay: 1280 },
-  // Outermost scatter
-  { x:  6, y: 50, r: 0.5, delay: 1360 },
-  { x: 94, y: 50, r: 0.5, delay: 1420 },
-  { x: 50, y:  8, r: 0.5, delay: 1480 },
-  { x: 50, y: 92, r: 0.5, delay: 1540 },
-  { x: 18, y: 10, r: 0.4, delay: 1600 },
-  { x: 82, y: 10, r: 0.4, delay: 1660 },
-  { x: 18, y: 90, r: 0.4, delay: 1720 },
-  { x: 82, y: 90, r: 0.4, delay: 1780 },
-  { x:  8, y: 26, r: 0.4, delay: 1840 },
-  { x: 92, y: 26, r: 0.4, delay: 1900 },
-  { x:  8, y: 74, r: 0.4, delay: 1960 },
-  { x: 92, y: 74, r: 0.4, delay: 2020 },
+// Neural layout — generated from a single soma with 8 dendrites that branch
+// fractally to depth 3. Deterministic (seeded) so the layout is stable across
+// renders. viewBox is 400x150 (~2.67:1) to fill wide screens edge-to-edge.
+const NEURAL_VIEWBOX = { w: 400, h: 150 };
+const SOMA = { x: 200, y: 75 };
+
+// Deterministic per-index pseudo-random in [0,1).
+function _seededRand(i) {
+  const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+// Asymmetric dendrite directions — hand-picked so it doesn't read as a ring.
+const _DENDRITE_ANGLES = [
+  -Math.PI * 0.92,
+  -Math.PI * 0.62,
+  -Math.PI * 0.34,
+  -Math.PI * 0.06,
+   Math.PI * 0.17,
+   Math.PI * 0.43,
+   Math.PI * 0.71,
+   Math.PI * 0.96,
 ];
 
-// Connections grouped by the phase they belong to. Earlier phases wire up
-// the centre; later phases push the connections outward.
-const NEURAL_LINKS = [
-  // Phase 0 — centre → inner ring
-  { from:  0, to:  1, phase: 0 },
-  { from:  0, to:  2, phase: 0 },
-  { from:  0, to:  3, phase: 0 },
-  { from:  0, to:  4, phase: 0 },
-  { from:  0, to:  5, phase: 0 },
-  { from:  0, to:  6, phase: 0 },
-  // Phase 1 — inner ring cross-links
-  { from:  1, to:  2, phase: 1 },
-  { from:  3, to:  4, phase: 1 },
-  { from:  5, to:  6, phase: 1 },
-  { from:  1, to:  3, phase: 1 },
-  { from:  2, to:  4, phase: 1 },
-  // Phase 2 — inner → outer
-  { from:  1, to:  7, phase: 2 },
-  { from:  2, to:  8, phase: 2 },
-  { from:  0, to:  9, phase: 2 },
-  { from:  0, to: 10, phase: 2 },
-  { from:  5, to: 13, phase: 2 },
-  { from:  6, to: 14, phase: 2 },
-  // Phase 3 — outer ring closes + outermost activates
-  { from:  9, to: 11, phase: 3 },
-  { from:  9, to: 12, phase: 3 },
-  { from: 10, to: 15, phase: 3 },
-  { from: 10, to: 16, phase: 3 },
-  { from:  7, to: 13, phase: 3 },
-  { from:  8, to: 14, phase: 3 },
-  { from:  7, to: 17, phase: 3 },
-  { from:  8, to: 18, phase: 3 },
-  { from:  9, to: 19, phase: 3 },
-  { from: 10, to: 20, phase: 3 },
-  // Phase 4 — full mesh + outermost connects
-  { from: 11, to: 12, phase: 4 },
-  { from: 13, to: 14, phase: 4 },
-  { from: 15, to: 16, phase: 4 },
-  { from: 11, to: 21, phase: 4 },
-  { from: 12, to: 22, phase: 4 },
-  { from: 15, to: 23, phase: 4 },
-  { from: 16, to: 24, phase: 4 },
-  { from:  7, to: 25, phase: 4 },
-  { from:  8, to: 26, phase: 4 },
-  { from: 13, to: 27, phase: 4 },
-  { from: 14, to: 28, phase: 4 },
-];
+function _buildNeuron() {
+  const nodes = [{ ...SOMA, r: 2.6, delay: 0, depth: 0, center: true }];
+  const links = [];
+  let nextDelay = 80;
+
+  function grow(parentIdx, x, y, angle, length, depthRemaining, seedBase) {
+    if (depthRemaining <= 0) return;
+
+    const ex = x + Math.cos(angle) * length;
+    const ey = y + Math.sin(angle) * length;
+    const idx = nodes.length;
+    const curDepth = 4 - depthRemaining; // 1, 2, 3
+
+    nodes.push({
+      x: ex, y: ey,
+      r: 0.35 + depthRemaining * 0.28,
+      delay: nextDelay,
+      depth: curDepth,
+    });
+    nextDelay += 45;
+
+    links.push({
+      from: parentIdx,
+      to: idx,
+      phase: Math.min(curDepth - 1, 3), // depth 1 -> phase 0; depth 2 -> 1; depth 3 -> 2
+      depth: curDepth,
+    });
+
+    if (depthRemaining > 1) {
+      const subCount = 2 + (_seededRand(seedBase * 7) < 0.35 ? 1 : 0); // sometimes 3
+      for (let i = 0; i < subCount; i++) {
+        const spread = Math.PI / 2.8;
+        const jitter = (_seededRand(seedBase * 13 + i * 17) - 0.5) * 0.55;
+        const subAngle = angle + ((i - (subCount - 1) / 2) * spread / subCount) + jitter;
+        const subLength = length * (0.55 + _seededRand(seedBase * 19 + i) * 0.28);
+        grow(idx, ex, ey, subAngle, subLength, depthRemaining - 1, seedBase * 31 + i + 1);
+      }
+    }
+  }
+
+  _DENDRITE_ANGLES.forEach((angle, i) => {
+    const jitter = (_seededRand(i * 41) - 0.5) * 0.28;
+    const length = 78 + _seededRand(i * 53) * 22; // 78–100 viewBox units
+    grow(0, SOMA.x, SOMA.y, angle + jitter, length, 3, i * 101 + 7);
+  });
+
+  // Phase 3 → phase 4: lateral cross-links between adjacent terminal tips so
+  // the network closes into a mesh during the final phase.
+  const terminals = nodes
+    .map((n, i) => ({ n, i }))
+    .filter(t => t.n.depth === 3)
+    .sort((a, b) => Math.atan2(a.n.y - SOMA.y, a.n.x - SOMA.x) - Math.atan2(b.n.y - SOMA.y, b.n.x - SOMA.x));
+  for (let i = 0; i < terminals.length; i++) {
+    const next = terminals[(i + 2) % terminals.length];
+    links.push({ from: terminals[i].i, to: next.i, phase: 4, depth: 4 });
+  }
+
+  return { nodes, links };
+}
+
+const { nodes: NEURAL_NODES, links: NEURAL_LINKS } = _buildNeuron();
 
 // Convergence timing — kept in sync with the CSS transition durations below
 // and with --animate-neural-flare in index.css.
@@ -472,75 +471,84 @@ function NeuralLoader({ loading, results, ftiMeta, darkmonMeta, profile, riskSco
           }}
         />
 
-        {/* The constellation. Wrapped in a div that floats so the entire
-            network drifts vertically — animation stops during convergence. */}
-        <div className="absolute inset-0 flex items-center justify-center">
+        {/* The neuron. Full-width SVG (wider viewBox) so it reaches edge to
+            edge; floats vertically while streaming, halts during convergence. */}
+        <div className="absolute inset-0">
           <svg
-            viewBox="0 0 100 100"
+            viewBox={`0 0 ${NEURAL_VIEWBOX.w} ${NEURAL_VIEWBOX.h}`}
             preserveAspectRatio="xMidYMid meet"
             className={`w-full h-full ${converging ? '' : 'animate-neural-float'}`}
           >
-            {/* Connections — endpoints converge to centre, opacity fades. */}
+            {/* Dendrite connections. Stroke width tapers with depth (thick
+                near the soma, thin at terminals). Active links carry a
+                traveling signal pulse via stroke-dasharray animation. */}
             {NEURAL_LINKS.map((c, i) => {
               const a = NEURAL_NODES[c.from];
               const b = NEURAL_NODES[c.to];
               const active = phases[c.phase]?.done;
+              // Depth 1 = thickest; depth 4 (cross-links) = thinnest
+              const strokeW = c.depth === 4 ? 0.18 : Math.max(0.18, 0.55 - (c.depth - 1) * 0.13);
               return (
                 <line
                   key={`link-${i}`}
-                  x1={converging ? 50 : a.x} y1={converging ? 50 : a.y}
-                  x2={converging ? 50 : b.x} y2={converging ? 50 : b.y}
+                  x1={converging ? SOMA.x : a.x} y1={converging ? SOMA.y : a.y}
+                  x2={converging ? SOMA.x : b.x} y2={converging ? SOMA.y : b.y}
                   stroke="var(--color-sap-accent)"
-                  strokeWidth="0.18"
-                  strokeOpacity={converging ? 0 : (active ? 0.55 : 0.08)}
-                  className={!converging && active ? 'animate-neural-link' : ''}
+                  strokeWidth={strokeW}
+                  strokeOpacity={converging ? 0 : (active ? 0.65 : 0.1)}
+                  strokeDasharray={active && !converging ? '1 11' : 'none'}
+                  strokeLinecap="round"
+                  className={active && !converging ? 'animate-neural-signal' : ''}
                   style={{
                     transition: linkTransition,
-                    animationDelay: `${(i % 4) * 280}ms`,
+                    animationDelay: `${(i % 7) * 170}ms`,
                   }}
                 />
               );
             })}
 
-            {/* Pulsing concentric rings around the centre — sonar feel.
-                Hidden during convergence; the flare below takes over. */}
+            {/* Sonar rings at the soma — only while streaming. */}
             {!converging && (
               <>
-                <circle cx="50" cy="50" r="3"
-                  fill="none" stroke="var(--color-sap-accent)" strokeWidth="0.2"
+                <circle cx={SOMA.x} cy={SOMA.y} r="3"
+                  fill="none" stroke="var(--color-sap-accent)" strokeWidth="0.25"
                   className="animate-neural-ring"
                 />
-                <circle cx="50" cy="50" r="3"
-                  fill="none" stroke="var(--color-sap-accent)" strokeWidth="0.2"
+                <circle cx={SOMA.x} cy={SOMA.y} r="3"
+                  fill="none" stroke="var(--color-sap-accent)" strokeWidth="0.25"
                   className="animate-neural-ring"
                   style={{ animationDelay: '0.8s' }}
                 />
               </>
             )}
 
-            {/* Nodes — staggered blink while streaming; collapse to centre
-                with shrink + fade during convergence. */}
-            {NEURAL_NODES.map((n, i) => (
-              <circle
-                key={`node-${i}`}
-                cx={converging ? 50 : n.x}
-                cy={converging ? 50 : n.y}
-                r={converging ? 0.4 : n.r}
-                fill="var(--color-sap-accent)"
-                fillOpacity={converging ? 0 : (n.center ? 1 : 0.35 + (doneCount / phases.length) * 0.5)}
-                className={converging ? '' : 'animate-neural-blip'}
-                style={{
-                  transition: nodeTransition,
-                  animationDelay: `${n.delay}ms`,
-                }}
-              />
-            ))}
+            {/* Nodes. Bright only when their depth's phase has fired,
+                otherwise dim. Collapse to the soma during convergence. */}
+            {NEURAL_NODES.map((n, i) => {
+              // Soma is always bright; other nodes light up when the phase
+              // that wired up their parent link has completed.
+              const fired = n.depth === 0 || phases[Math.min(n.depth - 1, 3)]?.done;
+              return (
+                <circle
+                  key={`node-${i}`}
+                  cx={converging ? SOMA.x : n.x}
+                  cy={converging ? SOMA.y : n.y}
+                  r={converging ? 0.3 : n.r}
+                  fill="var(--color-sap-accent)"
+                  fillOpacity={converging ? 0 : (n.center ? 1 : (fired ? 0.85 : 0.25))}
+                  className={converging ? '' : (fired ? 'animate-neural-blip' : '')}
+                  style={{
+                    transition: nodeTransition,
+                    animationDelay: `${n.delay}ms`,
+                  }}
+                />
+              );
+            })}
 
-            {/* Central flare — only mounts during convergence. Bursts outward
-                and dies, leaving an empty stage for the report to fade in. */}
+            {/* Convergence flare at the soma. Bursts outward then dies. */}
             {converging && (
               <circle
-                cx="50" cy="50" r="0"
+                cx={SOMA.x} cy={SOMA.y} r="0"
                 fill="var(--color-sap-accent)"
                 fillOpacity="0"
                 className="animate-neural-flare"

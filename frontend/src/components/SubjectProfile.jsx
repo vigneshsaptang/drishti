@@ -505,18 +505,36 @@ function IdentifiedSubjectBanner({ canonical, location }) {
 
 const CAT_TO_ENTITY_TYPE = { phones: 'phone', emails: 'email' };
 
-// Categories whose values are identifiers (mono on the value text is appropriate)
+// Categories whose values *may* contain identifiers — mono is only allowed inside these.
+// Within them, per-value heuristic decides; descriptive text like "Active" stays in sans.
 const IDENTIFIER_CATS = new Set(['usernames', 'emails', 'phones', 'ips', 'accounts', 'financial']);
+
+// Returns true if the value reads as a machine identifier (mono-worthy) rather than
+// human-readable description. Heuristic — errs on the side of sans for ambiguous cases.
+function isIdentifierValue(v) {
+  if (typeof v !== 'string') return false;
+  const s = v.trim();
+  if (!s) return false;
+  if (s.includes('@')) return true;              // email
+  if (s.includes('://')) return true;            // URI / account scheme
+  if (/^[\d\s\-+()]{6,}$/.test(s)) return true;  // phone / numeric id
+  if (!s.includes(' ')) {                        // single token
+    if (/[._\-+/]/.test(s)) return true;         // has separators → handle / id
+    if (/\d/.test(s)) return true;               // contains a digit → id-ish
+    if (s === s.toLowerCase() && s.length >= 4) return true; // lowercase handle
+    return false;                                // single TitleCase / UPPER word → description
+  }
+  return false;                                  // multi-word phrase → description
+}
 
 function ProfileSection({ catKey, label, icon, color, values, totalValues, onFocusEntity, locationData }) {
   if (values.length === 0 && !(catKey === 'locations' && locationData?.state)) return null;
 
   const isLocation = catKey === 'locations';
-  const isIdentifier = IDENTIFIER_CATS.has(catKey);
-  const valueFont = isIdentifier ? 'font-mono' : '';
-  const tagClasses = isLocation
-    ? `inline-block px-2 py-0.5 rounded text-12 ${valueFont} bg-sap-panel border border-sap-border-light text-sap-text whitespace-normal break-words leading-snug max-w-full animate-slide-up`
-    : `inline-block px-2 py-0.5 rounded text-12 ${valueFont} bg-sap-panel border border-sap-border-light text-sap-text truncate max-w-56 animate-slide-up`;
+  const catAllowsIdentifier = IDENTIFIER_CATS.has(catKey);
+  const tagClassesBase = isLocation
+    ? 'inline-block px-2 py-0.5 rounded text-12 bg-sap-panel border border-sap-border-light text-sap-text whitespace-normal break-words leading-snug max-w-full animate-slide-up'
+    : 'inline-block px-2 py-0.5 rounded text-12 bg-sap-panel border border-sap-border-light text-sap-text truncate max-w-56 animate-slide-up';
 
   const entityType = CAT_TO_ENTITY_TYPE[catKey];
   const isNavigable = !!entityType && !!onFocusEntity;
@@ -536,8 +554,10 @@ function ProfileSection({ catKey, label, icon, color, values, totalValues, onFoc
       )}
 
       <div className="flex flex-wrap gap-1.5">
-        {values.slice(0, 15).map((v, i) => (
-          isNavigable ? (
+        {values.slice(0, 15).map((v, i) => {
+          const fontCls = catAllowsIdentifier && isIdentifierValue(v) ? 'font-mono' : '';
+          const tagClasses = `${tagClassesBase} ${fontCls}`;
+          return isNavigable ? (
             <button
               key={v}
               type="button"
@@ -557,8 +577,8 @@ function ProfileSection({ catKey, label, icon, color, values, totalValues, onFoc
             >
               {v}
             </span>
-          )
-        ))}
+          );
+        })}
         {totalValues > 15 && (
           <span className="inline-block px-2 py-0.5 rounded text-12 bg-sap-panel border border-sap-border-light text-sap-muted">
             +{totalValues - 15} more

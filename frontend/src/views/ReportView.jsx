@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import SubjectProfile from '../components/SubjectProfile';
 import FtiScreening from '../components/FtiScreening';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -311,32 +311,49 @@ function FinancialSummary({ financialResults, onSwitchView }) {
 // subject identity then takes its place via SubjectProfile fade-in.
 // ───────────────────────────────────────────────────────────────────────────
 
-// Hand-picked node layout. Center is index 0; nodes 1-6 are the inner ring;
-// 7-16 are the outer ring. Positions in % of the 100x100 viewBox.
+// Hand-picked node layout. Center is index 0. Nodes 1-6 = inner ring;
+// 7-16 = outer ring; 17-28 = outermost scatter (smallest, dimmest, edges).
+// Positions in % of the 100x100 viewBox.
 const NEURAL_NODES = [
+  // Center
   { x: 50, y: 50, r: 2.4, delay:    0, center: true },
-  { x: 30, y: 32, r: 1.1, delay:  140 },
-  { x: 70, y: 32, r: 1.2, delay:  260 },
-  { x: 22, y: 56, r: 1.0, delay:  380 },
-  { x: 78, y: 56, r: 1.1, delay:  500 },
-  { x: 38, y: 74, r: 1.0, delay:  620 },
-  { x: 62, y: 74, r: 1.1, delay:  740 },
-  { x: 14, y: 38, r: 0.8, delay:  860 },
-  { x: 86, y: 38, r: 0.8, delay:  980 },
-  { x: 50, y: 18, r: 0.9, delay: 1100 },
-  { x: 50, y: 86, r: 0.9, delay: 1220 },
-  { x: 28, y: 18, r: 0.7, delay: 1340 },
-  { x: 72, y: 18, r: 0.7, delay: 1460 },
-  { x: 12, y: 72, r: 0.7, delay: 1580 },
-  { x: 88, y: 72, r: 0.7, delay: 1700 },
-  { x: 26, y: 86, r: 0.6, delay: 1820 },
-  { x: 74, y: 86, r: 0.6, delay: 1940 },
+  // Inner ring
+  { x: 30, y: 32, r: 1.1, delay:   80 },
+  { x: 70, y: 32, r: 1.2, delay:  160 },
+  { x: 22, y: 56, r: 1.0, delay:  240 },
+  { x: 78, y: 56, r: 1.1, delay:  320 },
+  { x: 38, y: 74, r: 1.0, delay:  400 },
+  { x: 62, y: 74, r: 1.1, delay:  480 },
+  // Outer ring
+  { x: 14, y: 38, r: 0.8, delay:  560 },
+  { x: 86, y: 38, r: 0.8, delay:  640 },
+  { x: 50, y: 18, r: 0.9, delay:  720 },
+  { x: 50, y: 86, r: 0.9, delay:  800 },
+  { x: 28, y: 18, r: 0.7, delay:  880 },
+  { x: 72, y: 18, r: 0.7, delay:  960 },
+  { x: 12, y: 72, r: 0.7, delay: 1040 },
+  { x: 88, y: 72, r: 0.7, delay: 1120 },
+  { x: 26, y: 86, r: 0.6, delay: 1200 },
+  { x: 74, y: 86, r: 0.6, delay: 1280 },
+  // Outermost scatter
+  { x:  6, y: 50, r: 0.5, delay: 1360 },
+  { x: 94, y: 50, r: 0.5, delay: 1420 },
+  { x: 50, y:  8, r: 0.5, delay: 1480 },
+  { x: 50, y: 92, r: 0.5, delay: 1540 },
+  { x: 18, y: 10, r: 0.4, delay: 1600 },
+  { x: 82, y: 10, r: 0.4, delay: 1660 },
+  { x: 18, y: 90, r: 0.4, delay: 1720 },
+  { x: 82, y: 90, r: 0.4, delay: 1780 },
+  { x:  8, y: 26, r: 0.4, delay: 1840 },
+  { x: 92, y: 26, r: 0.4, delay: 1900 },
+  { x:  8, y: 74, r: 0.4, delay: 1960 },
+  { x: 92, y: 74, r: 0.4, delay: 2020 },
 ];
 
-// Connections grouped by the phase they belong to. Earlier phases wire up the
-// inner ring; later phases reach the outer constellation.
+// Connections grouped by the phase they belong to. Earlier phases wire up
+// the centre; later phases push the connections outward.
 const NEURAL_LINKS = [
-  // Phase 0 — center → inner ring
+  // Phase 0 — centre → inner ring
   { from:  0, to:  1, phase: 0 },
   { from:  0, to:  2, phase: 0 },
   { from:  0, to:  3, phase: 0 },
@@ -349,28 +366,65 @@ const NEURAL_LINKS = [
   { from:  5, to:  6, phase: 1 },
   { from:  1, to:  3, phase: 1 },
   { from:  2, to:  4, phase: 1 },
-  // Phase 2 — inner → outer (cardinals)
+  // Phase 2 — inner → outer
   { from:  1, to:  7, phase: 2 },
   { from:  2, to:  8, phase: 2 },
   { from:  0, to:  9, phase: 2 },
   { from:  0, to: 10, phase: 2 },
-  // Phase 3 — outer ring forms
+  { from:  5, to: 13, phase: 2 },
+  { from:  6, to: 14, phase: 2 },
+  // Phase 3 — outer ring closes + outermost activates
   { from:  9, to: 11, phase: 3 },
   { from:  9, to: 12, phase: 3 },
   { from: 10, to: 15, phase: 3 },
   { from: 10, to: 16, phase: 3 },
   { from:  7, to: 13, phase: 3 },
   { from:  8, to: 14, phase: 3 },
-  // Phase 4 — final mesh
+  { from:  7, to: 17, phase: 3 },
+  { from:  8, to: 18, phase: 3 },
+  { from:  9, to: 19, phase: 3 },
+  { from: 10, to: 20, phase: 3 },
+  // Phase 4 — full mesh + outermost connects
   { from: 11, to: 12, phase: 4 },
   { from: 13, to: 14, phase: 4 },
   { from: 15, to: 16, phase: 4 },
-  { from:  5, to: 13, phase: 4 },
-  { from:  6, to: 14, phase: 4 },
+  { from: 11, to: 21, phase: 4 },
+  { from: 12, to: 22, phase: 4 },
+  { from: 15, to: 23, phase: 4 },
+  { from: 16, to: 24, phase: 4 },
+  { from:  7, to: 25, phase: 4 },
+  { from:  8, to: 26, phase: 4 },
+  { from: 13, to: 27, phase: 4 },
+  { from: 14, to: 28, phase: 4 },
 ];
 
+// Convergence timing — kept in sync with the CSS transition durations below
+// and with --animate-neural-flare in index.css.
+const NEURAL_CONVERGE_MS = 700;
+
 function NeuralLoader({ loading, results, ftiMeta, darkmonMeta, profile, riskScore }) {
-  if (!loading) return null;
+  // 'streaming' while data arrives; 'converging' for the exit animation;
+  // 'done' returns null. Distinct from `loading` so we control unmount timing.
+  const [stage, setStage] = useState(loading ? 'streaming' : 'done');
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- stage machine driven by `loading` prop transitions; setState is the intent
+  useEffect(() => {
+    if (loading) {
+      // Search restarted — reset to streaming.
+      setStage('streaming');
+      return undefined;
+    }
+    if (stage === 'streaming') {
+      // Loading just finished — kick off the convergence sequence.
+      setStage('converging');
+      const t = setTimeout(() => setStage('done'), NEURAL_CONVERGE_MS);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [loading, stage]);
+
+  if (stage === 'done') return null;
+  const converging = stage === 'converging';
 
   const phases = [
     { label: 'Searching breach data',  done: (results?.length || 0) > 0 },
@@ -383,23 +437,34 @@ function NeuralLoader({ loading, results, ftiMeta, darkmonMeta, profile, riskSco
   const current = phases.find(p => !p.done) || phases[phases.length - 1];
   const pct = Math.round((doneCount / phases.length) * 100);
 
+  // Animatable transitions for SVG attributes — modern browsers support CSS
+  // transitions on cx, cy, r, x1/y1/x2/y2, fill-opacity, stroke-opacity.
+  const nodeTransition = converging
+    ? 'cx 0.7s cubic-bezier(0.4, 0, 0.7, 0.4), cy 0.7s cubic-bezier(0.4, 0, 0.7, 0.4), r 0.7s ease-in, fill-opacity 0.6s ease-in'
+    : '';
+  const linkTransition = converging
+    ? 'x1 0.7s cubic-bezier(0.4, 0, 0.7, 0.4), y1 0.7s cubic-bezier(0.4, 0, 0.7, 0.4), x2 0.7s cubic-bezier(0.4, 0, 0.7, 0.4), y2 0.7s cubic-bezier(0.4, 0, 0.7, 0.4), stroke-opacity 0.5s ease-in'
+    : 'stroke-opacity 1.1s ease-out';
+
   return (
     <Card>
-      <div className="relative h-72 overflow-hidden bg-sap-bg">
-        {/* Ambient accent glow at center */}
+      <div className="relative h-[26rem] overflow-hidden bg-sap-bg">
+        {/* Ambient accent glow at centre. Fades during convergence. */}
         <div
           aria-hidden
-          className="absolute inset-0 pointer-events-none"
+          className="absolute inset-0 pointer-events-none transition-opacity duration-500"
           style={{
+            opacity: converging ? 0 : 1,
             background:
-              'radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--color-sap-accent) 10%, transparent), transparent 65%)',
+              'radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--color-sap-accent) 12%, transparent), transparent 60%)',
           }}
         />
-        {/* Faint dot grid backdrop */}
+        {/* Faint dot grid backdrop. Also fades during convergence. */}
         <div
           aria-hidden
-          className="absolute inset-0 pointer-events-none"
+          className="absolute inset-0 pointer-events-none transition-opacity duration-500"
           style={{
+            opacity: converging ? 0 : 1,
             backgroundImage:
               'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--color-sap-text) 4%, transparent) 1px, transparent 0)',
             backgroundSize: '22px 22px',
@@ -407,14 +472,14 @@ function NeuralLoader({ loading, results, ftiMeta, darkmonMeta, profile, riskSco
         />
 
         {/* The constellation. Wrapped in a div that floats so the entire
-            network gently drifts vertically. */}
+            network drifts vertically — animation stops during convergence. */}
         <div className="absolute inset-0 flex items-center justify-center">
           <svg
             viewBox="0 0 100 100"
             preserveAspectRatio="xMidYMid meet"
-            className="w-full h-full animate-neural-float"
+            className={`w-full h-full ${converging ? '' : 'animate-neural-float'}`}
           >
-            {/* Connections — opacity transitions when their phase completes. */}
+            {/* Connections — endpoints converge to centre, opacity fades. */}
             {NEURAL_LINKS.map((c, i) => {
               const a = NEURAL_NODES[c.from];
               const b = NEURAL_NODES[c.to];
@@ -422,50 +487,73 @@ function NeuralLoader({ loading, results, ftiMeta, darkmonMeta, profile, riskSco
               return (
                 <line
                   key={`link-${i}`}
-                  x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                  x1={converging ? 50 : a.x} y1={converging ? 50 : a.y}
+                  x2={converging ? 50 : b.x} y2={converging ? 50 : b.y}
                   stroke="var(--color-sap-accent)"
                   strokeWidth="0.18"
-                  strokeOpacity={active ? 0.55 : 0.08}
-                  className={active ? 'animate-neural-link' : ''}
+                  strokeOpacity={converging ? 0 : (active ? 0.55 : 0.08)}
+                  className={!converging && active ? 'animate-neural-link' : ''}
                   style={{
-                    transition: 'stroke-opacity 1.1s ease-out',
-                    animationDelay: `${(i % 4) * 350}ms`,
+                    transition: linkTransition,
+                    animationDelay: `${(i % 4) * 280}ms`,
                   }}
                 />
               );
             })}
 
-            {/* Pulsing rings around the central node — sci-fi sonar feel. */}
-            <circle cx="50" cy="50" r="3"
-              fill="none" stroke="var(--color-sap-accent)" strokeWidth="0.2"
-              className="animate-neural-ring"
-            />
-            <circle cx="50" cy="50" r="3"
-              fill="none" stroke="var(--color-sap-accent)" strokeWidth="0.2"
-              className="animate-neural-ring"
-              style={{ animationDelay: '1.4s' }}
-            />
+            {/* Pulsing concentric rings around the centre — sonar feel.
+                Hidden during convergence; the flare below takes over. */}
+            {!converging && (
+              <>
+                <circle cx="50" cy="50" r="3"
+                  fill="none" stroke="var(--color-sap-accent)" strokeWidth="0.2"
+                  className="animate-neural-ring"
+                />
+                <circle cx="50" cy="50" r="3"
+                  fill="none" stroke="var(--color-sap-accent)" strokeWidth="0.2"
+                  className="animate-neural-ring"
+                  style={{ animationDelay: '0.8s' }}
+                />
+              </>
+            )}
 
-            {/* Nodes — staggered blink. */}
+            {/* Nodes — staggered blink while streaming; collapse to centre
+                with shrink + fade during convergence. */}
             {NEURAL_NODES.map((n, i) => (
               <circle
                 key={`node-${i}`}
-                cx={n.x} cy={n.y} r={n.r}
+                cx={converging ? 50 : n.x}
+                cy={converging ? 50 : n.y}
+                r={converging ? 0.4 : n.r}
                 fill="var(--color-sap-accent)"
-                fillOpacity={n.center ? 1 : 0.35 + (doneCount / phases.length) * 0.5}
-                className="animate-neural-blip"
-                style={{ animationDelay: `${n.delay}ms` }}
+                fillOpacity={converging ? 0 : (n.center ? 1 : 0.35 + (doneCount / phases.length) * 0.5)}
+                className={converging ? '' : 'animate-neural-blip'}
+                style={{
+                  transition: nodeTransition,
+                  animationDelay: `${n.delay}ms`,
+                }}
               />
             ))}
+
+            {/* Central flare — only mounts during convergence. Bursts outward
+                and dies, leaving an empty stage for the report to fade in. */}
+            {converging && (
+              <circle
+                cx="50" cy="50" r="0"
+                fill="var(--color-sap-accent)"
+                fillOpacity="0"
+                className="animate-neural-flare"
+              />
+            )}
           </svg>
         </div>
 
-        {/* Phase + progress footer with gradient mask so the SVG fades cleanly
-            into the label area. */}
+        {/* Phase + progress footer. Fades during convergence. */}
         <div
-          className="absolute bottom-0 left-0 right-0 px-4 pt-6 pb-3"
+          className="absolute bottom-0 left-0 right-0 px-4 pt-8 pb-3 transition-opacity duration-300"
           style={{
-            background: 'linear-gradient(to top, var(--color-sap-bg) 35%, transparent)',
+            opacity: converging ? 0 : 1,
+            background: 'linear-gradient(to top, var(--color-sap-bg) 40%, transparent)',
           }}
         >
           <div className="flex items-center gap-2.5 mb-2">

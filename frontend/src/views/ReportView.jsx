@@ -407,15 +407,16 @@ function NeuralLoader({ loading, results, ftiMeta, darkmonMeta, profile, riskSco
   // 'done' returns null. Distinct from `loading` so we control unmount timing.
   const [stage, setStage] = useState(loading ? 'streaming' : 'done');
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- stage machine driven by `loading` prop transitions; setState is the intent
   useEffect(() => {
     if (loading) {
       // Search restarted — reset to streaming.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional state machine driven by `loading` prop transitions
       setStage('streaming');
       return undefined;
     }
     if (stage === 'streaming') {
       // Loading just finished — kick off the convergence sequence.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional state machine driven by `loading` prop transitions
       setStage('converging');
       const t = setTimeout(() => setStage('done'), NEURAL_CONVERGE_MS);
       return () => clearTimeout(t);

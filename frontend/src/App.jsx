@@ -85,7 +85,7 @@ function ScannerWait() {
 }
 
 export default function App() {
-  const { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults } = useSearchV2();
+  const { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, profile, canonicalLocation, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults } = useSearchV2();
   const [activeTab, setActiveTab] = useState('report');
   const [focusedEntity, setFocusedEntity] = useState(null);
   const [overlay, setOverlay] = useState(null);
@@ -197,6 +197,8 @@ export default function App() {
         riskScore={riskScore}
         canonical={canonical}
         watchlistFilterTokens={watchlistFilterTokens}
+        profile={profile}
+        canonicalLocation={canonicalLocation}
         ftiResults={ftiResults}
         ftiMeta={ftiMeta}
         darkmonResults={darkmonResults}

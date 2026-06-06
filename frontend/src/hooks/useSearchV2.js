@@ -27,6 +27,8 @@ export function useSearchV2() {
   const [financialResults, setFinancialResults] = useState([]);
   const [financialMeta, setFinancialMeta] = useState(null);
   const [aiSummary, setAiSummary] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [canonicalLocation, setCanonicalLocation] = useState(null);
   const [riskScore, setRiskScore] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -100,6 +102,8 @@ export function useSearchV2() {
     setFinancialResults([]);
     setFinancialMeta(null);
     setAiSummary(null);
+    setProfile(null);
+    setCanonicalLocation(null);
     setRiskScore(null);
     setLoading(true);
     setError(null);
@@ -209,6 +213,8 @@ export function useSearchV2() {
 
                 case 'summary':
                   setAiSummary(parsed.text || null);
+                  if (parsed.profile) setProfile(parsed.profile);
+                  if (parsed.canonical_location) setCanonicalLocation(parsed.canonical_location);
                   break;
 
                 case 'search:complete':
@@ -268,9 +274,11 @@ export function useSearchV2() {
     setFinancialResults([]);
     setFinancialMeta(null);
     setAiSummary(null);
+    setProfile(null);
+    setCanonicalLocation(null);
     setRiskScore(null);
     setSearchMeta(null);
   }, [cancelSearch]);
 
-  return { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults };
+  return { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, profile, canonicalLocation, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults };
 }

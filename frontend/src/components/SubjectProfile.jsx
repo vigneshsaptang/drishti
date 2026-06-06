@@ -1,279 +1,160 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { chooseCanonicalIdentity } from '../lib/canonicalIdentity';
-import { chooseCanonicalLocation, formatCanonicalLocation } from '../lib/canonicalLocation';
+import { formatCanonicalLocation } from '../lib/canonicalLocation';
 import { ecourtsSearch, getEcourtsByState } from '../lib/api';
 
+// Render-only metadata. Classification + value validation happens in the
+// backend (app.engines.identifier_categorizer). The render order here also
+// drives the category grid order.
 const CATEGORIES = [
   {
     key: 'names',
     label: 'Identity',
+    color: 'text-sap-text',
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
       </svg>
     ),
-    color: 'text-sap-text',
-    match: k => /^(name|fullname|full_name|first_?name|last_?name|middle_?name|display_?name|displayname|real_?name)$/i.test(k),
   },
   {
     key: 'usernames',
     label: 'Usernames',
+    color: 'text-entity-darkweb',
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9" />
       </svg>
     ),
-    color: 'text-entity-darkweb',
-    match: k => /^(user_?name|username|nick(?:name)?|screen_?name|handle|loginname|user_?id|username_?2)$/i.test(k),
-    validate: v => typeof v === 'string'
-      && v.trim().length >= 3
-      && !/^\d{8,}$/.test(v.trim())
-      && !/^\d{4}[-/]\d{2}[-/]\d{2}/.test(v.trim())
-      && !/^\d{2}-[A-Z]{3}-\d{2,4}$/i.test(v.trim())
-      && !/^\d{2}\/\d{2}\/\d{4}$/.test(v.trim()),
   },
   {
     key: 'emails',
     label: 'Emails',
+    color: 'text-entity-email',
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
       </svg>
     ),
-    color: 'text-entity-email',
-    match: k => /^(e-?mail|mail|email_?address)$/i.test(k),
-    validate: v => typeof v === 'string' && v.includes('@'),
   },
   {
     key: 'phones',
     label: 'Phone numbers',
+    color: 'text-entity-phone',
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
       </svg>
     ),
-    color: 'text-entity-phone',
-    match: k => /phone|mobile|cell|telephone|contact_?number|contactnumber/i.test(k)
-      && !/email/i.test(k),
-    validate: v => typeof v === 'string' && /\d{7,}/.test(v.replace(/\D/g, '')),
   },
   {
     key: 'ips',
     label: 'IP addresses',
+    color: 'text-entity-telegram',
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
       </svg>
     ),
-    color: 'text-entity-telegram',
-    match: k => /^(ip|ip_?address|last_?ip|signup_?ip|login_?ip|created_?ip|register_?ip|reg_?ip)$/i.test(k),
-    validate: v => typeof v === 'string' && /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(v),
   },
   {
     key: 'locations',
     label: 'Locations',
+    color: 'text-sap-dim',
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     ),
-    color: 'text-sap-dim',
-    match: k => /city|state|country|region|zip|zipcode|postal|address|location|geo|pincode|district|area/i.test(k)
-      && !/ip/i.test(k) && !/email/i.test(k),
   },
   {
     key: 'devices',
     label: 'Device / browser',
+    color: 'text-sap-dim',
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
       </svg>
     ),
-    color: 'text-sap-dim',
-    match: k => /device|browser|user_?agent|os|platform|device_?id|imei|mac_?address/i.test(k),
   },
   {
     key: 'accounts',
     label: 'Linked accounts',
+    color: 'text-entity-darkweb',
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
       </svg>
     ),
-    color: 'text-entity-darkweb',
-    match: k => /facebook|linkedin|twitter|instagram|telegram|skype|discord|steam|truecaller|whatsapp|snapchat|tiktok|reddit|github|spotify|netflix|amazon|apple_?id|google|yahoo|outlook|profile_?url|website|url|homepage|social/i.test(k),
   },
   {
     key: 'financial',
     label: 'Financial',
+    color: 'text-entity-upi',
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
       </svg>
     ),
-    color: 'text-entity-upi',
-    match: k => /upi|bank|ifsc|account_?number|card|pan|aadhaar|aadhar|cibil|payment|wallet/i.test(k)
-      && !/wallet_?balance/i.test(k),
   },
   {
     key: 'dob',
     label: 'Date of birth',
+    color: 'text-sap-dim',
     icon: (
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
       </svg>
     ),
-    color: 'text-sap-dim',
-    match: k => /dob|date_?of_?birth|birth_?date|birthday/i.test(k),
   },
 ];
 
-const SKIP_VALUES = new Set(['', 'null', 'None', 'none', 'undefined', 'N/A', 'n/a', '-', '0', 'false']);
-
-function isUseful(v) {
-  if (!v || typeof v !== 'string') return false;
-  const trimmed = v.trim();
-  if (SKIP_VALUES.has(trimmed)) return false;
-  if (trimmed.length < 2 || trimmed.length > 500) return false;
-  return true;
-}
-
-const NAME_COMPOSITE_KEYS = new Set(['fullname', 'full_name', 'displayname', 'display_name', 'real_name', 'name']);
-const NAME_COMPONENT_KEYS = new Set(['first_name', 'firstname', 'last_name', 'lastname', 'middle_name', 'middlename']);
-const ADDR_PART_KEYS = ['address1', 'address2', 'building', 'area', 'street', 'landmark', 'city', 'district', 'state', 'zip', 'zipcode', 'postal', 'pincode', 'country'];
-const ADDR_PART_SET = new Set(ADDR_PART_KEYS);
-const COUNTRY_EXPAND = { IN: 'India', US: 'United States', UK: 'United Kingdom', AU: 'Australia', CA: 'Canada', SG: 'Singapore', AE: 'United Arab Emirates', NZ: 'New Zealand', DE: 'Germany', FR: 'France', GB: 'United Kingdom' };
-
-function composeName(fields) {
-  const consumed = new Set();
-  for (const k of Object.keys(fields)) {
-    if (NAME_COMPOSITE_KEYS.has(k.toLowerCase())) {
-      const v = fields[k];
-      if (isUseful(v)) {
-        consumed.add(k.toLowerCase());
-        [...NAME_COMPONENT_KEYS].forEach(ck => consumed.add(ck));
-        return [v.trim(), consumed];
-      }
-    }
-  }
-  const parts = [];
-  for (const partKey of ['first_name', 'firstname', 'middle_name', 'middlename', 'last_name', 'lastname']) {
-    const v = fields[partKey] || fields[partKey.replace('_', '')];
-    if (v && isUseful(v)) parts.push(v.trim());
-  }
-  if (parts.length > 0) {
-    [...NAME_COMPOSITE_KEYS, ...NAME_COMPONENT_KEYS].forEach(ck => consumed.add(ck));
-    return [parts.join(' '), consumed];
-  }
-  return [null, consumed];
-}
-
-function composeAddress(fields) {
-  const consumed = new Set();
-  const fieldsLower = {};
-  for (const k of Object.keys(fields)) fieldsLower[k.toLowerCase()] = { key: k, val: fields[k] };
-
-  const parts = [];
-  const countryEntry = fieldsLower['country'];
-  let countryVal = countryEntry && isUseful(countryEntry.val) ? countryEntry.val.trim() : null;
-  if (countryVal && /^[A-Z]{2}$/i.test(countryVal)) {
-    countryVal = COUNTRY_EXPAND[countryVal.toUpperCase()] || null;
-  }
-
-  for (const partKey of ADDR_PART_KEYS) {
-    if (partKey === 'country') continue;
-    const entry = fieldsLower[partKey];
-    if (!entry || !isUseful(entry.val)) continue;
-    const v = entry.val.trim();
-    if (/^\d{1,6}$/.test(v)) { consumed.add(partKey); continue; }
-    if (v.length < 4) { consumed.add(partKey); continue; }
-    if (v === '#') { consumed.add(partKey); continue; }
-    parts.push(v);
-    consumed.add(partKey);
-  }
-  if (countryEntry) consumed.add('country');
-  if (countryVal) parts.push(countryVal);
-
-  if (parts.length === 0) return [null, consumed];
-  const deduped = parts.filter((p, i) => i === 0 || p.toLowerCase() !== parts[i - 1].toLowerCase());
-  return [deduped.join(', '), consumed];
-}
-
-function extractProfile(results) {
-  const buckets = {};
-  CATEGORIES.forEach(c => { buckets[c.key] = new Map(); });
-
-  for (const entity of (results || [])) {
-    if (!entity.found) continue;
-    for (const src of (entity.sources || [])) {
-      for (const rec of (src.records || [])) {
-        const fields = rec.fields || {};
-
-        const [composedName, nameConsumed] = composeName(fields);
-        if (composedName && isUseful(composedName)) {
-          const n = composedName.trim();
-          if (!buckets.names.has(n.toLowerCase())) buckets.names.set(n.toLowerCase(), n);
-        }
-
-        const [composedAddr, addrConsumed] = composeAddress(fields);
-        if (composedAddr && isUseful(composedAddr)) {
-          const a = composedAddr.trim();
-          if (!buckets.locations.has(a.toLowerCase())) buckets.locations.set(a.toLowerCase(), a);
-        }
-
-        for (const [key, val] of Object.entries(fields)) {
-          if (!isUseful(val)) continue;
-          const keyLower = key.toLowerCase();
-
-          if (nameConsumed.has(keyLower)) continue;
-          if (addrConsumed.has(keyLower) || ADDR_PART_SET.has(keyLower)) continue;
-
-          for (const cat of CATEGORIES) {
-            if (cat.key === 'names' || cat.key === 'locations') continue;
-            if (cat.match(key)) {
-              if (cat.validate && !cat.validate(val)) break;
-              const normalized = val.trim();
-              if (!buckets[cat.key].has(normalized.toLowerCase())) {
-                buckets[cat.key].set(normalized.toLowerCase(), normalized);
-              }
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    if (entity.entity_type === 'email' && entity.entity_value) {
-      const v = entity.entity_value.trim();
-      if (!buckets.emails.has(v.toLowerCase())) {
-        buckets.emails.set(v.toLowerCase(), v);
-      }
-    }
-    if (entity.entity_type === 'phone' && entity.entity_value) {
-      const v = entity.entity_value.trim();
-      if (!buckets.phones.has(v.toLowerCase())) {
-        buckets.phones.set(v.toLowerCase(), v);
-      }
-    }
-  }
-
-  const profile = {};
-  let totalCount = 0;
-  CATEGORIES.forEach(cat => {
-    const values = [...buckets[cat.key].values()];
-    if (values.length > 0) {
-      profile[cat.key] = values;
-      totalCount += values.length;
-    }
-  });
-  return { profile, totalCount };
-}
-
 const TAG_STAGGER_MS = 80;
 
-export default function SubjectProfile({ results, loading, onFocusEntity, onSwitchTab, aiSummary, canonical: canonicalProp }) {
-  const { profile, totalCount } = useMemo(() => extractProfile(results), [results]);
+// Decode common URI schemes seen in Linked accounts so the rendered chip
+// shows something a human can read. The raw value remains available via the
+// chip's title attribute.
+function decodeAccountValue(raw) {
+  if (typeof raw !== 'string') return { label: String(raw ?? ''), mono: false };
+  const v = raw.trim();
+  if (!v) return { label: v, mono: false };
+  if (v.startsWith('android://')) {
+    return { label: 'Google Ad ID: ', mono: true, suffix: v.slice('android://'.length) };
+  }
+  if (v.startsWith('mailto:')) {
+    return { label: v.slice('mailto:'.length), mono: true };
+  }
+  if (v.startsWith('tel:')) {
+    return { label: v.slice('tel:'.length), mono: true };
+  }
+  const m = v.match(/^https?:\/\/([^/?#]+)/i);
+  if (m) {
+    return { label: m[1], mono: true };
+  }
+  return { label: v, mono: true };
+}
+
+export default function SubjectProfile({
+  loading, onFocusEntity, onSwitchTab, aiSummary,
+  canonical: canonicalProp, profile: profileProp, canonicalLocation,
+}) {
+  // Backend ships the categorized profile (see app.engines.identifier_categorizer).
+  // Empty arrays are filtered here so empty buckets don't render headers.
+  const profile = useMemo(() => {
+    const src = profileProp || {};
+    const out = {};
+    for (const cat of CATEGORIES) {
+      const values = Array.isArray(src[cat.key]) ? src[cat.key].filter(Boolean) : [];
+      if (values.length > 0) out[cat.key] = values;
+    }
+    return out;
+  }, [profileProp]);
+
+  const totalCount = useMemo(
+    () => CATEGORIES.reduce((sum, c) => sum + (profile[c.key]?.length || 0), 0),
+    [profile],
+  );
 
   const canonicalLocal = useMemo(
     () => chooseCanonicalIdentity({
@@ -285,8 +166,7 @@ export default function SubjectProfile({ results, loading, onFocusEntity, onSwit
   );
 
   const canonical = canonicalProp || canonicalLocal;
-
-  const location = useMemo(() => chooseCanonicalLocation(results), [results]);
+  const location = canonicalLocation || null;
 
   const allTags = useMemo(() => {
     const tags = [];
@@ -557,6 +437,22 @@ function ProfileSection({ catKey, label, icon, color, values, totalValues, onFoc
         {values.slice(0, 15).map((v, i) => {
           const fontCls = catAllowsIdentifier && isIdentifierValue(v) ? 'font-mono' : '';
           const tagClasses = `${tagClassesBase} ${fontCls}`;
+          // Linked accounts: decode common URI schemes at render-time so the
+          // chip shows something human-readable instead of `android://…`.
+          let content;
+          if (catKey === 'accounts') {
+            const decoded = decodeAccountValue(v);
+            content = decoded.suffix !== undefined ? (
+              <>
+                <span className="font-sans">{decoded.label}</span>
+                <span className="font-mono">{decoded.suffix}</span>
+              </>
+            ) : (
+              <span className={decoded.mono ? 'font-mono' : ''}>{decoded.label}</span>
+            );
+          } else {
+            content = v;
+          }
           return isNavigable ? (
             <button
               key={v}
@@ -566,7 +462,7 @@ function ProfileSection({ catKey, label, icon, color, values, totalValues, onFoc
               style={{ animationDelay: `${i * 30}ms`, animationFillMode: 'both' }}
               title={`View ${v} in network map`}
             >
-              {v}<span className="ml-1 opacity-60">&#x2197;</span>
+              {content}<span className="ml-1 opacity-60">&#x2197;</span>
             </button>
           ) : (
             <span
@@ -575,7 +471,7 @@ function ProfileSection({ catKey, label, icon, color, values, totalValues, onFoc
               style={{ animationDelay: `${i * 30}ms`, animationFillMode: 'both' }}
               title={v}
             >
-              {v}
+              {content}
             </span>
           );
         })}

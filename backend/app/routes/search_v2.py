@@ -6,7 +6,6 @@ import asyncio
 import concurrent.futures
 import json
 import logging
-import re
 import time
 from datetime import datetime
 from bson import ObjectId
@@ -14,13 +13,14 @@ from fastapi import APIRouter, Depends, Request
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel, field_validator
 
-from app.engines import credmon, darkmon, fti, risk_ingestor, risk_scorer
+from app.engines import credmon, darkmon, fti, risk_ingestor, risk_scorer, geo
 from app.engines.credmon import (
     _get_leak_schema,
     _flatten_record,
     search_master as credmon_search_master,
     fetch_record_by_id as credmon_fetch_record,
 )
+from app.engines.identifier_categorizer import extract_profile as categorizer_extract_profile
 from app.audit import audit as audit_service
 from app.credits import require_credits, ENGINE_COST_KEYS
 
@@ -146,77 +146,6 @@ def _extract_fullnames(results: list[dict]) -> list[str]:
 
     # Cap at 10 names
     return list(seen)[:10]
-
-
-_NAME_KEYS = {"fullname", "full_name", "name", "first_name", "last_name", "display_name", "displayname"}
-_USERNAME_KEYS = {"username", "user_name", "nickname", "handle", "screen_name", "loginname"}
-_EMAIL_KEYS = {"email", "e-mail", "mail", "email_address"}
-_PHONE_KEYS = {"phone", "mobile", "cell", "telephone", "contact_number"}
-_IP_KEYS = {"ip", "ip_address", "last_ip", "signup_ip", "login_ip"}
-_DOB_KEYS = {"dob", "date_of_birth", "birth_date", "birthday"}
-_LOCATION_KEYS = {"city", "state", "country", "region", "district", "address", "pincode", "zip"}
-_ACCOUNT_KEYS = {"facebook", "linkedin", "twitter", "instagram", "telegram", "discord", "github", "reddit"}
-_SKIP_VALUES = {"", "null", "None", "none", "undefined", "N/A", "n/a", "-", "0", "false"}
-
-
-def _extract_profile_for_summary(results: list[dict]) -> dict:
-    """Build a compact profile dict for the AI summary prompt."""
-    names: set[str] = set()
-    emails: set[str] = set()
-    phones: set[str] = set()
-    usernames: set[str] = set()
-    ips: set[str] = set()
-    dobs: set[str] = set()
-    locations: set[str] = set()
-    accounts: set[str] = set()
-    source_count = 0
-
-    for result in results:
-        if not result.get("found"):
-            continue
-        if result.get("entity_type") == "email" and result.get("entity_value"):
-            emails.add(result["entity_value"])
-        if result.get("entity_type") == "phone" and result.get("entity_value"):
-            phones.add(result["entity_value"])
-        source_count += len(result.get("sources", []))
-
-        for source in result.get("sources", []):
-            for record in source.get("records", []):
-                for key, val in record.get("fields", {}).items():
-                    if not val or not isinstance(val, str) or val.strip() in _SKIP_VALUES:
-                        continue
-                    v = val.strip()
-                    kl = key.lower()
-                    if kl in _NAME_KEYS and len(v) > 3 and "@" not in v and not v.isdigit():
-                        names.add(v)
-                    elif kl in _USERNAME_KEYS and len(v) >= 3 and "@" not in v and not v.isdigit():
-                        usernames.add(v)
-                    elif kl in _EMAIL_KEYS and "@" in v:
-                        emails.add(v)
-                    elif any(pk in kl for pk in _PHONE_KEYS) and re.search(r"\d{7,}", v.replace(" ", "")):
-                        phones.add(v)
-                    elif kl in _IP_KEYS and re.match(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", v):
-                        ips.add(v)
-                    elif kl in _DOB_KEYS:
-                        dobs.add(v)
-                    elif kl in _LOCATION_KEYS and len(v) > 2:
-                        locations.add(v)
-                    elif kl in _ACCOUNT_KEYS:
-                        accounts.add(v)
-
-    return {
-        "names": list(names)[:15],
-        "emails": list(emails)[:15],
-        "phones": list(phones)[:10],
-        "usernames": list(usernames)[:10],
-        "ips": list(ips)[:10],
-        "dobs": list(dobs)[:3],
-        "locations": list(locations)[:10],
-        "accounts": list(accounts)[:10],
-        "source_count": source_count,
-        "total_entities": len(results),
-        "total_found": sum(1 for r in results if r.get("found")),
-    }
 
 
 def _generate_programmatic_summary(
@@ -791,7 +720,17 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
             yield {"event": "financial:complete", "data": _dumps({"total_phones_screened": 0, "total_upi_hits": 0, "total_time_ms": 0, "skipped": True, "reason": "fullname_search"})}
 
         # 8. Programmatic summary
-        profile = _extract_profile_for_summary(all_results)
+        profile = categorizer_extract_profile(all_results)
+        # Surface counts used by the programmatic summary generator (it reads
+        # source_count, total_entities, total_found from the profile dict).
+        profile["source_count"] = sum(len(r.get("sources", [])) for r in all_results if r.get("found"))
+        profile["total_entities"] = len(all_results)
+        profile["total_found"] = sum(1 for r in all_results if r.get("found"))
+        # Backward compat: programmatic summary code reads "dobs" (plural).
+        if "dobs" not in profile:
+            profile["dobs"] = profile.get("dob", [])
+        canonical_location = geo.resolve_canonical_location(all_results)
+
         fti_summary = {
             "crimedata_matches": crimedata_matches,
             "worldcheck_matches": worldcheck_matches,
@@ -807,11 +746,16 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
         }
 
         summary_text = _generate_programmatic_summary(profile, fti_summary, darkmon_summary, financial_summary)
-        if summary_text:
-            yield {
-                "event": "summary",
-                "data": _dumps({"text": summary_text}),
-            }
+        # Always emit the summary event so profile + canonical_location reach
+        # the frontend even when no prose summary is generated.
+        yield {
+            "event": "summary",
+            "data": _dumps({
+                "text": summary_text or None,
+                "profile": profile,
+                "canonical_location": canonical_location,
+            }),
+        }
 
         # 8.5 Risk scoring
         canonical_name = profile.get("names", [None])[0] if profile.get("names") else None

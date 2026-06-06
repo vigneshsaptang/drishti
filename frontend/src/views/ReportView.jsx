@@ -303,6 +303,7 @@ function FinancialSummary({ financialResults, onSwitchView }) {
 
 export default function ReportView({
   results, data, loading, aiSummary, riskScore, canonical, watchlistFilterTokens,
+  profile, canonicalLocation,
   ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults,
   onPivot, onFocusEntity, onSwitchTab,
 }) {
@@ -328,6 +329,8 @@ export default function ReportView({
           onSwitchTab={onSwitchTab}
           aiSummary={aiSummary}
           canonical={canonical}
+          profile={profile}
+          canonicalLocation={canonicalLocation}
         />
       </ErrorBoundary>
 

@@ -5,7 +5,7 @@ import { classifyBreach, getRecency, recencyScore, extractGeoIntel } from '../li
 import { extractIdentifiers } from '../lib/identifierExtract';
 
 function depthLabel(depth) {
-  if (depth === 0) return 'Direct Matches';
+  if (depth === 0) return 'Direct matches';
   if (depth === 1) return 'Linked \u2014 1 hop';
   return `Linked \u2014 ${depth} hops`;
 }
@@ -59,8 +59,8 @@ export default function BreachesV2Tab({ results, onPivot, loading, onFocusEntity
 
   if (!results || results.length === 0) {
     return (
-      <p className="text-sap-dim text-sm py-8 text-center">
-        {loading ? 'Waiting for breach results...' : 'No breach data found'}
+      <p className="text-sap-dim text-13 py-8 text-center">
+        {loading ? 'Waiting for breach results…' : 'No breach data found'}
       </p>
     );
   }
@@ -95,24 +95,24 @@ export default function BreachesV2Tab({ results, onPivot, loading, onFocusEntity
 
 function ActivityFeed({ lastRevealed, pending, loading, totalResults, revealedCount }) {
   return (
-    <div className="rounded-lg border border-sap-accent/20 bg-sap-surface overflow-hidden shadow-sm">
-      <div className="px-4 py-2.5 bg-sap-accent/5 border-b border-sap-accent/10 flex items-center gap-2.5">
-        <div className="h-2 w-2 rounded-full bg-sap-accent shadow-[0_0_8px_#4f46e5] animate-pulse" />
-        <span className="text-xs font-mono uppercase tracking-[2px] text-sap-accent font-semibold">Live Trace</span>
-        <span className="text-xs font-mono text-sap-muted ml-auto">{revealedCount}/{totalResults} entities</span>
+    <div className="rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-sap-border-light flex items-center gap-2.5">
+        <div className="h-2 w-2 rounded-full bg-sap-accent animate-pulse" />
+        <span className="text-12 font-semibold tracking-tight text-sap-text">Live trace</span>
+        <span className="text-11 text-sap-muted ml-auto tabular-nums">{revealedCount}/{totalResults} entities</span>
       </div>
       <div className="px-4 py-3 space-y-1.5 max-h-28 overflow-hidden">
         {/* Last revealed entity */}
         {lastRevealed && (
-          <div className="flex items-center gap-2 text-xs font-mono animate-fade-in">
-            <span className={lastRevealed.found ? 'text-entity-email' : 'text-sap-muted'}>
+          <div className="flex items-center gap-2 text-12 animate-fade-in">
+            <span className={lastRevealed.found ? 'text-sap-success' : 'text-sap-muted'}>
               {lastRevealed.found ? '\u2713' : '\u2717'}
             </span>
             <span className="text-sap-dim">
-              {lastRevealed.entity_type}:<span className="text-sap-text font-semibold">{lastRevealed.entity_value}</span>
+              {lastRevealed.entity_type}:<span className="text-sap-text font-medium font-mono ml-0.5">{lastRevealed.entity_value}</span>
             </span>
             {lastRevealed.found ? (
-              <span className="text-entity-breach">
+              <span className="text-sap-dim tabular-nums">
                 {lastRevealed.sources?.length} source{lastRevealed.sources?.length !== 1 ? 's' : ''}
                 {lastRevealed.new_identifiers?.length > 0 && (
                   <span className="text-sap-accent ml-1.5">+{lastRevealed.new_identifiers.length} new</span>
@@ -121,26 +121,26 @@ function ActivityFeed({ lastRevealed, pending, loading, totalResults, revealedCo
             ) : (
               <span className="text-sap-muted">no match</span>
             )}
-            <span className="text-sap-muted ml-auto">{lastRevealed.search_time_ms}ms</span>
+            <span className="text-sap-muted ml-auto tabular-nums">{lastRevealed.search_time_ms}ms</span>
           </div>
         )}
         {/* Currently processing */}
         {pending && (
-          <div className="flex items-center gap-2 text-xs font-mono animate-scan">
+          <div className="flex items-center gap-2 text-12 animate-scan">
             <span className="text-sap-accent">&gt;</span>
             <span className="text-sap-dim">
-              Searching {pending.entity_type}:<span className="text-sap-text font-semibold">{pending.entity_value}</span>
+              Searching {pending.entity_type}:<span className="text-sap-text font-medium font-mono ml-0.5">{pending.entity_value}</span>
             </span>
           </div>
         )}
         {!pending && loading && (
-          <div className="flex items-center gap-2 text-xs font-mono animate-scan">
+          <div className="flex items-center gap-2 text-12 animate-scan">
             <span className="text-sap-accent">&gt;</span>
-            <span className="text-sap-dim">Waiting for next entity...</span>
+            <span className="text-sap-dim">Waiting for next entity\u2026</span>
           </div>
         )}
         {!pending && !loading && (
-          <div className="flex items-center gap-2 text-xs font-mono text-sap-muted">
+          <div className="flex items-center gap-2 text-12 text-sap-muted">
             <span>\u2501</span>
             <span>Trace complete</span>
           </div>
@@ -209,38 +209,42 @@ function InvestigationSummary({ results, onFocusEntity }) {
   }
 
   return (
-    <div className="rounded-lg border border-sap-border bg-sap-surface p-5 mb-6">
-      <h3 className="text-xs font-mono tracking-[3px] uppercase text-sap-accent font-semibold mb-3">Investigation Summary</h3>
-      <p className="text-sm text-sap-dim leading-relaxed">{sentences.join(' ')}</p>
-      {identifierSections.length > 0 && (
-        <div className="mt-3 space-y-2">
-          {identifierSections.map(({ type, label, values }) => {
-            const isNavigable = (type === 'phone' || type === 'email') && !!onFocusEntity;
-            return (
-              <div key={type}>
-                <span className="text-xs font-mono text-sap-muted uppercase tracking-wider">{label} ({values.length})</span>
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {values.map(v => (
-                    isNavigable ? (
-                      <button
-                        key={v}
-                        type="button"
-                        onClick={() => onFocusEntity(type, v)}
-                        className="text-xs font-mono px-2 py-0.5 rounded bg-sap-panel border border-sap-border text-sap-text hover:border-sap-accent/50 cursor-pointer"
-                        title={`View ${v} in network map`}
-                      >
-                        {v}<span className="ml-1 opacity-60">&#x2197;</span>
-                      </button>
-                    ) : (
-                      <span key={v} className="text-xs font-mono px-2 py-0.5 rounded bg-sap-panel border border-sap-border text-sap-text">{v}</span>
-                    )
-                  ))}
+    <div className="rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden mb-6">
+      <div className="px-4 py-2.5 border-b border-sap-border-light flex items-center justify-between gap-3">
+        <h3 className="text-12 font-semibold tracking-tight text-sap-text">Investigation summary</h3>
+      </div>
+      <div className="px-4 py-3">
+        <p className="text-13 text-sap-dim leading-relaxed">{sentences.join(' ')}</p>
+        {identifierSections.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {identifierSections.map(({ type, label, values }) => {
+              const isNavigable = (type === 'phone' || type === 'email') && !!onFocusEntity;
+              return (
+                <div key={type}>
+                  <span className="text-11 text-sap-muted font-medium">{label} <span className="tabular-nums">({values.length})</span></span>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {values.map(v => (
+                      isNavigable ? (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => onFocusEntity(type, v)}
+                          className="text-12 font-mono px-2 py-0.5 rounded border bg-sap-bg border-sap-border-light text-sap-text hover:bg-sap-surface hover:border-sap-border transition-colors duration-150 cursor-pointer"
+                          title={`View ${v} in network map`}
+                        >
+                          {v}<span className="ml-1 opacity-60">&#x2197;</span>
+                        </button>
+                      ) : (
+                        <span key={v} className="text-12 font-mono px-2 py-0.5 rounded border bg-sap-bg border-sap-border-light text-sap-text">{v}</span>
+                      )
+                    ))}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -251,13 +255,13 @@ function DepthSection({ depth, entities, onPivot, onFocusEntity }) {
   return (
     <div>
       <div className="flex items-center gap-3 mb-3 animate-fade-in">
-        <span className="text-xs font-mono tracking-[3px] uppercase text-sap-accent font-semibold">
+        <span className="text-12 font-semibold tracking-tight text-sap-text">
           {depthLabel(depth)}
         </span>
-        <span className="text-xs font-mono text-sap-dim">
+        <span className="text-11 text-sap-muted tabular-nums">
           {foundCount}/{entities.length} found
         </span>
-        <div className="flex-1 h-px bg-sap-border" />
+        <div className="flex-1 h-px bg-sap-border-light" />
       </div>
       {entities.map((entity, i) => (
         <EntityCard
@@ -278,25 +282,25 @@ function EntityCard({ entity, depth, onPivot, onFocusEntity }) {
 
   return (
     <div
-      className={`bg-sap-surface border border-sap-border rounded-lg mb-3 shadow-sm animate-slide-up ${entity.found ? '' : 'opacity-50'}`}
+      className={`bg-sap-surface border border-sap-border-light rounded-lg mb-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden animate-slide-up ${entity.found ? '' : 'opacity-50'}`}
     >
       {/* Header row */}
       <div
-        className="px-5 py-3.5 flex items-center justify-between cursor-pointer"
+        className="px-4 py-2.5 flex items-center justify-between cursor-pointer hover:bg-sap-bg/60 transition-colors duration-150"
         onClick={() => setOpen(!open)}
       >
         <div className="flex items-center gap-3">
           <EntityBadge type={entity.entity_type} value={entity.entity_value} />
           {!entity.found ? (
-            <span className="text-xs text-entity-drug font-mono font-semibold">NOT FOUND</span>
+            <span className="text-11 text-sap-danger font-medium uppercase tracking-wide">Not found</span>
           ) : (
-            <span className="text-xs text-sap-dim font-mono">{sourceCount} source{sourceCount !== 1 ? 's' : ''}</span>
+            <span className="text-11 text-sap-muted tabular-nums">{sourceCount} source{sourceCount !== 1 ? 's' : ''}</span>
           )}
           {(entity.entity_type === 'phone' || entity.entity_type === 'email') && onFocusEntity && (
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onFocusEntity(entity.entity_type, entity.entity_value); }}
-              className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-sap-border text-sap-dim hover:text-sap-accent hover:border-sap-accent/50 transition-colors"
+              className="inline-flex items-center gap-1 text-11 px-1.5 py-0.5 rounded border border-sap-border-light bg-sap-bg text-sap-dim hover:text-sap-text hover:border-sap-border transition-colors duration-150"
               title="View in network map"
             >
               &#x2197; graph
@@ -304,14 +308,14 @@ function EntityCard({ entity, depth, onPivot, onFocusEntity }) {
           )}
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-sap-dim font-mono">{entity.search_time_ms}ms</span>
+          <span className="text-11 text-sap-muted tabular-nums">{entity.search_time_ms}ms</span>
           {entity.new_identifiers?.length > 0 && (
-            <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-sap-accent/10 text-sap-accent border border-sap-accent/20">
+            <span className="text-11 font-medium tabular-nums px-1.5 py-0.5 rounded bg-sap-accent/10 text-sap-accent border border-sap-accent/20">
               +{entity.new_identifiers.length} new
             </span>
           )}
           <svg
-            className={`w-4 h-4 text-sap-dim transition-transform ${open ? 'rotate-180' : ''}`}
+            className={`w-3.5 h-3.5 text-sap-muted transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -336,8 +340,8 @@ function EntityCard({ entity, depth, onPivot, onFocusEntity }) {
 
           {/* New identifiers discovered */}
           {entity.new_identifiers?.length > 0 && (
-            <div className="border-t border-sap-border px-5 py-3 bg-sap-panel/30">
-              <p className="text-xs font-mono text-sap-dim uppercase tracking-wider mb-2 font-medium">
+            <div className="border-t border-sap-border-light px-4 py-3 bg-sap-bg/60">
+              <p className="text-11 text-sap-muted mb-2 font-medium">
                 Queued for next layer
               </p>
               <div className="flex flex-wrap gap-1.5">
@@ -357,8 +361,8 @@ function EntityCard({ entity, depth, onPivot, onFocusEntity }) {
 
       {/* Not-found but has new_identifiers (edge case) */}
       {open && !entity.found && entity.new_identifiers?.length > 0 && (
-        <div className="border-t border-sap-border px-5 py-3 bg-sap-panel/30">
-          <p className="text-xs font-mono text-sap-dim uppercase tracking-wider mb-2 font-medium">
+        <div className="border-t border-sap-border-light px-4 py-3 bg-sap-bg/60">
+          <p className="text-11 text-sap-muted mb-2 font-medium">
             Queued for next layer
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -394,28 +398,28 @@ function BreachSource({ source }) {
   })();
 
   return (
-    <div className="border-t border-sap-border" style={{ opacity: score }}>
+    <div className="border-t border-sap-border-light" style={{ opacity: score }}>
       {/* Source header */}
-      <div className="px-4 py-2 bg-sap-panel/50 flex items-center justify-between text-xs font-mono flex-wrap gap-2">
+      <div className="px-4 py-2 bg-sap-bg/60 flex items-center justify-between text-12 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <span
-            className={`px-1.5 py-0.5 rounded text-xs font-bold border ${breachType.color}`}
+            className={`px-1.5 py-0.5 rounded text-11 font-medium border ${breachType.color}`}
             title={breachType.description}
           >
             {breachType.icon} {breachType.label}
           </span>
-          <span className="text-entity-breach font-semibold">
+          <span className="text-sap-text font-medium">
             {source.leak_name || source.collection}
           </span>
         </div>
-        <div className="flex items-center gap-3 text-sap-dim">
-          {source.breach_date && <span>Breach: {source.breach_date}</span>}
+        <div className="flex items-center gap-3 text-sap-muted">
+          {source.breach_date && <span className="tabular-nums">Breach: {source.breach_date}</span>}
           {recency && (
-            <span className={recency.color} title={`Record from ${recency.date}`}>
+            <span className="text-sap-dim tabular-nums" title={`Record from ${recency.date}`}>
               {relativeTime || recency.label}
             </span>
           )}
-          <span>{recordCount} record{recordCount !== 1 ? 's' : ''}</span>
+          <span className="tabular-nums">{recordCount} record{recordCount !== 1 ? 's' : ''}</span>
         </div>
       </div>
 
@@ -426,32 +430,32 @@ function BreachSource({ source }) {
           <div key={rec.record_id || ri}>
             {/* Geo-intelligence badge */}
             {geo && (
-              <div className={`mx-4 mt-2 px-3 py-2 rounded-lg border flex items-center gap-3 ${geo.bgColor}`}>
+              <div className="mx-4 mt-2 px-3 py-2 rounded-lg border border-sap-border-light bg-sap-bg flex items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <svg className={`w-4 h-4 ${geo.color}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5 text-sap-dim" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  <span className={`text-sm font-semibold ${geo.color}`}>{geo.label}</span>
+                  <span className="text-13 font-medium text-sap-text">{geo.label}</span>
                 </div>
-                <span className={`text-xs font-mono px-2 py-0.5 rounded border ${geo.bgColor} ${geo.color}`}>
+                <span className="text-11 px-2 py-0.5 rounded border border-sap-border-light bg-sap-surface text-sap-dim">
                   {geo.badge}
                 </span>
-                <span className="text-xs text-sap-dim font-mono ml-auto">
+                <span className="text-11 text-sap-muted font-mono ml-auto tabular-nums">
                   {geo.lat.toFixed(4)}N, {geo.lng.toFixed(4)}E
                 </span>
               </div>
             )}
 
             {/* Field table */}
-            <table className="w-full text-xs font-mono">
-              <tbody>
+            <table className="w-full text-12">
+              <tbody className="divide-y divide-sap-border-light">
                 {Object.entries(rec.fields || {}).map(([k, v]) => {
                   const cls = fieldClass(k);
                   return (
-                    <tr key={k} className="border-t border-sap-border/30 hover:bg-sap-panel/30">
-                      <td className="px-4 py-1.5 text-sap-dim w-48 whitespace-nowrap">{k}</td>
-                      <td className={`px-4 py-1.5 ${cls} break-all`}>{redactPassword(k, v)}</td>
+                    <tr key={k} className="hover:bg-sap-bg/60 transition-colors duration-150">
+                      <td className="px-4 py-1.5 text-sap-muted w-48 whitespace-nowrap">{k}</td>
+                      <td className={`px-4 py-1.5 font-mono text-sap-text ${cls} break-all`}>{redactPassword(k, v)}</td>
                     </tr>
                   );
                 })}

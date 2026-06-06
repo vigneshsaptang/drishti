@@ -72,7 +72,7 @@ function LazyFallback() {
 }
 
 export default function App() {
-  const { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, profile, canonicalLocation, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults } = useSearchV2();
+  const { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, profile, canonicalLocation, canonicalName, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults } = useSearchV2();
   const [activeTab, setActiveTab] = useState('report');
   const [focusedEntity, setFocusedEntity] = useState(null);
   const [overlay, setOverlay] = useState(null);
@@ -103,20 +103,27 @@ export default function App() {
   }, [results]);
 
   const watchlistFilterTokens = useMemo(() => {
+    const explicit = String(canonicalName || '').trim();
+    if (explicit) {
+      return explicit
+        .toLowerCase()
+        .split(/[\s,]+/)
+        .filter(t => t.length >= 2 && !/^\d/.test(t));
+    }
     const src = canonical?.canonical || canonical?.anchor || '';
     return String(src)
       .toLowerCase()
       .split(/[\s,]+/)
       .filter(t => t.length >= 3 && !/^\d/.test(t));
-  }, [canonical]);
+  }, [canonical, canonicalName]);
 
   const [currentEngines, setCurrentEngines] = useState(null);
 
-  const handleSearch = useCallback((seeds, engines = null) => {
+  const handleSearch = useCallback((seeds, engines = null, subject = null) => {
     setCurrentEngines(engines);
     setActiveTab('report');
     setFocusedEntity(null);
-    doSearch(seeds, 2, engines);
+    doSearch(seeds, 2, engines, subject);
   }, [doSearch]);
 
   const handleExportReport = useCallback(() => {

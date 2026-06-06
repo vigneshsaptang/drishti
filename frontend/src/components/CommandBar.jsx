@@ -4,11 +4,9 @@ import { useCredits } from '../lib/creditContext';
 const TYPE_META = {
   phone:    { label: 'phone',    color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
   email:    { label: 'email',    color: '#10b981', bg: '#f0fdf4', border: '#bbf7d0' },
-  fullname: { label: 'name',     color: '#111827', bg: '#f3f4f6', border: '#d1d5db' },
-  username: { label: 'username', color: '#8b5cf6', bg: '#f5f3ff', border: '#ddd6fe' },
 };
 
-const TYPES = ['phone', 'email', 'fullname', 'username'];
+const TYPES = ['phone', 'email'];
 
 const ENGINE_META = [
   { key: 'breach',       label: 'Breaches',    icon: '⛊' },
@@ -20,26 +18,21 @@ const ENGINE_META = [
 const ALL_ENGINE_KEYS = ENGINE_META.map(e => e.key);
 
 const ENGINES_BY_TYPE = {
-  phone:    ['breach', 'threat_intel', 'darkweb', 'financial'],
-  email:    ['breach', 'threat_intel', 'darkweb', 'financial'],
-  username: ['breach', 'darkweb'],
-  fullname: ['threat_intel'],
+  phone: ['breach', 'threat_intel', 'darkweb', 'financial'],
+  email: ['breach', 'threat_intel', 'darkweb', 'financial'],
 };
 
 const TYPE_HINTS = {
-  phone:    'Breach records, watchlists, dark web, financial',
-  email:    'Breach records, watchlists, dark web, financial',
-  username: 'Breach records, dark web forums',
-  fullname: 'Watchlist & sanctions screening',
+  phone: 'Breach records, watchlists, dark web, financial',
+  email: 'Breach records, watchlists, dark web, financial',
 };
 
-function detectType(value) {
+function detectPrimaryType(value) {
   const v = value.trim();
-  if (!v) return 'username';
-  if (/^\+?[\d\s\-() ]{7,15}$/.test(v)) return 'phone';
+  if (!v) return null;
   if (v.includes('@')) return 'email';
-  if (v.includes(' ') && v.length > 3) return 'fullname';
-  return 'username';
+  if (/^\+?[\d\s\-()]{7,15}$/.test(v)) return 'phone';
+  return null;
 }
 
 function Spinner() {
@@ -62,19 +55,41 @@ function Kbd({ children, tone = 'light' }) {
   );
 }
 
+function Chevron({ open }) {
+  return (
+    <svg
+      className={`w-3 h-3 transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 2.5 L8 6 L4 9.5" />
+    </svg>
+  );
+}
+
 export default function CommandBar({ onSearch, loading, onCancel, onClear, collapsed, activeSeeds }) {
   const [value, setValue] = useState('');
-  const [manualType, setManualType] = useState(null);
   const [selectedEngines, setSelectedEngines] = useState(new Set(ALL_ENGINE_KEYS));
+  const [nameOpen, setNameOpen] = useState(false);
+  const [nameFirst, setNameFirst] = useState('');
+  const [nameMiddle, setNameMiddle] = useState('');
+  const [nameLast, setNameLast] = useState('');
+  const [nameInitials, setNameInitials] = useState('');
+  const [nameDob, setNameDob] = useState('');
   const inputRef = useRef(null);
   const { engineCosts, remaining, overage, isAdmin } = useCredits();
 
-  const detectedType = manualType ?? detectType(value);
-  const meta = TYPE_META[detectedType];
-  const hasValue = value.trim().length > 0;
+  const trimmed = value.trim();
+  const detectedType = detectPrimaryType(value);
+  const hasValue = trimmed.length > 0;
+  const isInvalid = hasValue && detectedType === null;
 
   const applicableEngines = useMemo(
-    () => new Set(ENGINES_BY_TYPE[detectedType] || ALL_ENGINE_KEYS),
+    () => new Set(detectedType ? (ENGINES_BY_TYPE[detectedType] || ALL_ENGINE_KEYS) : ALL_ENGINE_KEYS),
     [detectedType]
   );
 
@@ -90,6 +105,10 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
 
   const canAfford = isAdmin || remaining === null || remaining >= totalCost || overage !== 'hard';
 
+  const hasName = !!(nameFirst.trim() || nameLast.trim() || nameInitials.trim());
+
+  const filledNameCount = [nameFirst, nameMiddle, nameLast, nameInitials].filter(s => s.trim()).length;
+
   const toggleEngine = useCallback((key) => {
     setSelectedEngines(prev => {
       const next = new Set(prev);
@@ -102,23 +121,29 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
     });
   }, []);
 
-  const cycleType = useCallback(() => {
-    const current = manualType ?? detectType(value);
-    const idx = TYPES.indexOf(current);
-    setManualType(TYPES[(idx + 1) % TYPES.length]);
-  }, [manualType, value]);
-
   const handleSubmit = useCallback((e) => {
     e?.preventDefault();
     const v = value.trim();
     if (!v) return;
+    const primaryType = detectPrimaryType(v);
+    if (primaryType === null) return;
     const engines = effectiveEngines.size === ALL_ENGINE_KEYS.length ? null : [...effectiveEngines];
-    onSearch([{ type: detectedType, value: v }], engines);
-  }, [value, detectedType, onSearch, effectiveEngines]);
+    const subject = hasName ? {
+      first:    nameFirst.trim()    || null,
+      middle:   nameMiddle.trim()   || null,
+      last:     nameLast.trim()     || null,
+      initials: nameInitials.trim() || null,
+      dob:      nameDob.trim()      || null,
+    } : null;
+    onSearch(
+      [{ type: primaryType, value: v }],
+      engines,
+      subject,
+    );
+  }, [value, onSearch, effectiveEngines, hasName, nameFirst, nameMiddle, nameLast, nameInitials, nameDob]);
 
   const handleClear = useCallback(() => {
     setValue('');
-    setManualType(null);
     onClear?.();
   }, [onClear]);
 
@@ -126,15 +151,13 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
     if (activeSeeds?.length) {
       const seed = activeSeeds[0];
       setValue(seed.value);
-      setManualType(seed.type);
     }
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [activeSeeds]);
 
   useEffect(() => {
-    CommandBar._setSearch = (type, val) => {
+    CommandBar._setSearch = (_type, val) => {
       setValue(val);
-      setManualType(type);
     };
     return () => { CommandBar._setSearch = null; };
   }, []);
@@ -151,7 +174,6 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
       if (e.key === 'Escape') {
         if (document.activeElement === inputRef.current) {
           setValue('');
-          setManualType(null);
           inputRef.current?.blur();
         }
       }
@@ -162,7 +184,7 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
 
   if (collapsed && (activeSeeds?.length > 0)) {
     const seed = activeSeeds[0];
-    const seedMeta = TYPE_META[seed.type] ?? TYPE_META.username;
+    const seedMeta = TYPE_META[seed.type] ?? TYPE_META.email;
     return (
       <div className="flex items-center gap-2 h-9 px-2.5 rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         <span
@@ -205,69 +227,151 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
     );
   }
 
-  const showCostBar = hasValue && !loading && !isAdmin && Object.keys(engineCosts).length > 0;
+  const showCostBar = hasValue && !isInvalid && !loading && !isAdmin && Object.keys(engineCosts).length > 0;
+
+  const formBorderCls = isInvalid
+    ? 'border-sap-danger/40 focus-within:border-sap-danger focus-within:ring-4 focus-within:ring-sap-danger/10'
+    : 'border-sap-border-light focus-within:border-sap-accent focus-within:ring-4 focus-within:ring-sap-accent/10';
+
+  const searchDisabled = !hasValue || isInvalid || !canAfford;
 
   return (
     <div className="space-y-1.5">
-      <form
-        onSubmit={handleSubmit}
-        className="flex items-center gap-2 h-11 pl-3 pr-1.5 rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-within:border-sap-accent focus-within:ring-4 focus-within:ring-sap-accent/10 transition-[border-color,box-shadow] duration-150"
-      >
-        <input
-          ref={inputRef}
-          type="text"
-          value={value}
-          onChange={e => { setValue(e.target.value); setManualType(null); }}
-          onKeyDown={e => e.key === 'Escape' && (setValue(''), setManualType(null))}
-          placeholder="Search phone, email, name, or username…"
-          autoFocus
-          className="flex-1 min-w-0 bg-transparent outline-none text-14 text-sap-text placeholder:text-sap-muted"
-        />
+      <div className="rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <form
+          onSubmit={handleSubmit}
+          className={`flex items-center gap-2 h-11 pl-3 pr-1.5 rounded-lg bg-sap-surface border transition-[border-color,box-shadow] duration-150 ${formBorderCls}`}
+        >
+          <input
+            ref={inputRef}
+            type="text"
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            onKeyDown={e => e.key === 'Escape' && setValue('')}
+            placeholder="Search phone or email…"
+            autoFocus
+            className="flex-1 min-w-0 bg-transparent outline-none text-14 text-sap-text placeholder:text-sap-muted"
+          />
 
-        {!hasValue && (
-          <span className="hidden sm:inline-flex items-center gap-1 text-11 text-sap-muted shrink-0 pr-1">
-            <Kbd>/</Kbd>
-            <span>to focus</span>
-          </span>
-        )}
+          {!hasValue && (
+            <span className="hidden sm:inline-flex items-center gap-1 text-11 text-sap-muted shrink-0 pr-1">
+              <Kbd>/</Kbd>
+              <span>to focus</span>
+            </span>
+          )}
 
-        {hasValue && (
+          {loading ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="shrink-0 h-8 px-3 rounded-md bg-sap-danger-filled hover:bg-sap-danger text-white text-13 font-medium transition-colors flex items-center gap-1.5"
+            >
+              <Spinner />
+              Cancel
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={searchDisabled}
+              className="shrink-0 h-8 px-3 rounded-md bg-sap-accent hover:bg-sap-accent-glow disabled:opacity-40 disabled:cursor-not-allowed text-white text-13 font-medium transition-colors inline-flex items-center gap-2"
+              style={{
+                boxShadow:
+                  'inset 0 -1px 0 rgba(0,0,0,0.16), 0 1px 2px color-mix(in srgb, var(--color-sap-accent) 25%, transparent)',
+              }}
+            >
+              <span>Search</span>
+              <Kbd tone="dark">↵</Kbd>
+            </button>
+          )}
+        </form>
+
+        <div className="border-t border-sap-border-light">
           <button
             type="button"
-            onClick={cycleType}
-            title="Click to change type"
-            className="shrink-0 inline-flex items-center px-2 h-6 rounded-md cursor-pointer transition-colors hover:opacity-80 active:scale-95"
-            style={{ color: meta.color, background: meta.bg, border: `1px solid ${meta.border}` }}
+            onClick={() => setNameOpen(o => !o)}
+            className="w-full flex items-center justify-between px-3 py-2.5 text-12 text-sap-dim hover:text-sap-text transition-colors"
           >
-            <span className="text-11 font-medium tracking-tight">{meta.label}</span>
+            <span className="flex items-center gap-1.5">
+              <Chevron open={nameOpen} />
+              Add name details
+              <span className="text-sap-muted">(recommended for screening accuracy)</span>
+            </span>
+            {hasName && (
+              <span className="text-11 text-sap-accent tabular-nums">
+                {filledNameCount} fields
+              </span>
+            )}
           </button>
-        )}
-        {loading ? (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="shrink-0 h-8 px-3 rounded-md bg-sap-danger-filled hover:bg-sap-danger text-white text-13 font-medium transition-colors flex items-center gap-1.5"
-          >
-            <Spinner />
-            Cancel
-          </button>
-        ) : (
-          <button
-            type="submit"
-            disabled={!hasValue || !canAfford}
-            className="shrink-0 h-8 px-3 rounded-md bg-sap-accent hover:bg-sap-accent-glow disabled:opacity-40 disabled:cursor-not-allowed text-white text-13 font-medium transition-colors inline-flex items-center gap-2"
-            style={{
-              boxShadow:
-                'inset 0 -1px 0 rgba(0,0,0,0.16), 0 1px 2px color-mix(in srgb, var(--color-sap-accent) 25%, transparent)',
-            }}
-          >
-            <span>Search</span>
-            <Kbd tone="dark">↵</Kbd>
-          </button>
-        )}
-      </form>
 
-      {hasValue && (
+          {nameOpen && (
+            <div className="px-3 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-11 text-sap-dim" htmlFor="cb-name-first">First name</label>
+                <input
+                  id="cb-name-first"
+                  type="text"
+                  value={nameFirst}
+                  onChange={e => setNameFirst(e.target.value)}
+                  placeholder="e.g. Saikrishna"
+                  className="h-8 rounded-md border border-sap-border-light bg-sap-surface px-2.5 text-12 text-sap-text placeholder:text-sap-muted outline-none focus:border-sap-accent focus:ring-4 focus:ring-sap-accent/10"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-11 text-sap-dim" htmlFor="cb-name-initials">Initials</label>
+                <input
+                  id="cb-name-initials"
+                  type="text"
+                  value={nameInitials}
+                  onChange={e => setNameInitials(e.target.value)}
+                  placeholder="e.g. BVS"
+                  className="h-8 rounded-md border border-sap-border-light bg-sap-surface px-2.5 text-12 text-sap-text placeholder:text-sap-muted outline-none focus:border-sap-accent focus:ring-4 focus:ring-sap-accent/10"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-11 text-sap-dim" htmlFor="cb-name-last">Last name</label>
+                <input
+                  id="cb-name-last"
+                  type="text"
+                  value={nameLast}
+                  onChange={e => setNameLast(e.target.value)}
+                  placeholder="e.g. Budamgunta"
+                  className="h-8 rounded-md border border-sap-border-light bg-sap-surface px-2.5 text-12 text-sap-text placeholder:text-sap-muted outline-none focus:border-sap-accent focus:ring-4 focus:ring-sap-accent/10"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-11 text-sap-dim" htmlFor="cb-name-dob">Date of birth</label>
+                <input
+                  id="cb-name-dob"
+                  type="text"
+                  value={nameDob}
+                  onChange={e => setNameDob(e.target.value)}
+                  placeholder="YYYY-MM-DD"
+                  className="h-8 rounded-md border border-sap-border-light bg-sap-surface px-2.5 text-12 text-sap-text placeholder:text-sap-muted outline-none focus:border-sap-accent focus:ring-4 focus:ring-sap-accent/10"
+                />
+              </div>
+              <div className="flex flex-col gap-1 sm:col-span-2">
+                <label className="text-11 text-sap-dim" htmlFor="cb-name-middle">Middle name</label>
+                <input
+                  id="cb-name-middle"
+                  type="text"
+                  value={nameMiddle}
+                  onChange={e => setNameMiddle(e.target.value)}
+                  placeholder="Optional"
+                  className="h-8 rounded-md border border-sap-border-light bg-sap-surface px-2.5 text-12 text-sap-text placeholder:text-sap-muted outline-none focus:border-sap-accent focus:ring-4 focus:ring-sap-accent/10"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {isInvalid && (
+        <p className="text-12 text-sap-danger px-1">
+          Primary input must be a phone number or email. Use Name details below for screening by name.
+        </p>
+      )}
+
+      {hasValue && !isInvalid && (
         <p className="text-11 text-sap-dim px-1">
           {TYPE_HINTS[detectedType]}
         </p>

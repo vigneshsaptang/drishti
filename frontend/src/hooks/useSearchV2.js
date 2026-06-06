@@ -29,6 +29,7 @@ export function useSearchV2() {
   const [aiSummary, setAiSummary] = useState(null);
   const [profile, setProfile] = useState(null);
   const [canonicalLocation, setCanonicalLocation] = useState(null);
+  const [canonicalName, setCanonicalName] = useState(null);
   const [riskScore, setRiskScore] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -85,7 +86,7 @@ export function useSearchV2() {
     financialBufferRef.current = [];
   }, []);
 
-  const doSearch = useCallback(async (seeds, maxDepth = 2, engines = null) => {
+  const doSearch = useCallback(async (seeds, maxDepth = 2, engines = null, subject = null) => {
     if (!seeds || seeds.length === 0) return;
 
     // Abort any previous search and clear stale buffers
@@ -104,6 +105,7 @@ export function useSearchV2() {
     setAiSummary(null);
     setProfile(null);
     setCanonicalLocation(null);
+    setCanonicalName(null);
     setRiskScore(null);
     setLoading(true);
     setError(null);
@@ -116,7 +118,12 @@ export function useSearchV2() {
       const res = await fetch('/api/v2/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ seeds, max_depth: maxDepth, ...(engines ? { engines } : {}) }),
+        body: JSON.stringify({
+          seeds,
+          max_depth: maxDepth,
+          ...(engines ? { engines } : {}),
+          ...(subject ? { subject } : {}),
+        }),
         signal: controller.signal,
       });
 
@@ -217,12 +224,14 @@ export function useSearchV2() {
                   // shows subject identity without waiting on screening.
                   if (parsed.profile) setProfile(parsed.profile);
                   if (parsed.canonical_location) setCanonicalLocation(parsed.canonical_location);
+                  if (parsed.canonical_name) setCanonicalName(parsed.canonical_name);
                   break;
 
                 case 'summary':
                   setAiSummary(parsed.text || null);
                   if (parsed.profile) setProfile(parsed.profile);
                   if (parsed.canonical_location) setCanonicalLocation(parsed.canonical_location);
+                  if (parsed.canonical_name) setCanonicalName(parsed.canonical_name);
                   break;
 
                 case 'search:complete':
@@ -284,9 +293,10 @@ export function useSearchV2() {
     setAiSummary(null);
     setProfile(null);
     setCanonicalLocation(null);
+    setCanonicalName(null);
     setRiskScore(null);
     setSearchMeta(null);
   }, [cancelSearch]);
 
-  return { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, profile, canonicalLocation, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults };
+  return { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, profile, canonicalLocation, canonicalName, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults };
 }

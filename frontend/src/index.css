@@ -50,14 +50,6 @@ html, body, #root {
   --animate-slide-in-right: slideInRight 0.25s ease-out;
   --animate-shake: shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97);
 
-  /* Neural-network loading state — see NeuralLoader in views/ReportView.jsx */
-  --animate-neural-blip:  neural-blip 1.4s ease-in-out infinite;
-  --animate-neural-ring:  neural-ring 1.6s ease-out infinite;
-  --animate-neural-float: neural-float 3.5s ease-in-out infinite;
-  --animate-neural-link:  neural-link 1.8s ease-in-out infinite;
-  --animate-neural-flare: neural-flare 0.7s ease-out forwards;
-  --animate-neural-signal: neural-signal 1.5s linear infinite;
-
   /* Type scale — 6-step disciplined ramp. Arbitrary text-[Xpx] is banned. */
   --text-11: 11px;
   --text-11--line-height: 14px;
@@ -89,36 +81,6 @@ html, body, #root {
   20%, 80% { transform: translateX(2px); }
   30%, 50%, 70% { transform: translateX(-3px); }
   40%, 60% { transform: translateX(3px); }
-}
-
-/* ═══ Neural loader keyframes ═══ */
-@keyframes neural-blip {
-  0%, 100% { fill-opacity: 1; }
-  50%      { fill-opacity: 0.35; }
-}
-@keyframes neural-ring {
-  0%   { r: 3; stroke-opacity: 0.6; }
-  100% { r: 14; stroke-opacity: 0; }
-}
-@keyframes neural-float {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-4px); }
-}
-@keyframes neural-link {
-  0%, 100% { stroke-opacity: 0.55; }
-  50%      { stroke-opacity: 0.2;  }
-}
-/* Convergence flare — central burst at the end of the loading sequence. */
-@keyframes neural-flare {
-  0%   { r: 0;  fill-opacity: 0;   }
-  35%  { r: 14; fill-opacity: 0.9; }
-  100% { r: 32; fill-opacity: 0;   }
-}
-/* Traveling signal pulse — used with stroke-dasharray to animate a moving
-   bright spot along an active connection (mimics action-potential travel). */
-@keyframes neural-signal {
-  0%   { stroke-dashoffset: 12; }
-  100% { stroke-dashoffset: 0;  }
 }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

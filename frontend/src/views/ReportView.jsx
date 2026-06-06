@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import SubjectProfile from '../components/SubjectProfile';
 import FtiScreening from '../components/FtiScreening';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -301,139 +301,12 @@ function FinancialSummary({ financialResults, onSwitchView }) {
   );
 }
 
-// ───────────────────────────────────────────────────────────────────────────
-// NeuralLoader — sci-fi-style "subject resolving" indicator
-//
-// SVG constellation of nodes + connections. Nodes pulse on a stagger; the
-// whole network gently floats. As each SSE phase lands, the connections tied
-// to that phase brighten — so the "neural network" wires itself up live as
-// the search streams in. Unmounts when loading flips to false; the actual
-// subject identity then takes its place via SubjectProfile fade-in.
-// ───────────────────────────────────────────────────────────────────────────
+// ReportProgress — slim card at the top of the report while the SSE stream
+// is in flight. Phase label + pulsing dot + progress bar derived from which
+// SSE events have landed. Unmounts when loading flips false.
 
-// Neural layout — generated from a single soma with 8 dendrites that branch
-// fractally to depth 3. Deterministic (seeded) so the layout is stable across
-// renders. viewBox is 400x150 (~2.67:1) to fill wide screens edge-to-edge.
-const NEURAL_VIEWBOX = { w: 400, h: 150 };
-const SOMA = { x: 200, y: 75 };
-
-// Deterministic per-index pseudo-random in [0,1).
-function _seededRand(i) {
-  const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
-  return x - Math.floor(x);
-}
-
-// Asymmetric dendrite directions — hand-picked so it doesn't read as a ring.
-const _DENDRITE_ANGLES = [
-  -Math.PI * 0.92,
-  -Math.PI * 0.62,
-  -Math.PI * 0.34,
-  -Math.PI * 0.06,
-   Math.PI * 0.17,
-   Math.PI * 0.43,
-   Math.PI * 0.71,
-   Math.PI * 0.96,
-];
-
-function _buildNeuron() {
-  const nodes = [{ ...SOMA, r: 2.6, delay: 0, depth: 0, center: true }];
-  const links = [];
-  let nextDelay = 80;
-
-  function grow(parentIdx, x, y, angle, length, depthRemaining, seedBase) {
-    if (depthRemaining <= 0) return;
-
-    const ex = x + Math.cos(angle) * length;
-    const ey = y + Math.sin(angle) * length;
-    const idx = nodes.length;
-    const curDepth = 4 - depthRemaining; // 1, 2, 3
-
-    nodes.push({
-      x: ex, y: ey,
-      r: 0.35 + depthRemaining * 0.28,
-      delay: nextDelay,
-      depth: curDepth,
-    });
-    nextDelay += 45;
-
-    links.push({
-      from: parentIdx,
-      to: idx,
-      phase: Math.min(curDepth - 1, 3), // depth 1 -> phase 0; depth 2 -> 1; depth 3 -> 2
-      depth: curDepth,
-    });
-
-    if (depthRemaining > 1) {
-      const subCount = 2 + (_seededRand(seedBase * 7) < 0.35 ? 1 : 0); // sometimes 3
-      for (let i = 0; i < subCount; i++) {
-        const spread = Math.PI / 2.8;
-        const jitter = (_seededRand(seedBase * 13 + i * 17) - 0.5) * 0.55;
-        const subAngle = angle + ((i - (subCount - 1) / 2) * spread / subCount) + jitter;
-        const subLength = length * (0.55 + _seededRand(seedBase * 19 + i) * 0.28);
-        grow(idx, ex, ey, subAngle, subLength, depthRemaining - 1, seedBase * 31 + i + 1);
-      }
-    }
-  }
-
-  _DENDRITE_ANGLES.forEach((angle, i) => {
-    const jitter = (_seededRand(i * 41) - 0.5) * 0.28;
-    const length = 78 + _seededRand(i * 53) * 22; // 78–100 viewBox units
-    grow(0, SOMA.x, SOMA.y, angle + jitter, length, 3, i * 101 + 7);
-  });
-
-  // Phase 3 → phase 4: lateral cross-links between adjacent terminal tips so
-  // the network closes into a mesh during the final phase.
-  const terminals = nodes
-    .map((n, i) => ({ n, i }))
-    .filter(t => t.n.depth === 3)
-    .sort((a, b) => Math.atan2(a.n.y - SOMA.y, a.n.x - SOMA.x) - Math.atan2(b.n.y - SOMA.y, b.n.x - SOMA.x));
-  for (let i = 0; i < terminals.length; i++) {
-    const next = terminals[(i + 2) % terminals.length];
-    links.push({ from: terminals[i].i, to: next.i, phase: 4, depth: 4 });
-  }
-
-  return { nodes, links };
-}
-
-const { nodes: NEURAL_NODES, links: NEURAL_LINKS } = _buildNeuron();
-
-// Convergence timing — kept in sync with the CSS transition durations below
-// and with --animate-neural-flare in index.css.
-const NEURAL_CONVERGE_MS = 700;
-
-function NeuralLoader({ loading, results, ftiMeta, darkmonMeta, profile, riskScore }) {
-  // 'streaming' while data arrives; 'converging' for the exit animation;
-  // 'done' returns null. Distinct from `loading` so we control unmount timing.
-  const [stage, setStage] = useState(loading ? 'streaming' : 'done');
-
-  // React to the `loading` prop. Two effects split so the converge→done
-  // timer in the second effect isn't torn down when the first effect
-  // re-runs on stage changes.
-  useEffect(() => {
-    if (loading) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional state machine driven by `loading` prop transitions
-      setStage('streaming');
-    } else {
-      // Only transition to converging if we were actually streaming —
-      // ignore the initial mount-with-loading-false case.
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional state machine driven by `loading` prop transitions
-      setStage(prev => (prev === 'streaming' ? 'converging' : prev));
-    }
-  }, [loading]);
-
-  // Owns the converging → done timer. Only this effect controls the timeout,
-  // so it isn't accidentally cancelled by transitions in the loading effect.
-  useEffect(() => {
-    if (stage !== 'converging') return undefined;
-    const t = setTimeout(() => {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- terminal of the converge timer
-      setStage('done');
-    }, NEURAL_CONVERGE_MS);
-    return () => clearTimeout(t);
-  }, [stage]);
-
-  if (stage === 'done') return null;
-  const converging = stage === 'converging';
+function ReportProgress({ loading, results, ftiMeta, darkmonMeta, profile, riskScore }) {
+  if (!loading) return null;
 
   const phases = [
     { label: 'Searching breach data',  done: (results?.length || 0) > 0 },
@@ -446,152 +319,26 @@ function NeuralLoader({ loading, results, ftiMeta, darkmonMeta, profile, riskSco
   const current = phases.find(p => !p.done) || phases[phases.length - 1];
   const pct = Math.round((doneCount / phases.length) * 100);
 
-  // Animatable transitions for SVG attributes — modern browsers support CSS
-  // transitions on cx, cy, r, x1/y1/x2/y2, fill-opacity, stroke-opacity.
-  const nodeTransition = converging
-    ? 'cx 0.7s cubic-bezier(0.4, 0, 0.7, 0.4), cy 0.7s cubic-bezier(0.4, 0, 0.7, 0.4), r 0.7s ease-in, fill-opacity 0.6s ease-in'
-    : '';
-  const linkTransition = converging
-    ? 'x1 0.7s cubic-bezier(0.4, 0, 0.7, 0.4), y1 0.7s cubic-bezier(0.4, 0, 0.7, 0.4), x2 0.7s cubic-bezier(0.4, 0, 0.7, 0.4), y2 0.7s cubic-bezier(0.4, 0, 0.7, 0.4), stroke-opacity 0.5s ease-in'
-    : 'stroke-opacity 1.1s ease-out';
-
   return (
     <Card>
-      <div className="relative h-[26rem] overflow-hidden bg-sap-bg">
-        {/* Ambient accent glow at centre. Fades during convergence. */}
-        <div
-          aria-hidden
-          className="absolute inset-0 pointer-events-none transition-opacity duration-500"
-          style={{
-            opacity: converging ? 0 : 1,
-            background:
-              'radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--color-sap-accent) 12%, transparent), transparent 60%)',
-          }}
-        />
-        {/* Faint dot grid backdrop. Also fades during convergence. */}
-        <div
-          aria-hidden
-          className="absolute inset-0 pointer-events-none transition-opacity duration-500"
-          style={{
-            opacity: converging ? 0 : 1,
-            backgroundImage:
-              'radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--color-sap-text) 4%, transparent) 1px, transparent 0)',
-            backgroundSize: '22px 22px',
-          }}
-        />
-
-        {/* The neuron. Full-width SVG (wider viewBox) so it reaches edge to
-            edge; floats vertically while streaming, halts during convergence. */}
-        <div className="absolute inset-0">
-          <svg
-            viewBox={`0 0 ${NEURAL_VIEWBOX.w} ${NEURAL_VIEWBOX.h}`}
-            preserveAspectRatio="xMidYMid meet"
-            className={`w-full h-full ${converging ? '' : 'animate-neural-float'}`}
-          >
-            {/* Dendrite connections. Stroke width tapers with depth (thick
-                near the soma, thin at terminals). Active links carry a
-                traveling signal pulse via stroke-dasharray animation. */}
-            {NEURAL_LINKS.map((c, i) => {
-              const a = NEURAL_NODES[c.from];
-              const b = NEURAL_NODES[c.to];
-              const active = phases[c.phase]?.done;
-              // Depth 1 = thickest; depth 4 (cross-links) = thinnest
-              const strokeW = c.depth === 4 ? 0.18 : Math.max(0.18, 0.55 - (c.depth - 1) * 0.13);
-              return (
-                <line
-                  key={`link-${i}`}
-                  x1={converging ? SOMA.x : a.x} y1={converging ? SOMA.y : a.y}
-                  x2={converging ? SOMA.x : b.x} y2={converging ? SOMA.y : b.y}
-                  stroke="var(--color-sap-accent)"
-                  strokeWidth={strokeW}
-                  strokeOpacity={converging ? 0 : (active ? 0.65 : 0.1)}
-                  strokeDasharray={active && !converging ? '1 11' : 'none'}
-                  strokeLinecap="round"
-                  className={active && !converging ? 'animate-neural-signal' : ''}
-                  style={{
-                    transition: linkTransition,
-                    animationDelay: `${(i % 7) * 170}ms`,
-                  }}
-                />
-              );
-            })}
-
-            {/* Sonar rings at the soma — only while streaming. */}
-            {!converging && (
-              <>
-                <circle cx={SOMA.x} cy={SOMA.y} r="3"
-                  fill="none" stroke="var(--color-sap-accent)" strokeWidth="0.25"
-                  className="animate-neural-ring"
-                />
-                <circle cx={SOMA.x} cy={SOMA.y} r="3"
-                  fill="none" stroke="var(--color-sap-accent)" strokeWidth="0.25"
-                  className="animate-neural-ring"
-                  style={{ animationDelay: '0.8s' }}
-                />
-              </>
-            )}
-
-            {/* Nodes. Bright only when their depth's phase has fired,
-                otherwise dim. Collapse to the soma during convergence. */}
-            {NEURAL_NODES.map((n, i) => {
-              // Soma is always bright; other nodes light up when the phase
-              // that wired up their parent link has completed.
-              const fired = n.depth === 0 || phases[Math.min(n.depth - 1, 3)]?.done;
-              return (
-                <circle
-                  key={`node-${i}`}
-                  cx={converging ? SOMA.x : n.x}
-                  cy={converging ? SOMA.y : n.y}
-                  r={converging ? 0.3 : n.r}
-                  fill="var(--color-sap-accent)"
-                  fillOpacity={converging ? 0 : (n.center ? 1 : (fired ? 0.85 : 0.25))}
-                  className={converging ? '' : (fired ? 'animate-neural-blip' : '')}
-                  style={{
-                    transition: nodeTransition,
-                    animationDelay: `${n.delay}ms`,
-                  }}
-                />
-              );
-            })}
-
-            {/* Convergence flare at the soma. Bursts outward then dies. */}
-            {converging && (
-              <circle
-                cx={SOMA.x} cy={SOMA.y} r="0"
-                fill="var(--color-sap-accent)"
-                fillOpacity="0"
-                className="animate-neural-flare"
-              />
-            )}
-          </svg>
+      <div className="px-4 py-3">
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <span className="relative flex h-2 w-2 shrink-0" aria-hidden>
+            <span className="absolute inline-flex h-full w-full rounded-full bg-sap-accent opacity-40 animate-ping" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-sap-accent" />
+          </span>
+          <p className="text-13 font-medium text-sap-text">
+            {current.label}<span className="text-sap-dim">…</span>
+          </p>
+          <span className="ml-auto text-11 tabular-nums text-sap-muted">
+            {doneCount}/{phases.length}
+          </span>
         </div>
-
-        {/* Phase + progress footer. Fades during convergence. */}
-        <div
-          className="absolute bottom-0 left-0 right-0 px-4 pt-8 pb-3 transition-opacity duration-300"
-          style={{
-            opacity: converging ? 0 : 1,
-            background: 'linear-gradient(to top, var(--color-sap-bg) 40%, transparent)',
-          }}
-        >
-          <div className="flex items-center gap-2.5 mb-2">
-            <span className="relative flex h-2 w-2 shrink-0" aria-hidden>
-              <span className="absolute inline-flex h-full w-full rounded-full bg-sap-accent opacity-40 animate-ping" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-sap-accent" />
-            </span>
-            <p className="text-13 font-medium text-sap-text">
-              {current.label}<span className="text-sap-dim">…</span>
-            </p>
-            <span className="ml-auto text-11 tabular-nums text-sap-muted">
-              {doneCount}/{phases.length}
-            </span>
-          </div>
-          <div className="h-1 rounded-full bg-sap-panel overflow-hidden">
-            <div
-              className="h-full bg-sap-accent rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
+        <div className="h-1 rounded-full bg-sap-panel overflow-hidden">
+          <div
+            className="h-full bg-sap-accent rounded-full transition-all duration-500 ease-out"
+            style={{ width: `${pct}%` }}
+          />
         </div>
       </div>
     </Card>
@@ -617,10 +364,8 @@ export default function ReportView({
 
   return (
     <div className="animate-fade-in space-y-4">
-      {/* Loading state — sci-fi neural-network animation while the SSE
-          stream is in flight. Unmounts when loading flips false; the
-          subject identity then materialises via SubjectProfile. */}
-      <NeuralLoader
+      {/* Loading state — slim progress card with phase label + bar. */}
+      <ReportProgress
         loading={loading}
         results={results}
         ftiMeta={ftiMeta}

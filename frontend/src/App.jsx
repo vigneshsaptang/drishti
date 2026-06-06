@@ -155,9 +155,8 @@ export default function App() {
     }
 
     // While loading without results: fall through to the active tab — the
-    // NeuralLoader inside ReportView fills the empty space with the
-    // sci-fi loading animation; Evidence/Tools render with their own
-    // empty/loading states.
+    // ReportProgress card inside ReportView shows the streaming phase;
+    // Evidence/Tools render with their own empty/loading states.
     if (!hasResults && !loading) return <DashboardIdle />;
 
     if (activeTab === 'evidence') {

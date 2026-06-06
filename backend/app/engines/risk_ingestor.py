@@ -120,6 +120,21 @@ _SENSITIVE_BREACH = re.compile(
 )
 
 
+def _as_str_lower(v) -> str:
+    """Coerce a worldcheck/MCA field to a lowercased string.
+
+    World-check records contain mixed shapes for the same field — keywords
+    and category arrive as either a string or a list of strings depending on
+    the upstream feed. This keeps callers from crashing on .lower() when the
+    value happens to be a list.
+    """
+    if v is None:
+        return ""
+    if isinstance(v, list):
+        return " ".join(str(x) for x in v if x).lower()
+    return str(v).lower()
+
+
 def _is_plaintext(val: str) -> bool:
     if not val or len(val) > 30:
         return False
@@ -522,13 +537,12 @@ def _derive_fti_factors(fti_results: list[dict], canonical_name: str | None, fac
         }
         for hit in wc_hits:
             for result in hit.get("results", []):
-                list_type = (
+                list_type = _as_str_lower(
                     result.get("list_type")
                     or result.get("category")
                     or result.get("EXTRA_DATA", {}).get("category")
-                    or ""
-                ).lower()
-                keywords = (result.get("EXTRA_DATA", {}).get("keywords") or "").lower()
+                )
+                keywords = _as_str_lower(result.get("EXTRA_DATA", {}).get("keywords"))
                 combined_wc = list_type + " " + keywords
 
                 if "pep" in combined_wc or "political" in combined_wc:
@@ -555,7 +569,7 @@ def _derive_fti_factors(fti_results: list[dict], canonical_name: str | None, fac
                             "count": len(linked_list),
                         })
 
-                country = (result.get("country") or "").strip().lower()
+                country = _as_str_lower(result.get("country")).strip()
                 if country and country in _HIGH_RISK_COUNTRIES:
                     factors.setdefault("HighRiskCountryNexus", {
                         "factor_id": "HighRiskCountryNexus",

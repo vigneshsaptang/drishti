@@ -211,6 +211,14 @@ export function useSearchV2() {
                   setRiskScore(parsed);
                   break;
 
+                case 'profile:ready':
+                  // Early profile emit — backend ships this right after
+                  // CREDMON, before screening engines run, so the report
+                  // shows subject identity without waiting on screening.
+                  if (parsed.profile) setProfile(parsed.profile);
+                  if (parsed.canonical_location) setCanonicalLocation(parsed.canonical_location);
+                  break;
+
                 case 'summary':
                   setAiSummary(parsed.text || null);
                   if (parsed.profile) setProfile(parsed.profile);

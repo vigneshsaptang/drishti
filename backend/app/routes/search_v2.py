@@ -148,6 +148,23 @@ def _extract_fullnames(results: list[dict]) -> list[str]:
     return list(seen)[:10]
 
 
+def _build_profile_payload(all_results: list[dict]) -> dict:
+    """Compute the profile + canonical_location pair from current results.
+
+    Used both for the early ``profile:ready`` SSE event (emitted right after
+    CREDMON so the report's Subject section appears before screening engines
+    run) and for the final ``summary`` event.
+    """
+    profile = categorizer_extract_profile(all_results)
+    profile["source_count"] = sum(len(r.get("sources", [])) for r in all_results if r.get("found"))
+    profile["total_entities"] = len(all_results)
+    profile["total_found"] = sum(1 for r in all_results if r.get("found"))
+    if "dobs" not in profile:
+        profile["dobs"] = profile.get("dob", [])
+    canonical_location = geo.resolve_canonical_location(all_results)
+    return {"profile": profile, "canonical_location": canonical_location}
+
+
 def _format_canonical_location_str(loc: dict | None) -> str | None:
     """Render a canonical_location dict as 'City, State' / 'District, State' / 'State'.
 
@@ -645,6 +662,12 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
                     "data": _dumps(result),
                 }
 
+            # Emit subject profile + canonical location early — before the
+            # screening engines run — so the report surfaces the subject
+            # identity as soon as breach data is in, instead of waiting on
+            # FTI/darkmon/financial.
+            yield {"event": "profile:ready", "data": _dumps(_build_profile_payload(all_results))}
+
             def _run_parallel():
                 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
                     f_fti = executor.submit(_run_fti_and_financial, engines, all_results, seeds_dicts)
@@ -709,6 +732,9 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
                 total_entities_searched += 1
                 yield {"event": "entity:result", "data": _dumps(result)}
 
+            # Early profile emit — see phone/email tier above.
+            yield {"event": "profile:ready", "data": _dumps(_build_profile_payload(all_results))}
+
             if "darkweb" in engines:
                 dm_result = await asyncio.to_thread(_run_darkmon_direct, seeds_dicts[0]["value"])
                 for evt in dm_result["events"]:
@@ -743,17 +769,11 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
             yield {"event": "darkmon:complete", "data": _dumps({"total_usernames_searched": 0, "total_matches": 0, "total_time_ms": 0, "skipped": True, "reason": "fullname_search"})}
             yield {"event": "financial:complete", "data": _dumps({"total_phones_screened": 0, "total_upi_hits": 0, "total_time_ms": 0, "skipped": True, "reason": "fullname_search"})}
 
-        # 8. Programmatic summary
-        profile = categorizer_extract_profile(all_results)
-        # Surface counts used by the programmatic summary generator (it reads
-        # source_count, total_entities, total_found from the profile dict).
-        profile["source_count"] = sum(len(r.get("sources", [])) for r in all_results if r.get("found"))
-        profile["total_entities"] = len(all_results)
-        profile["total_found"] = sum(1 for r in all_results if r.get("found"))
-        # Backward compat: programmatic summary code reads "dobs" (plural).
-        if "dobs" not in profile:
-            profile["dobs"] = profile.get("dob", [])
-        canonical_location = geo.resolve_canonical_location(all_results)
+        # 8. Programmatic summary — reuse the same helper that built the
+        # early profile:ready event so frontend sees a consistent payload.
+        _profile_payload = _build_profile_payload(all_results)
+        profile = _profile_payload["profile"]
+        canonical_location = _profile_payload["canonical_location"]
 
         # Apply the canonical-name token filter to FTI hits before counting, so
         # the programmatic summary agrees with FtiScreening + deriveAlerts on

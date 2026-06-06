@@ -3,7 +3,6 @@ import { useState, useCallback, useMemo, lazy, Suspense } from 'react';
 // Keep static: shell components always visible
 import Header from './components/Header';
 import CommandBar from './components/CommandBar';
-import StatusLine from './components/StatusLine';
 import ClassificationBanner from './components/ClassificationBanner';
 import TabStrip from './components/TabStrip';
 import DashboardIdle from './components/DashboardIdle';
@@ -68,18 +67,6 @@ function LazyFallback() {
     <div className="flex items-center justify-center p-12">
       <div className="h-2 w-2 rounded-full bg-sap-accent animate-pulse" />
       <span className="ml-3 text-xs font-mono text-sap-dim">Loading module...</span>
-    </div>
-  );
-}
-
-function ScannerWait() {
-  return (
-    <div className="rounded-lg border border-sap-accent/25 p-8 max-w-xl">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="h-2 w-2 rounded-full bg-sap-accent shadow-[0_0_8px_#4f46e5] animate-pulse" />
-        <h2 className="text-sm font-mono uppercase tracking-widest text-sap-accent">Subscribing to stream</h2>
-      </div>
-      <p className="text-sm text-sap-dim">Engines are handshaking. Results will appear as they arrive...</p>
     </div>
   );
 }
@@ -167,7 +154,10 @@ export default function App() {
       );
     }
 
-    if (loading && !hasResults) return <ScannerWait />;
+    // While loading without results: fall through to the active tab — the
+    // NeuralLoader inside ReportView fills the empty space with the
+    // sci-fi loading animation; Evidence/Tools render with their own
+    // empty/loading states.
     if (!hasResults && !loading) return <DashboardIdle />;
 
     if (activeTab === 'evidence') {
@@ -240,7 +230,6 @@ export default function App() {
           collapsed={hasResults}
           activeSeeds={searchMeta?.seeds ?? []}
         />
-        <StatusLine visible={loading} results={results} searchMeta={searchMeta} />
       </div>
       <TabStrip
         activeTab={activeTab}

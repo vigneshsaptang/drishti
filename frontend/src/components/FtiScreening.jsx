@@ -55,7 +55,7 @@ function parseFurtherInfo(s) {
 
 /**
  * Render worldcheck keywords (array of {keyword, source_name, keyword_type} objects)
- * as colored pills. Each pill's tooltip carries source_name; color comes from keyword_type.
+ * as compact neutral pills. Tooltip carries source_name and type for analyst inspection.
  */
 function KeywordPills({ keywords }) {
   const list = (Array.isArray(keywords) ? keywords : []).filter(
@@ -63,14 +63,14 @@ function KeywordPills({ keywords }) {
   );
   if (list.length === 0) return null;
 
-  const colorFor = (kt) => {
+  const toneFor = (kt) => {
     const t = (kt || '').toUpperCase();
-    if (t.includes('SANCTION'))            return 'bg-rose-500/15 text-rose-700 border-rose-500/40';
-    if (t.includes('LAW ENFORCEMENT'))     return 'bg-rose-500/15 text-rose-700 border-rose-500/40';
-    if (t.includes('REGULATORY'))          return 'bg-amber-500/15 text-amber-700 border-amber-500/40';
-    if (t.includes('PEP'))                 return 'bg-purple-500/15 text-purple-700 border-purple-500/40';
-    if (t.includes('ADVERSE'))             return 'bg-rose-400/15 text-rose-700 border-rose-400/40';
-    return 'bg-sap-panel text-sap-dim border-sap-border';
+    if (t.includes('SANCTION'))        return 'bg-sap-danger-soft text-sap-danger border-sap-danger/30';
+    if (t.includes('LAW ENFORCEMENT')) return 'bg-sap-danger-soft text-sap-danger border-sap-danger/30';
+    if (t.includes('REGULATORY'))      return 'bg-sap-warning-soft text-sap-warning border-sap-warning-filled/30';
+    if (t.includes('PEP'))             return 'bg-sap-warning-soft text-sap-warning border-sap-warning-filled/30';
+    if (t.includes('ADVERSE'))         return 'bg-sap-danger-soft text-sap-danger border-sap-danger/30';
+    return 'bg-sap-panel text-sap-dim border-sap-border-light';
   };
 
   return (
@@ -79,13 +79,13 @@ function KeywordPills({ keywords }) {
         <span
           key={i}
           title={`${asText(k.source_name) || asText(k.keyword)} · ${asText(k.keyword_type) || 'flag'}`}
-          className={`px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border ${colorFor(k.keyword_type)}`}
+          className={`inline-flex items-center px-1.5 h-5 rounded text-11 font-medium border ${toneFor(k.keyword_type)}`}
         >
-          {asText(k.keyword)}
+          <span className="font-mono">{asText(k.keyword)}</span>
         </span>
       ))}
       {list.length > 8 && (
-        <span className="text-[10px] font-mono text-sap-muted self-center">+{list.length - 8} more</span>
+        <span className="text-11 text-sap-muted self-center">+{list.length - 8} more</span>
       )}
     </div>
   );
@@ -102,8 +102,8 @@ function FurtherInfoSection({ text }) {
 
   const tone = {
     BIOGRAPHY:      'text-sap-dim',
-    IDENTIFICATION: 'text-amber-700',
-    REPORTS:        'text-rose-700',
+    IDENTIFICATION: 'text-sap-warning',
+    REPORTS:        'text-sap-danger',
   };
 
   return (
@@ -111,11 +111,11 @@ function FurtherInfoSection({ text }) {
       {sections.map((s, i) => {
         const long = s.body.length > 220 && !expanded;
         return (
-          <div key={i} className="text-[11px] leading-relaxed">
-            <span className={`font-mono font-bold uppercase tracking-[0.16em] text-[9px] ${tone[s.label] || 'text-sap-muted'}`}>
-              {s.label}
+          <div key={i} className="text-12 leading-relaxed">
+            <span className={`text-11 font-semibold tracking-tight ${tone[s.label] || 'text-sap-muted'}`}>
+              {s.label.charAt(0) + s.label.slice(1).toLowerCase()}
             </span>
-            <span className="text-sap-text font-mono ml-2">
+            <span className="text-sap-text ml-2">
               {long ? s.body.slice(0, 220) + '…' : s.body}
             </span>
           </div>
@@ -125,8 +125,8 @@ function FurtherInfoSection({ text }) {
         <button
           type="button"
           onClick={() => setExpanded(e => !e)}
-          className="text-[10px] font-mono uppercase tracking-[0.16em] text-sap-muted hover:text-sap-text"
-        >{expanded ? '▼ less' : '▶ more'}</button>
+          className="text-11 text-sap-dim hover:text-sap-text transition-colors"
+        >{expanded ? 'Show less' : 'Show more'}</button>
       )}
     </div>
   );
@@ -139,16 +139,16 @@ function FurtherInfoSection({ text }) {
 function RawRecord({ record }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="mt-2 border-t border-sap-border/40 pt-2">
+    <div className="mt-2 border-t border-sap-border-light pt-2">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="text-[10px] font-mono uppercase tracking-[0.16em] text-sap-muted hover:text-sap-text transition-colors"
+        className="text-11 text-sap-dim hover:text-sap-text transition-colors"
       >
-        {open ? '▼ raw record' : '▶ raw record'}
+        {open ? 'Hide raw record' : 'Show raw record'}
       </button>
       {open && (
-        <pre className="mt-1.5 px-2 py-1.5 rounded-sm bg-sap-panel/80 border border-sap-border text-[10px] font-mono text-sap-dim leading-relaxed whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
+        <pre className="mt-1.5 px-2 py-1.5 rounded bg-sap-panel border border-sap-border-light text-11 font-mono text-sap-dim leading-relaxed whitespace-pre-wrap break-all max-h-64 overflow-y-auto">
           {JSON.stringify(record, null, 2)}
         </pre>
       )}
@@ -168,19 +168,19 @@ function ShieldIcon({ className }) {
 }
 
 /**
- * Badge showing MATCH (red) or CLEAR (green).
+ * Badge showing Match (danger) or Clear (success).
  */
 function StatusBadge({ found }) {
   if (found) {
     return (
-      <span className="px-2 py-0.5 rounded text-xs font-bold bg-entity-watchlist text-white">
-        MATCH
+      <span className="inline-flex items-center px-2 h-5 rounded text-11 font-semibold bg-sap-danger-filled text-white">
+        Match
       </span>
     );
   }
   return (
-    <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/20 text-emerald-500">
-      CLEAR
+    <span className="inline-flex items-center px-2 h-5 rounded text-11 font-semibold bg-sap-success-soft text-sap-success">
+      Clear
     </span>
   );
 }
@@ -192,10 +192,10 @@ function ScoreChip({ score }) {
   if (score == null) return null;
   const s = Number(score);
   let color = 'text-sap-dim bg-sap-panel';
-  if (s >= 7) color = 'text-entity-watchlist bg-entity-watchlist/10';
-  else if (s >= 4) color = 'text-entity-breach bg-entity-breach/10';
+  if (s >= 7) color = 'text-sap-danger bg-sap-danger-soft';
+  else if (s >= 4) color = 'text-sap-warning bg-sap-warning-soft';
   return (
-    <span className={`px-1.5 py-0.5 rounded text-xs font-mono font-semibold ${color}`}>
+    <span className={`inline-flex items-center px-1.5 h-5 rounded text-11 font-semibold tabular-nums ${color}`}>
       {s.toFixed(1)}
     </span>
   );
@@ -300,28 +300,28 @@ function McaCompanyBlock({ name }) {
   }, [name]);
 
   return (
-    <div className="mt-2 border border-sap-border/60 rounded-sm bg-sap-bg/60 px-2.5 py-2 text-[11px] font-mono">
+    <div className="mt-2 border border-sap-border-light rounded bg-sap-bg px-2.5 py-2 text-12">
       {/* Company label row */}
       <div className="flex items-center gap-1.5 mb-1">
-        <span className="text-[9px] uppercase tracking-[0.18em] text-sap-muted font-semibold">Company</span>
+        <span className="text-11 text-sap-muted font-medium">Company</span>
         <span className="text-sap-text font-semibold truncate">{name}</span>
       </div>
 
       {state === 'loading' && (
         <div className="flex items-center gap-1.5 py-1">
           {/* Shimmer row */}
-          <div className="h-2 bg-sap-border/60 rounded animate-pulse w-32" />
-          <div className="h-2 bg-sap-border/60 rounded animate-pulse w-20" />
+          <div className="h-2 bg-sap-border-light rounded animate-pulse w-32" />
+          <div className="h-2 bg-sap-border-light rounded animate-pulse w-20" />
         </div>
       )}
 
       {state === 'found' && data && (
         <>
-          <div className="text-sap-accent text-[10px] uppercase tracking-[0.14em] font-semibold mb-1">
-            ✓ Matched in MCA registry
+          <div className="text-sap-accent text-11 font-semibold mb-1">
+            Matched in MCA registry
           </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-            <div><span className="text-sap-muted">CIN</span> <span className="text-sap-text">{data.cin || '—'}</span></div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-12">
+            <div><span className="text-sap-muted">CIN</span> <span className="text-sap-text font-mono">{data.cin || '—'}</span></div>
             <div><span className="text-sap-muted">Status</span> <span className="text-sap-text">{data.company_status || '—'}</span></div>
             <div><span className="text-sap-muted">Incorporated</span> <span className="text-sap-text tabular-nums">{fmtDate(data.incorporation_date)}</span></div>
             <div><span className="text-sap-muted">Industry</span> <span className="text-sap-text">{data.industry || '—'}</span></div>
@@ -333,13 +333,13 @@ function McaCompanyBlock({ name }) {
       )}
 
       {state === 'notfound' && (
-        <div className="text-amber-700 text-[10px]">
-          ⚠ Not found in MCA registry &mdash; may be deregistered or a naming variant
+        <div className="text-sap-warning text-11">
+          Not found in MCA registry &mdash; may be deregistered or a naming variant
         </div>
       )}
 
       {state === 'error' && (
-        <div className="text-sap-muted text-[10px]">MCA registry lookup unavailable</div>
+        <div className="text-sap-muted text-11">MCA registry lookup unavailable</div>
       )}
     </div>
   );
@@ -352,9 +352,9 @@ function McaCompanyBlock({ name }) {
 function McaEnrichment({ companies }) {
   if (!companies || companies.length === 0) return null;
   return (
-    <div className="mt-3 border-t border-sap-border/40 pt-2.5">
-      <div className="text-[9px] uppercase tracking-[0.18em] text-sap-muted font-semibold mb-1.5">
-        MCA Registry Enrichment
+    <div className="mt-3 border-t border-sap-border-light pt-2.5">
+      <div className="text-11 text-sap-muted font-semibold mb-1.5">
+        MCA registry enrichment
       </div>
       <div className="space-y-1.5">
         {companies.map((name, i) => (
@@ -377,24 +377,24 @@ function CrimedataCard({ result, index }) {
 
   return (
     <div
-      className="bg-sap-panel/50 border border-sap-border rounded-md p-3 animate-slide-up"
+      className="bg-sap-panel/60 border border-sap-border-light rounded-md p-3 animate-slide-up"
       style={{ animationDelay: `${index * 60}ms`, animationFillMode: 'both' }}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 min-w-0">
           <StatusBadge found={true} />
-          <span className="text-sm font-semibold text-sap-text truncate" title={recordName || entityText}>
+          <span className="text-13 font-semibold text-sap-text truncate" title={recordName || entityText}>
             {recordName || entityText || '—'}
           </span>
         </div>
         <ScoreChip score={result.score} />
       </div>
       {entityText && recordName && entityText.toLowerCase() !== recordName.toLowerCase() && (
-        <p className="text-[11px] font-mono text-sap-dim mb-1.5">
-          <span className="text-sap-muted">Matched search term:</span> <span className="text-sap-text">{entityText}</span>
+        <p className="text-12 text-sap-dim mb-1.5">
+          <span className="text-sap-muted">Matched search term:</span> <span className="text-sap-text font-mono">{entityText}</span>
         </p>
       )}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1 text-xs font-mono">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1 text-12">
         {src.category != null && (
           <div><span className="text-sap-muted">Category</span> <span className="text-sap-text font-medium">{asText(src.category)}</span></div>
         )}
@@ -409,18 +409,18 @@ function CrimedataCard({ result, index }) {
         )}
       </div>
       {(detail.linked_to || detail.address || detail.passport_id || detail.national_id) && (
-        <div className="mt-2 grid grid-cols-1 gap-y-0.5 text-[11px] font-mono">
+        <div className="mt-2 grid grid-cols-1 gap-y-0.5 text-12">
           {detail.linked_to && (
-            <div><span className="text-sap-muted uppercase tracking-[0.14em] text-[9px] mr-2">Linked to</span><span className="text-sap-text">{asText(detail.linked_to)}</span></div>
+            <div><span className="text-sap-muted mr-2">Linked to</span><span className="text-sap-text">{asText(detail.linked_to)}</span></div>
           )}
           {detail.address && (
-            <div><span className="text-sap-muted uppercase tracking-[0.14em] text-[9px] mr-2">Address</span><span className="text-sap-text">{asText(detail.address)}</span></div>
+            <div><span className="text-sap-muted mr-2">Address</span><span className="text-sap-text">{asText(detail.address)}</span></div>
           )}
           {detail.passport_id && (
-            <div><span className="text-sap-muted uppercase tracking-[0.14em] text-[9px] mr-2">Passport</span><span className="text-sap-text">{asText(detail.passport_id)}</span></div>
+            <div><span className="text-sap-muted mr-2">Passport</span><span className="text-sap-text font-mono">{asText(detail.passport_id)}</span></div>
           )}
           {detail.national_id && (
-            <div><span className="text-sap-muted uppercase tracking-[0.14em] text-[9px] mr-2">National ID</span><span className="text-sap-text">{asText(detail.national_id)}</span></div>
+            <div><span className="text-sap-muted mr-2">National ID</span><span className="text-sap-text font-mono">{asText(detail.national_id)}</span></div>
           )}
         </div>
       )}
@@ -451,14 +451,14 @@ function WorldcheckCard({ result, index }) {
 
   return (
     <div
-      className="bg-sap-panel/50 border border-sap-border rounded-md p-3 animate-slide-up"
+      className="bg-sap-panel/60 border border-sap-border-light rounded-md p-3 animate-slide-up"
       style={{ animationDelay: `${index * 60}ms`, animationFillMode: 'both' }}
     >
       {/* Header: name + score */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 min-w-0">
           <StatusBadge found={true} />
-          <span className="text-sm font-semibold text-sap-text truncate" title={headlineName}>
+          <span className="text-13 font-semibold text-sap-text truncate" title={headlineName}>
             {headlineName || '—'}
           </span>
         </div>
@@ -467,13 +467,13 @@ function WorldcheckCard({ result, index }) {
 
       {/* "Matched against your search term" indicator */}
       {entityText && primaryText && entityText !== primaryText && (
-        <p className="text-[11px] font-mono text-sap-dim mb-1.5">
-          <span className="text-sap-muted">Matched search term:</span> <span className="text-sap-text">{entityText}</span>
+        <p className="text-12 text-sap-dim mb-1.5">
+          <span className="text-sap-muted">Matched search term:</span> <span className="text-sap-text font-mono">{entityText}</span>
         </p>
       )}
 
       {/* Compact metadata grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1 text-xs font-mono">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1 text-12">
         {extra.category != null && (
           <div><span className="text-sap-muted">Category</span> <span className="text-sap-text font-medium">{asText(extra.category)}</span></div>
         )}
@@ -490,16 +490,16 @@ function WorldcheckCard({ result, index }) {
 
       {/* Aliases */}
       {aliases.length > 0 && (
-        <p className="mt-2 text-[11px] font-mono">
-          <span className="text-sap-muted uppercase tracking-[0.14em] text-[9px] mr-2">Aliases</span>
+        <p className="mt-2 text-12">
+          <span className="text-sap-muted mr-2">Aliases</span>
           <span className="text-sap-text">{aliases.join(' · ')}</span>
         </p>
       )}
 
       {/* Linked entities */}
       {linkedTo.length > 0 && (
-        <p className="mt-1 text-[11px] font-mono">
-          <span className="text-sap-muted uppercase tracking-[0.14em] text-[9px] mr-2">Linked</span>
+        <p className="mt-1 text-12">
+          <span className="text-sap-muted mr-2">Linked</span>
           <span className="text-sap-text">{linkedTo.join(' · ')}</span>
         </p>
       )}
@@ -523,15 +523,15 @@ function WorldcheckCard({ result, index }) {
 function ClearSection({ label, muted }) {
   if (muted) {
     return (
-      <div className="flex items-center gap-2 py-4 px-3 bg-sap-panel/30 border border-sap-border/50 rounded-md">
-        <span className="text-sm text-sap-muted">No {label} matches</span>
+      <div className="flex items-center gap-2 py-3 px-3 bg-sap-panel/40 border border-sap-border-light rounded-md">
+        <span className="text-12 text-sap-muted">No {label} matches</span>
       </div>
     );
   }
   return (
-    <div className="flex items-center gap-2 py-4 px-3 bg-emerald-500/5 border border-emerald-500/20 rounded-md">
-      <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/20 text-emerald-500">CLEAR</span>
-      <span className="text-sm text-emerald-600">No {label} matches found</span>
+    <div className="flex items-center gap-2 py-3 px-3 bg-sap-success-soft border border-sap-success/20 rounded-md">
+      <span className="inline-flex items-center px-2 h-5 rounded text-11 font-semibold bg-sap-success-filled text-white">Clear</span>
+      <span className="text-12 text-sap-success">No {label} matches found</span>
     </div>
   );
 }
@@ -620,27 +620,27 @@ export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTo
   const progressText = isComplete
     ? `${totalScreened} name${totalScreened !== 1 ? 's' : ''} screened`
     : loading
-      ? `${ftiResults.length} name${ftiResults.length !== 1 ? 's' : ''} screened...`
+      ? `${ftiResults.length} name${ftiResults.length !== 1 ? 's' : ''} screened…`
       : `${ftiResults.length} name${ftiResults.length !== 1 ? 's' : ''} screened`;
 
   // Visible total for the summary badge (after filtering)
   const visibleTotal = crimedataMatches.length + worldcheckMatches.length;
 
   return (
-    <div className="rounded-lg border border-sap-border bg-sap-surface shadow-sm overflow-hidden mb-5 animate-fade-in">
+    <div className="rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden animate-fade-in">
       {/* Header */}
-      <div className="px-5 py-3.5 bg-sap-panel/50 border-b border-sap-border flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-entity-watchlist/10 border border-entity-watchlist/20 flex items-center justify-center">
+      <div className="px-4 py-2.5 border-b border-sap-border-light flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-7 w-7 rounded-full bg-sap-danger-soft border border-sap-danger/20 flex items-center justify-center shrink-0">
             {loading && !isComplete ? (
-              <div className="h-4 w-4 rounded-full border-2 border-entity-watchlist/30 border-t-entity-watchlist animate-spin" />
+              <div className="h-3.5 w-3.5 rounded-full border-2 border-sap-danger/30 border-t-sap-danger animate-spin" />
             ) : (
-              <ShieldIcon className="w-4.5 h-4.5 text-entity-watchlist" />
+              <ShieldIcon className="w-3.5 h-3.5 text-sap-danger" />
             )}
           </div>
-          <div>
-            <h3 className="text-sm font-semibold text-sap-text">Watchlist Screening</h3>
-            <p className="text-xs font-mono text-sap-muted">
+          <div className="min-w-0">
+            <h3 className="text-12 font-semibold tracking-tight text-sap-text">Watchlist screening</h3>
+            <p className="text-11 text-sap-muted">
               {loading && !isComplete
                 ? <span className="animate-scan">{progressText}</span>
                 : <span>{progressText}</span>
@@ -652,12 +652,12 @@ export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTo
         {isComplete && (
           <div className="flex items-center gap-2">
             {visibleTotal > 0 ? (
-              <span className="px-2 py-0.5 rounded text-xs font-bold bg-entity-watchlist text-white">
-                {visibleTotal} MATCH{visibleTotal !== 1 ? 'ES' : ''}
+              <span className="inline-flex items-center px-2 h-6 rounded-md text-11 font-semibold bg-sap-danger-filled text-white tabular-nums">
+                {visibleTotal} match{visibleTotal !== 1 ? 'es' : ''}
               </span>
             ) : (
-              <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/20 text-emerald-500">
-                ALL CLEAR
+              <span className="inline-flex items-center px-2 h-6 rounded-md text-11 font-semibold bg-sap-success-soft text-sap-success">
+                All clear
               </span>
             )}
           </div>
@@ -667,57 +667,57 @@ export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTo
       {/* Filter status — ALWAYS visible when there are matches, so the operator
           can never be silently looking at unfiltered noise. Three states:
             (a) tokens present + filter ON  → muted, "Filtered to subject"
-            (b) tokens present + filter OFF → amber warning, can re-engage
-            (c) tokens missing (canonical didn't resolve) → amber warning, no toggle */}
+            (b) tokens present + filter OFF → warning, can re-engage
+            (c) tokens missing (canonical didn't resolve) → warning, no toggle */}
       {totalAllMatches > 0 && (
-        <div className={`px-5 py-2 border-b border-sap-border flex items-center gap-2 text-[11px] font-mono ${
-          tokens.length === 0 || !filterToCanonical ? 'bg-amber-500/5' : 'bg-sap-bg/60'
+        <div className={`px-4 py-2 border-b border-sap-border-light flex items-center gap-2 text-12 ${
+          tokens.length === 0 || !filterToCanonical ? 'bg-sap-warning-soft' : 'bg-sap-bg'
         }`}>
           {tokens.length === 0 ? (
             <>
-              <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-              <span className="text-amber-700 font-semibold">No subject identified</span>
+              <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-sap-warning-filled" />
+              <span className="text-sap-warning font-semibold">No subject identified</span>
               <span className="text-sap-muted">· filter inactive — every namesake hit is shown ({totalAllMatches} total)</span>
             </>
           ) : filterToCanonical ? (
             <>
-              <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-sap-success-filled" />
               <span className="text-sap-muted">Filtered to subject</span>
-              <span className="text-sap-text font-semibold">"{canonicalName || tokens.join(' ')}"</span>
+              <span className="text-sap-text font-semibold">&ldquo;{canonicalName || tokens.join(' ')}&rdquo;</span>
               <span className="text-sap-muted">
                 · {hiddenCount > 0 ? `${hiddenCount} namesake hit${hiddenCount === 1 ? '' : 's'} hidden` : 'all results match subject'}
               </span>
               <button
                 type="button"
                 onClick={() => setFilterToCanonical(false)}
-                className="ml-auto text-sap-accent hover:underline uppercase tracking-[0.16em] text-[10px]"
+                className="ml-auto text-11 text-sap-accent hover:underline"
               >Show all</button>
             </>
           ) : (
             <>
-              <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-              <span className="text-amber-700 font-semibold">Showing namesake matches too</span>
+              <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-sap-warning-filled" />
+              <span className="text-sap-warning font-semibold">Showing namesake matches too</span>
               <span className="text-sap-muted">· filter disabled by operator</span>
               <button
                 type="button"
                 onClick={() => setFilterToCanonical(true)}
-                className="ml-auto text-sap-accent hover:underline uppercase tracking-[0.16em] text-[10px]"
-              >Filter to "{canonicalName || tokens.join(' ')}"</button>
+                className="ml-auto text-11 text-sap-accent hover:underline"
+              >Filter to &ldquo;{canonicalName || tokens.join(' ')}&rdquo;</button>
             </>
           )}
         </div>
       )}
 
       {/* Two-column body */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-sap-border/50">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-sap-border-light">
         {/* Crime Database section */}
         <div className="bg-sap-surface p-4">
           <div className="flex items-center gap-2 mb-3">
-            <svg className="w-4 h-4 text-entity-watchlist" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 text-sap-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
-            <h4 className="text-xs font-mono uppercase tracking-widest text-sap-dim font-semibold">Crime Database</h4>
-            <span className="text-xs font-mono text-sap-muted ml-auto">
+            <h4 className="text-12 font-semibold tracking-tight text-sap-text">Crime database</h4>
+            <span className="text-11 text-sap-muted ml-auto tabular-nums">
               {crimedataMatches.length} hit{crimedataMatches.length !== 1 ? 's' : ''}
             </span>
           </div>
@@ -736,11 +736,11 @@ export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTo
         {/* Sanctions & PEP section */}
         <div className="bg-sap-surface p-4">
           <div className="flex items-center gap-2 mb-3">
-            <svg className="w-4 h-4 text-entity-watchlist" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 text-sap-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
             </svg>
-            <h4 className="text-xs font-mono uppercase tracking-widest text-sap-dim font-semibold">Sanctions & PEP</h4>
-            <span className="text-xs font-mono text-sap-muted ml-auto">
+            <h4 className="text-12 font-semibold tracking-tight text-sap-text">Sanctions &amp; PEP</h4>
+            <span className="text-11 text-sap-muted ml-auto tabular-nums">
               {worldcheckMatches.length} hit{worldcheckMatches.length !== 1 ? 's' : ''}
             </span>
           </div>
@@ -759,7 +759,7 @@ export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTo
 
       {/* Footer timing */}
       {ftiMeta?.total_time_ms != null && (
-        <div className="px-5 py-2 bg-sap-panel/30 border-t border-sap-border/50 text-xs font-mono text-sap-muted text-right">
+        <div className="px-4 py-2 bg-sap-panel/40 border-t border-sap-border-light text-11 text-sap-muted text-right tabular-nums">
           Screening completed in {ftiMeta.total_time_ms}ms
         </div>
       )}
@@ -772,9 +772,9 @@ export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTo
  */
 function ScanningPlaceholder() {
   return (
-    <div className="flex items-center gap-2 py-4 px-3 bg-sap-panel/30 border border-sap-border/50 rounded-md">
+    <div className="flex items-center gap-2 py-3 px-3 bg-sap-panel/40 border border-sap-border-light rounded-md">
       <div className="h-3 w-3 rounded-full border-2 border-sap-muted/30 border-t-sap-muted animate-spin" />
-      <span className="text-xs font-mono text-sap-muted animate-scan">Scanning watchlists...</span>
+      <span className="text-12 text-sap-muted animate-scan">Scanning watchlists…</span>
     </div>
   );
 }

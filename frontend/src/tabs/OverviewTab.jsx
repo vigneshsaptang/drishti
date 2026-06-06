@@ -18,26 +18,26 @@ export default function OverviewTab({ data, results }) {
 
 function DigitalFootprint({ services, criticalCount, highCount }) {
   return (
-    <div className="rounded-lg border border-sap-border bg-sap-surface shadow-sm overflow-hidden">
-      <div className="px-5 py-3 border-b border-sap-border flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h3 className="text-xs font-mono tracking-widest text-sap-dim uppercase font-semibold">Digital Footprint</h3>
-          <span className="text-xs font-mono text-sap-muted">{services.length} services identified</span>
+    <div className="rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-sap-border-light flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <h3 className="text-12 font-semibold tracking-tight text-sap-text">Digital footprint</h3>
+          <span className="text-11 text-sap-muted">{services.length} services identified</span>
         </div>
         <div className="flex items-center gap-2">
           {criticalCount > 0 && (
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-entity-drug text-white">
-              {criticalCount} CRITICAL
+            <span className="inline-flex items-center px-2 h-5 rounded text-11 font-semibold bg-sap-danger-filled text-white tabular-nums">
+              {criticalCount} critical
             </span>
           )}
           {highCount > 0 && (
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-entity-drug/15 text-entity-drug border border-entity-drug/40">
-              {highCount} HIGH
+            <span className="inline-flex items-center px-2 h-5 rounded text-11 font-semibold bg-sap-danger-soft text-sap-danger tabular-nums">
+              {highCount} high
             </span>
           )}
         </div>
       </div>
-      <div className="px-5 py-4 flex flex-wrap gap-2">
+      <div className="px-4 py-3 flex flex-wrap gap-2">
         {services.filter(s => s.category !== 'other').map(svc => {
           const catMeta = CATEGORY_META[svc.category] || CATEGORY_META.other;
           const isCritical = svc.severity === 'CRITICAL';
@@ -45,26 +45,26 @@ function DigitalFootprint({ services, criticalCount, highCount }) {
           return (
             <div
               key={svc.collection}
-              className={`inline-flex items-center gap-2 pl-3 pr-2.5 py-1.5 rounded border text-xs font-mono ${
-                isCritical ? 'border-entity-drug/40 bg-entity-drug/5' :
-                isHigh ? 'border-entity-drug/20 bg-entity-drug/[0.03]' :
-                'border-sap-border bg-sap-panel/50'
+              className={`inline-flex items-center gap-2 pl-2.5 pr-2 py-1 rounded border text-12 ${
+                isCritical ? 'border-sap-danger/40 bg-sap-danger-soft' :
+                isHigh ? 'border-sap-danger/20 bg-sap-danger-soft/60' :
+                'border-sap-border-light bg-sap-panel/60'
               }`}
             >
-              <span className={`font-medium ${isCritical ? 'text-entity-drug' : 'text-sap-text'}`}>
+              <span className={`font-medium ${isCritical ? 'text-sap-danger' : 'text-sap-text'}`}>
                 {svc.name}
               </span>
-              <span className={`text-[10px] uppercase tracking-wider ${catMeta.color} opacity-70`}>
+              <span className="text-11 text-sap-muted">
                 {catMeta.label}
               </span>
               {isCritical && (
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-entity-drug text-white leading-none">
-                  CRITICAL
+                <span className="inline-flex items-center px-1.5 h-4 rounded text-11 font-semibold bg-sap-danger-filled text-white leading-none">
+                  Critical
                 </span>
               )}
               {isHigh && (
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-entity-drug/15 text-entity-drug border border-entity-drug/30 leading-none">
-                  HIGH
+                <span className="inline-flex items-center px-1.5 h-4 rounded text-11 font-semibold bg-sap-danger-soft text-sap-danger border border-sap-danger/30 leading-none">
+                  High
                 </span>
               )}
             </div>
@@ -74,7 +74,7 @@ function DigitalFootprint({ services, criticalCount, highCount }) {
           const otherCount = services.filter(s => s.category === 'other').length;
           if (!otherCount) return null;
           return (
-            <div className="inline-flex items-center gap-2 pl-3 pr-2.5 py-1.5 rounded border border-sap-border bg-sap-panel/50 text-xs font-mono">
+            <div className="inline-flex items-center gap-2 pl-2.5 pr-2 py-1 rounded border border-sap-border-light bg-sap-panel/60 text-12">
               <span className="text-sap-dim">+{otherCount} other {otherCount === 1 ? 'source' : 'sources'}</span>
             </div>
           );
@@ -83,4 +83,3 @@ function DigitalFootprint({ services, criticalCount, highCount }) {
     </div>
   );
 }
-

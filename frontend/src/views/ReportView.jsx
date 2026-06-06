@@ -131,49 +131,82 @@ function AlertsSection({ alerts }) {
   );
 }
 
-function RiskBadge({ riskScore }) {
+// IP boundary: only riskScore.level, riskScore.composite, and
+// riskScore.domains[].{name, level} are rendered. Factor IDs, weights,
+// severities, and rationale never reach the browser.
+function RiskOverview({ riskScore }) {
   if (!riskScore) return null;
-  const styles = {
-    CRITICAL: { pill: 'bg-sap-danger-filled text-white',          label: 'Critical' },
-    HIGH:     { pill: 'bg-sap-warning-filled text-white',         label: 'High' },
-    MEDIUM:   { pill: 'bg-sap-warning-soft text-sap-warning',     label: 'Medium' },
-    LOW:      { pill: 'bg-sap-success-soft text-sap-success',     label: 'Low' },
-  };
-  const s = styles[riskScore.level] || styles.LOW;
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className={`inline-flex items-center px-2 h-6 rounded-md text-11 font-semibold tracking-tight ${s.pill}`}>
-        {s.label} risk
-      </span>
-      <span className="text-12 text-sap-dim">
-        <span className="tabular-nums text-sap-text">{riskScore.composite.toFixed(1)}</span>
-        <span className="text-sap-muted"> / 10</span>
-      </span>
-    </div>
-  );
-}
 
-function DomainBreakdown({ riskScore }) {
-  if (!riskScore?.domains?.length) return null;
-  const tone = {
-    CRITICAL: 'text-sap-danger',
-    HIGH:     'text-sap-warning',
-    MEDIUM:   'text-sap-warning/65',
-    LOW:      'text-sap-success',
+  const verdictStyles = {
+    CRITICAL: { pill: 'bg-sap-danger-filled text-white',        accent: 'border-l-sap-danger',          bar: 'bg-sap-danger-filled',  label: 'Critical' },
+    HIGH:     { pill: 'bg-sap-warning-filled text-white',       accent: 'border-l-sap-warning-filled',  bar: 'bg-sap-warning-filled', label: 'High' },
+    MEDIUM:   { pill: 'bg-sap-warning-soft text-sap-warning',   accent: 'border-l-sap-warning',         bar: 'bg-sap-warning',        label: 'Medium' },
+    LOW:      { pill: 'bg-sap-success-soft text-sap-success',   accent: 'border-l-sap-success',         bar: 'bg-sap-success-filled', label: 'Low' },
   };
-  const fmtLevel = (lvl) => lvl ? lvl.charAt(0) + lvl.slice(1).toLowerCase() : '';
+  const v = verdictStyles[riskScore.level] || verdictStyles.LOW;
+  const compositePct = Math.min(100, Math.max(0, (riskScore.composite / 10) * 100));
+
+  // Group domains by their level for compact display
+  const domainsByLevel = {};
+  for (const d of (riskScore.domains || [])) {
+    const lvl = d.level || 'LOW';
+    (domainsByLevel[lvl] ||= []).push(d.name);
+  }
+  const levelOrder = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+  const levelTone = {
+    CRITICAL: { dot: 'bg-sap-danger',          label: 'Critical', text: 'text-sap-danger' },
+    HIGH:     { dot: 'bg-sap-warning-filled',  label: 'High',     text: 'text-sap-warning' },
+    MEDIUM:   { dot: 'bg-sap-warning-soft border border-sap-warning/40', label: 'Medium', text: 'text-sap-dim' },
+    LOW:      { dot: 'bg-sap-success-soft border border-sap-success/40', label: 'Low',    text: 'text-sap-dim' },
+  };
+
   return (
-    <Card>
-      <CardHeader title="Risk domains" />
-      <div className="px-4 py-3 flex flex-wrap gap-x-4 gap-y-2">
-        {riskScore.domains.map(d => (
-          <div key={d.name} className="flex items-center gap-1.5">
-            <span className={`text-11 font-semibold tracking-tight ${tone[d.level] || 'text-sap-dim'}`}>
-              {fmtLevel(d.level)}
+    <Card className={`border-l-[3px] ${v.accent}`}>
+      <CardHeader title="Risk verdict" />
+      <div className="px-4 py-3.5">
+        <div className="flex items-start gap-6">
+          {/* Verdict + composite + bar */}
+          <div className="flex flex-col gap-2 shrink-0">
+            <span className={`inline-flex items-center justify-center px-2.5 h-7 rounded-md text-12 font-semibold tracking-tight w-fit ${v.pill}`}>
+              {v.label} risk
             </span>
-            <span className="text-12 text-sap-dim">{d.name}</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-26 font-semibold tracking-tight tabular-nums text-sap-text">
+                {riskScore.composite.toFixed(1)}
+              </span>
+              <span className="text-12 text-sap-muted">/ 10</span>
+            </div>
+            <div className="h-1 w-32 rounded-full bg-sap-panel overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${v.bar}`}
+                style={{ width: `${compositePct}%` }}
+              />
+            </div>
           </div>
-        ))}
+
+          {/* Domains grouped by level */}
+          {riskScore.domains?.length > 0 && (
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <span className="text-11 text-sap-muted font-medium block mb-0.5">Risk by domain</span>
+              {levelOrder
+                .filter(lvl => domainsByLevel[lvl]?.length > 0)
+                .map(lvl => {
+                  const t = levelTone[lvl];
+                  return (
+                    <div key={lvl} className="flex items-baseline gap-2">
+                      <span className="flex items-center gap-1.5 shrink-0 w-16">
+                        <span className={`inline-block h-1.5 w-1.5 rounded-full ${t.dot}`} />
+                        <span className={`text-11 font-semibold tracking-tight ${t.text}`}>{t.label}</span>
+                      </span>
+                      <span className="text-12 text-sap-dim flex-1 min-w-0">
+                        {domainsByLevel[lvl].join(' · ')}
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
       </div>
     </Card>
   );
@@ -289,16 +322,13 @@ export default function ReportView({
         />
       </ErrorBoundary>
 
-      {/* Risk Badge */}
-      <RiskBadge riskScore={riskScore} />
+      {/* Risk verdict — hero panel (composite + level + per-domain) */}
+      <RiskOverview riskScore={riskScore} />
 
-      {/* C. Alerts */}
+      {/* Alerts — action-required signals */}
       <AlertsSection alerts={alerts} />
 
-      {/* Risk Domain Breakdown */}
-      <DomainBreakdown riskScore={riskScore} />
-
-      {/* D. Digital Footprint */}
+      {/* Digital Footprint */}
       {hasBreachData && (
         <ErrorBoundary name="DigitalFootprint">
           <OverviewTab data={data} results={results} onPivot={onPivot} ftiResults={ftiResults} />

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { listFraudUpis, listBankAccounts, getCryptoTrace } from '../lib/api';
+import { listFraudUpis, listBankAccounts, listCryptoWallets, getCryptoTrace } from '../lib/api';
 import { EvidenceImage } from '../components/Lightbox';
 import Shimmer from '../components/Shimmer';
 import L from 'leaflet';
@@ -184,6 +184,8 @@ const SUB_TABS = [
 export default function FinancialTab({ financialResults = [], financialMeta = null }) {
   const [upis, setUpis] = useState(null);
   const [banks, setBanks] = useState(null);
+  const [wallets, setWallets] = useState(null);
+  const [walletFilter, setWalletFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [upiFilter, setUpiFilter] = useState('');
   const [walletQuery, setWalletQuery] = useState('');
@@ -205,9 +207,14 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
         setError(err.message || 'Failed to load bank account data');
         return [];
       }),
-    ]).then(([u, b]) => {
+      listCryptoWallets(100).catch(err => {
+        setError(err.message || 'Failed to load crypto wallet data');
+        return [];
+      }),
+    ]).then(([u, b, w]) => {
       setUpis(u);
       setBanks(b);
+      setWallets(w);
       setLoading(false);
     });
   }, []);
@@ -530,15 +537,91 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
 
       {/* ── Crypto Wallet Trace ── */}
       {subTab === 'crypto' && (
-        <div className="rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-sap-border-light">
-            <h3 className="text-12 font-semibold tracking-tight text-sap-text">Crypto wallet trace</h3>
-            <p className="text-11 text-sap-muted mt-0.5">Enter a BTC or ETH wallet address to trace transaction history</p>
+        <div className="space-y-3">
+          {/* Known wallets — clickable list */}
+          <div className="rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-sap-border-light flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="text-12 font-semibold tracking-tight text-sap-text">Known wallets</h3>
+                <p className="text-11 text-sap-muted mt-0.5">
+                  {(wallets || []).length} tracked crypto wallets — click any row to trace
+                </p>
+              </div>
+              <input
+                type="text"
+                value={walletFilter}
+                onChange={e => setWalletFilter(e.target.value)}
+                placeholder="Filter by address…"
+                className="w-56 h-7 rounded-md border border-sap-border-light bg-sap-bg px-2.5 text-12 font-mono text-sap-text placeholder:text-sap-muted outline-none focus:border-sap-accent"
+              />
+            </div>
+            {wallets && wallets.length > 0 ? (
+              <div className="overflow-x-auto max-h-[260px] overflow-y-auto">
+                <table className="w-full text-12">
+                  <thead className="sticky top-0 bg-sap-bg/80 backdrop-blur">
+                    <tr className="border-b border-sap-border-light text-left">
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted">Address</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted">Chain</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted text-right">Balance</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted text-right">Received</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted text-right">Sent</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted text-right">Txns</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-sap-border-light">
+                    {(wallets || [])
+                      .filter(w => !walletFilter || (w.wallet_address || '').toLowerCase().includes(walletFilter.toLowerCase()))
+                      .slice(0, 100)
+                      .map((w, i) => (
+                        <tr
+                          key={w.wallet_address || i}
+                          onClick={() => {
+                            if (!w.wallet_address) return;
+                            setWalletQuery(w.wallet_address);
+                            handleWalletSearch(null, w.wallet_address);
+                          }}
+                          className="cursor-pointer hover:bg-sap-bg/60 transition-colors"
+                        >
+                          <td className="px-3 py-1.5 font-mono text-sap-text truncate max-w-[280px]">{w.wallet_address || '?'}</td>
+                          <td className="px-3 py-1.5">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-11 font-medium tracking-tight border border-sap-border-light bg-sap-bg text-sap-dim">
+                              {w.blockchain_type || 'BTC'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-1.5 font-mono tabular-nums text-sap-text text-right">
+                            {w.balance?.crypto?.amount ?? '—'}
+                          </td>
+                          <td className="px-3 py-1.5 font-mono tabular-nums text-sap-success text-right">
+                            {w.total_received?.fiat?.amount ?? '—'}
+                          </td>
+                          <td className="px-3 py-1.5 font-mono tabular-nums text-sap-danger text-right">
+                            {w.total_sent?.fiat?.amount ?? '—'}
+                          </td>
+                          <td className="px-3 py-1.5 font-mono tabular-nums text-sap-dim text-right">
+                            {w.transactions_count?.total ?? '—'}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="px-4 py-6 text-12 text-sap-muted">
+                {loading ? 'Loading wallets…' : 'No wallets available.'}
+              </div>
+            )}
           </div>
+
+          {/* Trace specific address */}
+          <div className="rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-sap-border-light">
+              <h3 className="text-12 font-semibold tracking-tight text-sap-text">Trace any address</h3>
+              <p className="text-11 text-sap-muted mt-0.5">Enter a BTC or ETH wallet address to trace transaction history</p>
+            </div>
           <div className="px-4 py-3">
             <form onSubmit={handleWalletSearch} className="flex gap-3 items-center max-w-2xl mb-4">
               <input type="text" value={walletQuery} onChange={e => setWalletQuery(e.target.value)}
-                placeholder="Enter BTC/ETH wallet address..."
+                placeholder="Enter BTC/ETH wallet address…"
                 className="flex-1 bg-sap-bg border border-sap-border-light rounded-lg px-4 py-2.5 text-13 font-mono text-sap-text outline-none focus:border-sap-accent placeholder:text-sap-muted" />
               <button type="submit" disabled={walletLoading}
                 className="bg-sap-accent-glow hover:bg-sap-accent text-sap-text hover:text-sap-bg border border-sap-accent px-5 py-2.5 rounded-lg text-13 font-semibold transition-colors disabled:opacity-40">
@@ -608,6 +691,7 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
                 </div>
               </div>
             )}
+          </div>
           </div>
         </div>
       )}

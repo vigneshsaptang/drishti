@@ -127,6 +127,13 @@ export async function listBankAccounts(limit = 50) {
   return res.json();
 }
 
+export async function listCryptoWallets(limit = 50, search = '') {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (search) params.set('search', search);
+  const res = await apiFetch(`${API}/financial/crypto-wallets?${params}`);
+  return res.json();
+}
+
 export async function buildGraph(searchResults) {
   const res = await apiFetch(`${API}/graph/build`, {
     method: 'POST',

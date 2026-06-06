@@ -20,10 +20,15 @@ function isUseful(v) {
   return true;
 }
 
+// Validators mirror backend/app/engines/identifier_categorizer.py — keep in sync.
 const RULES = {
   emails: {
     match:    k => /^(e-?mail|mail|email_?address)$/i.test(k),
-    validate: v => v.includes('@'),
+    validate: v => {
+      const s = v.trim();
+      const at = s.lastIndexOf('@');
+      return at > 0 && s.slice(at + 1).includes('.');
+    },
   },
   phones: {
     match:    k => /phone|mobile|cell|telephone|contact_?number|contactnumber/i.test(k) && !/email/i.test(k),
@@ -31,10 +36,27 @@ const RULES = {
   },
   usernames: {
     match:    k => /^(user_?name|username|nick(?:name)?|screen_?name|handle|login(?:name)?|user_?id|username_?2)$/i.test(k) && !/email/i.test(k),
+    validate: v => {
+      const s = v.trim();
+      if (s.length < 3) return false;            // 2-char fragments
+      if (s.includes('@')) return false;          // email leaked into username field
+      if (/^\d{8,}$/.test(s)) return false;       // numeric account IDs
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return false;             // ISO date
+      if (/^\d{2}-[A-Z]{3}-\d{2,4}$/i.test(s)) return false;      // 31-JAN-2024
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return false;          // DD/MM/YYYY
+      return true;
+    },
   },
   names: {
     match:    k => /^(name|fullname|full_name|first_?name|last_?name|middle_?name|display_?name|displayname|real_?name)$/i.test(k)
                   || k === 'Name' || k === 'name',
+    validate: v => {
+      const s = v.trim();
+      if (s.length < 2) return false;
+      if (/^\d+$/.test(s)) return false;          // pure-numeric "name"
+      if (s.includes('@')) return false;          // email leaked in
+      return true;
+    },
   },
 };
 

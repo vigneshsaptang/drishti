@@ -301,6 +301,44 @@ function FinancialSummary({ financialResults, onSwitchView }) {
   );
 }
 
+function ReportProgress({ loading, results, ftiMeta, darkmonMeta, profile, riskScore }) {
+  if (!loading) return null;
+
+  const phases = [
+    { label: 'Searching breach data',   done: (results?.length || 0) > 0 },
+    { label: 'Screening watchlists',    done: !!ftiMeta },
+    { label: 'Scanning dark web',       done: !!darkmonMeta },
+    { label: 'Building profile',        done: !!profile },
+    { label: 'Computing risk',          done: !!riskScore },
+  ];
+  const doneCount = phases.filter(p => p.done).length;
+  const current = phases.find(p => !p.done) || phases[phases.length - 1];
+  const pct = Math.round((doneCount / phases.length) * 100);
+
+  return (
+    <Card>
+      <div className="px-4 py-3">
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <span className="relative flex h-2 w-2 shrink-0" aria-hidden>
+            <span className="absolute inline-flex h-full w-full rounded-full bg-sap-accent opacity-40 animate-ping" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-sap-accent" />
+          </span>
+          <p className="text-13 font-medium text-sap-text">
+            {current.label}<span className="text-sap-dim">…</span>
+          </p>
+          <span className="ml-auto text-11 tabular-nums text-sap-muted">{doneCount}/{phases.length}</span>
+        </div>
+        <div className="h-1 rounded-full bg-sap-panel overflow-hidden">
+          <div
+            className="h-full bg-sap-accent rounded-full transition-all duration-500 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export default function ReportView({
   results, data, loading, aiSummary, riskScore, canonical, watchlistFilterTokens,
   profile, canonicalLocation,
@@ -320,6 +358,16 @@ export default function ReportView({
 
   return (
     <div className="animate-fade-in space-y-4">
+      {/* Loading progress — shown while the SSE stream is in flight */}
+      <ReportProgress
+        loading={loading}
+        results={results}
+        ftiMeta={ftiMeta}
+        darkmonMeta={darkmonMeta}
+        profile={profile}
+        riskScore={riskScore}
+      />
+
       {/* A. Subject Header + B. AI Summary — via SubjectProfile */}
       <ErrorBoundary name="SubjectProfile">
         <SubjectProfile

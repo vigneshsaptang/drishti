@@ -648,7 +648,7 @@ function CourtSearchSection({ name, location, onSwitchTab }) {
             return (
               <button key={code} type="button" onClick={() => toggleCourtState(code)}
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-11 border transition-colors duration-150 ${
-                  on ? 'bg-sap-accent-glow border-sap-accent/30 text-sap-accent' : 'bg-sap-panel border-sap-border-light text-sap-dim hover:text-sap-text'
+                  on ? 'bg-sap-accent/[0.10] border-sap-accent/30 text-sap-text' : 'bg-sap-panel border-sap-border-light text-sap-dim hover:text-sap-text'
                 }`}
               >
                 <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center ${on ? 'bg-sap-accent border-sap-accent' : 'border-sap-border bg-sap-bg'}`}>
@@ -665,7 +665,7 @@ function CourtSearchSection({ name, location, onSwitchTab }) {
             return (
               <button key={kind} type="button" onClick={() => toggleCourtKind(kind)}
                 className={`px-2 py-0.5 rounded text-11 border transition-colors duration-150 ${
-                  on ? 'bg-sap-accent-glow border-sap-accent/30 text-sap-accent' : 'bg-sap-panel border-sap-border-light text-sap-dim hover:text-sap-text'
+                  on ? 'bg-sap-accent/[0.10] border-sap-accent/30 text-sap-text' : 'bg-sap-panel border-sap-border-light text-sap-dim hover:text-sap-text'
                 }`}
               >{label}</button>
             );
@@ -743,12 +743,12 @@ function LocationIntel({ location }) {
                 key={s}
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-12 border ${
                   i === 0
-                    ? 'bg-sap-accent-glow text-sap-accent border-sap-accent/20 font-medium'
+                    ? 'bg-sap-accent/[0.10] text-sap-text border-sap-accent/30 font-medium'
                     : 'bg-sap-panel text-sap-dim border-sap-border-light'
                 }`}
               >
                 {s}
-                <span className={`text-11 tabular-nums ${i === 0 ? 'text-sap-accent/70' : 'text-sap-muted'}`}>{count}</span>
+                <span className={`text-11 tabular-nums ${i === 0 ? 'text-sap-accent' : 'text-sap-muted'}`}>{count}</span>
               </span>
             ))}
           </div>
@@ -763,12 +763,12 @@ function LocationIntel({ location }) {
                 key={c}
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-12 border ${
                   i === 0
-                    ? 'bg-sap-success-soft text-sap-success border-sap-success/20 font-medium'
+                    ? 'bg-sap-success-soft text-sap-text border-sap-success/30 font-medium'
                     : 'bg-sap-panel text-sap-dim border-sap-border-light'
                 }`}
               >
                 {c}
-                <span className={`text-11 tabular-nums ${i === 0 ? 'text-sap-success/70' : 'text-sap-muted'}`}>{count}</span>
+                <span className={`text-11 tabular-nums ${i === 0 ? 'text-sap-success' : 'text-sap-muted'}`}>{count}</span>
               </span>
             ))}
           </div>

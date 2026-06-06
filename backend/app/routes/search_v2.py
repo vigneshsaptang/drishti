@@ -148,11 +148,29 @@ def _extract_fullnames(results: list[dict]) -> list[str]:
     return list(seen)[:10]
 
 
+def _format_canonical_location_str(loc: dict | None) -> str | None:
+    """Render a canonical_location dict as 'City, State' / 'District, State' / 'State'.
+
+    Prefers city > district > locality for the place portion. Returns None if the
+    location couldn't be resolved.
+    """
+    if not loc:
+        return None
+    state = loc.get("state")
+    if not state:
+        return None
+    place = loc.get("city") or loc.get("district") or loc.get("locality")
+    if place and place.lower() != state.lower():
+        return f"{place}, {state}"
+    return state
+
+
 def _generate_programmatic_summary(
     profile: dict,
     fti_summary: dict,
     darkmon_summary: dict,
     financial_summary: dict,
+    canonical_location: dict | None = None,
 ) -> str:
     """Build a deterministic prose intelligence summary from profile data."""
     parts: list[str] = []
@@ -162,7 +180,13 @@ def _generate_programmatic_summary(
     locations = profile.get("locations", [])
     if names:
         lead = f"Subject identified as {names[0]}"
-        if locations:
+        # Prefer the canonical resolved location (City, State) over the first
+        # raw address from profile.locations — the latter is verbose street
+        # addressing, not "where is the subject."
+        canon_loc_str = _format_canonical_location_str(canonical_location)
+        if canon_loc_str:
+            lead += f", located in {canon_loc_str}"
+        elif locations:
             lead += f", located in {locations[0]}"
         lead += "."
         parts.append(lead)
@@ -731,9 +755,32 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
             profile["dobs"] = profile.get("dob", [])
         canonical_location = geo.resolve_canonical_location(all_results)
 
+        # Apply the canonical-name token filter to FTI hits before counting, so
+        # the programmatic summary agrees with FtiScreening + deriveAlerts on
+        # what a "watchlist match" is (namesake screening hits are excluded).
+        canonical_name_for_summary = profile.get("names", [None])[0] if profile.get("names") else None
+        canonical_tokens_for_summary = [
+            t for t in (canonical_name_for_summary or "").lower().split() if len(t) >= 2
+        ]
+
+        def _entry_matches_canonical(entry: dict) -> bool:
+            if not canonical_tokens_for_summary:
+                return True
+            ev = (entry.get("entity_value") or "").lower()
+            return all(t in ev for t in canonical_tokens_for_summary)
+
+        filtered_cd = sum(
+            1 for r in collected_fti_results
+            if r.get("query_type") == "crimedata" and r.get("found") and _entry_matches_canonical(r)
+        )
+        filtered_wc = sum(
+            1 for r in collected_fti_results
+            if r.get("query_type") == "worldcheck" and r.get("found") and _entry_matches_canonical(r)
+        )
+
         fti_summary = {
-            "crimedata_matches": crimedata_matches,
-            "worldcheck_matches": worldcheck_matches,
+            "crimedata_matches": filtered_cd,
+            "worldcheck_matches": filtered_wc,
             "total_names_screened": total_names_screened,
         }
         darkmon_summary = {
@@ -745,7 +792,10 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
             "total_phones_screened": total_phones_screened,
         }
 
-        summary_text = _generate_programmatic_summary(profile, fti_summary, darkmon_summary, financial_summary)
+        summary_text = _generate_programmatic_summary(
+            profile, fti_summary, darkmon_summary, financial_summary,
+            canonical_location=canonical_location,
+        )
         # Always emit the summary event so profile + canonical_location reach
         # the frontend even when no prose summary is generated.
         yield {

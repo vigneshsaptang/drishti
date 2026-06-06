@@ -106,6 +106,7 @@ export function useSearchV2() {
     setSearchMeta(null);
 
     let searchCompleted = false;
+    let authFailed = false;
 
     try {
       const res = await fetch('/api/v2/search', {
@@ -117,7 +118,7 @@ export function useSearchV2() {
 
       onUnauthorized(res);
       if (!res.ok) {
-        if (res.status === 401) return;
+        if (res.status === 401) { authFailed = true; return; }
         if (res.status === 402) {
           const body = await res.json().catch(() => ({}));
           throw new Error(body.detail?.error === 'insufficient_credits'
@@ -240,7 +241,7 @@ export function useSearchV2() {
       if (e.name === 'AbortError') return;
       setError(e.message);
     } finally {
-      if (!searchCompleted && !controller.signal.aborted) {
+      if (!searchCompleted && !controller.signal.aborted && !authFailed) {
         setError('Search stream ended unexpectedly — results may be incomplete');
       }
       setLoading(false);

@@ -406,22 +406,31 @@ function NeuralLoader({ loading, results, ftiMeta, darkmonMeta, profile, riskSco
   // 'done' returns null. Distinct from `loading` so we control unmount timing.
   const [stage, setStage] = useState(loading ? 'streaming' : 'done');
 
+  // React to the `loading` prop. Two effects split so the converge→done
+  // timer in the second effect isn't torn down when the first effect
+  // re-runs on stage changes.
   useEffect(() => {
     if (loading) {
-      // Search restarted — reset to streaming.
       // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional state machine driven by `loading` prop transitions
       setStage('streaming');
-      return undefined;
-    }
-    if (stage === 'streaming') {
-      // Loading just finished — kick off the convergence sequence.
+    } else {
+      // Only transition to converging if we were actually streaming —
+      // ignore the initial mount-with-loading-false case.
       // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional state machine driven by `loading` prop transitions
-      setStage('converging');
-      const t = setTimeout(() => setStage('done'), NEURAL_CONVERGE_MS);
-      return () => clearTimeout(t);
+      setStage(prev => (prev === 'streaming' ? 'converging' : prev));
     }
-    return undefined;
-  }, [loading, stage]);
+  }, [loading]);
+
+  // Owns the converging → done timer. Only this effect controls the timeout,
+  // so it isn't accidentally cancelled by transitions in the loading effect.
+  useEffect(() => {
+    if (stage !== 'converging') return undefined;
+    const t = setTimeout(() => {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- terminal of the converge timer
+      setStage('done');
+    }, NEURAL_CONVERGE_MS);
+    return () => clearTimeout(t);
+  }, [stage]);
 
   if (stage === 'done') return null;
   const converging = stage === 'converging';

@@ -143,12 +143,8 @@ export default function App() {
       return (
         <Suspense fallback={<LazyFallback />}>
           <ToolsView
-            data={data}
-            onPivot={handlePivot}
             financialResults={financialResults}
             financialMeta={financialMeta}
-            darkmonResults={darkmonResults}
-            darkmonMeta={darkmonMeta}
           />
         </Suspense>
       );

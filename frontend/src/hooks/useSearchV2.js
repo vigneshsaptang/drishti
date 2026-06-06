@@ -30,6 +30,7 @@ export function useSearchV2() {
   const [profile, setProfile] = useState(null);
   const [canonicalLocation, setCanonicalLocation] = useState(null);
   const [canonicalName, setCanonicalName] = useState(null);
+  const [canonicalSource, setCanonicalSource] = useState(null);
   const [riskScore, setRiskScore] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -106,6 +107,7 @@ export function useSearchV2() {
     setProfile(null);
     setCanonicalLocation(null);
     setCanonicalName(null);
+    setCanonicalSource(null);
     setRiskScore(null);
     setLoading(true);
     setError(null);
@@ -225,6 +227,7 @@ export function useSearchV2() {
                   if (parsed.profile) setProfile(parsed.profile);
                   if (parsed.canonical_location) setCanonicalLocation(parsed.canonical_location);
                   if (parsed.canonical_name) setCanonicalName(parsed.canonical_name);
+                  if (parsed.canonical_source) setCanonicalSource(parsed.canonical_source);
                   break;
 
                 case 'summary':
@@ -232,6 +235,7 @@ export function useSearchV2() {
                   if (parsed.profile) setProfile(parsed.profile);
                   if (parsed.canonical_location) setCanonicalLocation(parsed.canonical_location);
                   if (parsed.canonical_name) setCanonicalName(parsed.canonical_name);
+                  if (parsed.canonical_source) setCanonicalSource(parsed.canonical_source);
                   break;
 
                 case 'search:complete':
@@ -294,9 +298,10 @@ export function useSearchV2() {
     setProfile(null);
     setCanonicalLocation(null);
     setCanonicalName(null);
+    setCanonicalSource(null);
     setRiskScore(null);
     setSearchMeta(null);
   }, [cancelSearch]);
 
-  return { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, profile, canonicalLocation, canonicalName, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults };
+  return { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, profile, canonicalLocation, canonicalName, canonicalSource, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults };
 }

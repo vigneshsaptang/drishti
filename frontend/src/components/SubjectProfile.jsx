@@ -137,7 +137,7 @@ function decodeAccountValue(raw) {
 
 export default function SubjectProfile({
   loading, onFocusEntity, onSwitchTab, aiSummary,
-  canonical: canonicalProp, profile: profileProp, canonicalLocation,
+  canonical: canonicalProp, canonicalName, canonicalSource, profile: profileProp, canonicalLocation,
 }) {
   // Backend ships the categorized profile (see app.engines.identifier_categorizer).
   // Empty arrays are filtered here so empty buckets don't render headers.
@@ -249,14 +249,27 @@ export default function SubjectProfile({
         )}
       </div>
 
-      {/* Identified subject banner */}
-      {canonical.canonical && canonical.confidence > 0 && !isRevealing && (
+      {/* Identified subject banner.
+
+          When the investigator named the subject explicitly (canonicalSource
+          === 'investigator'), the inferred confidence percentage is
+          meaningless — we know who this is. Show a "Confirmed by
+          investigator" treatment instead. Otherwise fall back to the
+          inferred banner using canonical from chooseCanonicalIdentity.
+      */}
+      {canonicalSource === 'investigator' && canonicalName && !isRevealing ? (
+        <IdentifiedSubjectBanner
+          canonical={{ canonical: canonicalName, anchor: null, alternates: [], source: 'investigator', confidence: 1 }}
+          location={location}
+          investigatorProvided
+        />
+      ) : canonical.canonical && canonical.confidence > 0 && !isRevealing ? (
         <IdentifiedSubjectBanner canonical={canonical} location={location} />
-      )}
+      ) : null}
       {/* Court search — always shown when location has a resolved state */}
       {location?.state && !isRevealing && (
         <CourtSearchSection
-          name={canonical?.canonical || canonical?.anchor || null}
+          name={canonicalName || canonical?.canonical || canonical?.anchor || null}
           location={location}
           onSwitchTab={onSwitchTab}
         />
@@ -313,12 +326,37 @@ function buildCourtStates(location) {
   return entries;
 }
 
-function IdentifiedSubjectBanner({ canonical, location }) {
+function IdentifiedSubjectBanner({ canonical, location, investigatorProvided = false }) {
   const { canonical: name, anchor, confidence, alternates = [], source } = canonical;
   const isInferred = source === 'inferred';
   const locString = formatCanonicalLocation(location);
-  const pct = Math.round(confidence * 100);
 
+  // Investigator-provided: no probability, no "tier", no progress bar.
+  // The investigator told us who this is; the report just confirms it.
+  if (investigatorProvided) {
+    return (
+      <div className="px-4 py-3 bg-sap-bg border-b border-sap-border-light">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span aria-hidden className="relative flex">
+            <span className="w-2 h-2 rounded-full bg-sap-accent" />
+            <span className="absolute inset-0 w-2 h-2 rounded-full bg-sap-accent animate-ping opacity-50" />
+          </span>
+          <span className="text-11 font-semibold tracking-tight text-sap-accent">
+            Subject confirmed
+          </span>
+          <span className="text-11 text-sap-muted">·</span>
+          <span className="text-11 font-medium text-sap-dim">Provided by investigator</span>
+        </div>
+
+        <p className="text-17 leading-tight tracking-tight font-semibold text-sap-text">{name}</p>
+        {locString && (
+          <p className="text-12 text-sap-dim mt-0.5">{locString}</p>
+        )}
+      </div>
+    );
+  }
+
+  const pct = Math.round(confidence * 100);
   const tier =
     confidence >= 0.7 ? 'high' :
     confidence >= 0.4 ? 'medium' :

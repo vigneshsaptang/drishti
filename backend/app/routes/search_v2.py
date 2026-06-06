@@ -228,12 +228,15 @@ def _build_profile_payload(all_results: list[dict], subject: SubjectName | None 
     explicit_name = _explicit_canonical_name(subject)
     if explicit_name:
         canonical_name = explicit_name
+        canonical_source = "investigator"
     else:
         canonical_name = profile.get("names", [None])[0] if profile.get("names") else None
+        canonical_source = "inferred" if canonical_name else None
     return {
         "profile": profile,
         "canonical_location": canonical_location,
         "canonical_name": canonical_name,
+        "canonical_source": canonical_source,
     }
 
 
@@ -335,8 +338,15 @@ def _generate_programmatic_summary(
     return " ".join(parts)
 
 
-def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: list[dict]) -> dict:
-    """FTI screening + financial screening (runs in thread)."""
+def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: list[dict], explicit_name: str | None = None) -> dict:
+    """FTI screening + financial screening (runs in thread).
+
+    When ``explicit_name`` is provided, only that single name is screened
+    against the watchlist / crime database — bypassing the breach-record
+    name extraction entirely. This eliminates the "namesake" class of hits,
+    because we never look up anyone other than the investigator-named
+    subject.
+    """
     events = []
     parsed_fti = []
     t_fti = time.time()
@@ -345,7 +355,10 @@ def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: l
     wc_matches = 0
 
     if "threat_intel" in engines:
-        fullnames = _extract_fullnames(all_results)
+        if explicit_name:
+            fullnames = [explicit_name]
+        else:
+            fullnames = _extract_fullnames(all_results)
         names_screened = len(fullnames)
         for name in fullnames:
             t_q = time.time()
@@ -742,7 +755,7 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
 
             def _run_parallel():
                 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                    f_fti = executor.submit(_run_fti_and_financial, engines, all_results, seeds_dicts)
+                    f_fti = executor.submit(_run_fti_and_financial, engines, all_results, seeds_dicts, _explicit_canonical_name(req.subject))
                     f_dm = executor.submit(_run_darkmon, engines, all_results)
 
                     try:

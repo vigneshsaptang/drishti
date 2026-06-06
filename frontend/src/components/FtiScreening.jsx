@@ -536,7 +536,7 @@ function ClearSection({ label, muted }) {
   );
 }
 
-export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTokens, canonicalName }) {
+export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTokens, canonicalName, canonicalSource }) {
   const [filterToCanonical, setFilterToCanonical] = useState(true);   // default ON
   const [prevFtiResults, setPrevFtiResults] = useState(ftiResults);
   if (ftiResults !== prevFtiResults) {
@@ -664,12 +664,21 @@ export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTo
         )}
       </div>
 
-      {/* Filter status — ALWAYS visible when there are matches, so the operator
-          can never be silently looking at unfiltered noise. Three states:
-            (a) tokens present + filter ON  → muted, "Filtered to subject"
-            (b) tokens present + filter OFF → warning, can re-engage
-            (c) tokens missing (canonical didn't resolve) → warning, no toggle */}
-      {totalAllMatches > 0 && (
+      {/* Filter status. When the investigator named the subject explicitly,
+          the backend already screened only that name — no namesakes are
+          possible, so the toggle + namesake copy are removed in favour of
+          a single confirmation strip. Otherwise three states based on
+          inferred-canonical + operator toggle. */}
+      {canonicalSource === 'investigator' ? (
+        totalAllMatches > 0 && (
+          <div className="px-4 py-2 border-b border-sap-border-light flex items-center gap-2 text-12 bg-sap-bg">
+            <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-sap-accent" />
+            <span className="text-sap-muted">Screened against</span>
+            <span className="text-sap-text font-semibold">&ldquo;{canonicalName}&rdquo;</span>
+            <span className="text-sap-muted">· investigator-provided</span>
+          </div>
+        )
+      ) : totalAllMatches > 0 ? (
         <div className={`px-4 py-2 border-b border-sap-border-light flex items-center gap-2 text-12 ${
           tokens.length === 0 || !filterToCanonical ? 'bg-sap-warning-soft' : 'bg-sap-bg'
         }`}>
@@ -706,7 +715,7 @@ export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTo
             </>
           )}
         </div>
-      )}
+      ) : null}
 
       {/* Two-column body */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-sap-border-light">

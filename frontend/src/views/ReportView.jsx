@@ -346,7 +346,7 @@ function ReportProgress({ loading, results, ftiMeta, darkmonMeta, profile, riskS
 }
 
 export default function ReportView({
-  results, data, loading, aiSummary, riskScore, canonical, watchlistFilterTokens,
+  results, data, loading, aiSummary, riskScore, canonical, canonicalName, canonicalSource, watchlistFilterTokens,
   profile, canonicalLocation,
   ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults,
   onPivot, onFocusEntity, onSwitchTab,
@@ -383,6 +383,8 @@ export default function ReportView({
           onSwitchTab={onSwitchTab}
           aiSummary={aiSummary}
           canonical={canonical}
+          canonicalName={canonicalName}
+          canonicalSource={canonicalSource}
           profile={profile}
           canonicalLocation={canonicalLocation}
         />
@@ -409,7 +411,8 @@ export default function ReportView({
             ftiMeta={ftiMeta}
             loading={loading}
             canonicalTokens={watchlistFilterTokens}
-            canonicalName={canonical?.canonical || null}
+            canonicalName={canonicalName || canonical?.canonical || null}
+            canonicalSource={canonicalSource}
           />
         </ErrorBoundary>
       )}

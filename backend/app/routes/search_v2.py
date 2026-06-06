@@ -6,12 +6,13 @@ import asyncio
 import concurrent.futures
 import json
 import logging
+import re
 import time
 from datetime import datetime
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Request
 from sse_starlette.sse import EventSourceResponse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from app.engines import credmon, darkmon, fti, risk_ingestor, risk_scorer, geo
 from app.engines.credmon import (
@@ -71,10 +72,25 @@ class SeedItem(BaseModel):
 
 VALID_ENGINES = {"breach", "threat_intel", "darkweb", "financial", "ecourts"}
 
+
+class SubjectName(BaseModel):
+    first:    str | None = None
+    middle:   str | None = None
+    last:     str | None = None
+    initials: str | None = None
+    dob:      str | None = None
+
+    @model_validator(mode="after")
+    def at_least_one_part(self) -> "SubjectName":
+        # If the whole object is empty, treat as absent at the caller layer.
+        return self
+
+
 class SearchRequestV2(BaseModel):
     seeds: list[SeedItem]
     max_depth: int = 2
     engines: list[str] | None = None
+    subject: SubjectName | None = None
 
     @field_validator("seeds")
     @classmethod
@@ -148,7 +164,54 @@ def _extract_fullnames(results: list[dict]) -> list[str]:
     return list(seen)[:10]
 
 
-def _build_profile_payload(all_results: list[dict]) -> dict:
+def _explicit_canonical_name(subject: SubjectName | None) -> str | None:
+    """Build a display name from structured subject input.
+
+    Returns None when subject is absent or all of first/last/initials empty.
+    """
+    if subject is None:
+        return None
+    parts = [p for p in (subject.first, subject.middle, subject.last) if p]
+    if parts:
+        extra = subject.initials.strip() if subject.initials else ""
+        return (" ".join(parts) + (f" {extra}" if extra and not subject.middle else "")).strip()
+    if subject.initials:
+        letters = [ch for ch in subject.initials if ch.isalpha()]
+        if letters:
+            return ".".join(letters).upper() + "."
+    return None
+
+
+def _explicit_canonical_tokens(subject: SubjectName | None) -> list[str]:
+    """Tokens for the FTI canonical filter when structured subject is provided.
+
+    Multi-char tokens (full first/middle/last) appear as-is, lowercased.
+    Initials contribute single-letter tokens. Empty list when nothing usable.
+    """
+    if subject is None:
+        return []
+    tokens: list[str] = []
+    for k in ("last", "first", "middle"):
+        v = getattr(subject, k, None)
+        if v:
+            vv = v.strip().lower()
+            if len(vv) >= 2:
+                tokens.append(vv)
+    if subject.initials:
+        for ch in subject.initials.replace(" ", "").replace(".", ""):
+            if ch.isalpha():
+                tokens.append(ch.lower())
+    # dedupe preserving order
+    seen: set[str] = set()
+    out: list[str] = []
+    for t in tokens:
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out
+
+
+def _build_profile_payload(all_results: list[dict], subject: SubjectName | None = None) -> dict:
     """Compute the profile + canonical_location pair from current results.
 
     Used both for the early ``profile:ready`` SSE event (emitted right after
@@ -162,7 +225,16 @@ def _build_profile_payload(all_results: list[dict]) -> dict:
     if "dobs" not in profile:
         profile["dobs"] = profile.get("dob", [])
     canonical_location = geo.resolve_canonical_location(all_results)
-    return {"profile": profile, "canonical_location": canonical_location}
+    explicit_name = _explicit_canonical_name(subject)
+    if explicit_name:
+        canonical_name = explicit_name
+    else:
+        canonical_name = profile.get("names", [None])[0] if profile.get("names") else None
+    return {
+        "profile": profile,
+        "canonical_location": canonical_location,
+        "canonical_name": canonical_name,
+    }
 
 
 def _format_canonical_location_str(loc: dict | None) -> str | None:
@@ -666,7 +738,7 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
             # screening engines run — so the report surfaces the subject
             # identity as soon as breach data is in, instead of waiting on
             # FTI/darkmon/financial.
-            yield {"event": "profile:ready", "data": _dumps(_build_profile_payload(all_results))}
+            yield {"event": "profile:ready", "data": _dumps(_build_profile_payload(all_results, req.subject))}
 
             def _run_parallel():
                 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
@@ -733,7 +805,7 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
                 yield {"event": "entity:result", "data": _dumps(result)}
 
             # Early profile emit — see phone/email tier above.
-            yield {"event": "profile:ready", "data": _dumps(_build_profile_payload(all_results))}
+            yield {"event": "profile:ready", "data": _dumps(_build_profile_payload(all_results, req.subject))}
 
             if "darkweb" in engines:
                 dm_result = await asyncio.to_thread(_run_darkmon_direct, seeds_dicts[0]["value"])
@@ -771,23 +843,43 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
 
         # 8. Programmatic summary — reuse the same helper that built the
         # early profile:ready event so frontend sees a consistent payload.
-        _profile_payload = _build_profile_payload(all_results)
+        _profile_payload = _build_profile_payload(all_results, req.subject)
         profile = _profile_payload["profile"]
         canonical_location = _profile_payload["canonical_location"]
 
         # Apply the canonical-name token filter to FTI hits before counting, so
         # the programmatic summary agrees with FtiScreening + deriveAlerts on
         # what a "watchlist match" is (namesake screening hits are excluded).
-        canonical_name_for_summary = profile.get("names", [None])[0] if profile.get("names") else None
-        canonical_tokens_for_summary = [
-            t for t in (canonical_name_for_summary or "").lower().split() if len(t) >= 2
-        ]
+        explicit_name = _explicit_canonical_name(req.subject)
+        if explicit_name:
+            canonical_name = explicit_name
+            canonical_tokens_for_summary = _explicit_canonical_tokens(req.subject)
+        else:
+            canonical_name = profile.get("names", [None])[0] if profile.get("names") else None
+            canonical_tokens_for_summary = [
+                t for t in (canonical_name or "").lower().split() if len(t) >= 2
+            ]
 
-        def _entry_matches_canonical(entry: dict) -> bool:
-            if not canonical_tokens_for_summary:
+        if req.subject and _explicit_canonical_name(req.subject):
+            multi    = [t for t in canonical_tokens_for_summary if len(t) >= 2]
+            initials = [t for t in canonical_tokens_for_summary if len(t) == 1]
+            _initial_patterns = [re.compile(rf"\b{re.escape(c)}", re.IGNORECASE) for c in initials]
+
+            def _entry_matches_canonical(entry: dict) -> bool:
+                ev = (entry.get("entity_value") or "").lower()
+                if not multi and not initials:
+                    return True
+                if multi and not all(t in ev for t in multi):
+                    return False
+                if initials and not any(p.search(ev) for p in _initial_patterns):
+                    return False
                 return True
-            ev = (entry.get("entity_value") or "").lower()
-            return all(t in ev for t in canonical_tokens_for_summary)
+        else:
+            def _entry_matches_canonical(entry: dict) -> bool:
+                if not canonical_tokens_for_summary:
+                    return True
+                ev = (entry.get("entity_value") or "").lower()
+                return all(t in ev for t in canonical_tokens_for_summary)
 
         filtered_cd = sum(
             1 for r in collected_fti_results
@@ -824,11 +916,11 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
                 "text": summary_text or None,
                 "profile": profile,
                 "canonical_location": canonical_location,
+                "canonical_name": canonical_name,
             }),
         }
 
         # 8.5 Risk scoring
-        canonical_name = profile.get("names", [None])[0] if profile.get("names") else None
         risk_factors = risk_ingestor.derive_factors(
             search_results=all_results,
             fti_results=collected_fti_results,

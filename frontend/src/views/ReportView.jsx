@@ -49,15 +49,24 @@ function ViewDetailsLink({ onClick, label = 'View details' }) {
   );
 }
 
-function deriveAlerts({ results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, seedType }) {
+function deriveAlerts({ results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, seedType, canonicalTokens }) {
   const alerts = [];
 
   const ftiSkipped = ftiMeta?.skipped === true;
   const darkmonSkipped = darkmonMeta?.skipped === true;
 
+  const tokens = (canonicalTokens || []).filter(Boolean);
+  const matchesCanonical = (r) => {
+    if (tokens.length === 0) return true;  // no canonical → fall back to all hits
+    const ev = (r.extracted_info || '').toLowerCase();
+    if (tokens.every(t => ev.includes(t))) return true;
+    const matchedName = (r.matched_name || '').toLowerCase();
+    return tokens.every(t => matchedName.includes(t));
+  };
+
   if (!ftiSkipped && ftiResults?.length > 0) {
-    const wcHits = ftiResults.filter(r => r.query_type === 'worldcheck' && r.found);
-    const cdHits = ftiResults.filter(r => r.query_type === 'crimedata' && r.found);
+    const wcHits = ftiResults.filter(r => r.query_type === 'worldcheck' && r.found && matchesCanonical(r));
+    const cdHits = ftiResults.filter(r => r.query_type === 'crimedata' && r.found && matchesCanonical(r));
 
     if (wcHits.length > 0) {
       alerts.push({ severity: 'red', text: `Sanctions/PEP match — ${wcHits.length} watchlist hit${wcHits.length !== 1 ? 's' : ''}` });
@@ -300,8 +309,8 @@ export default function ReportView({
   const seedType = data?.seed?.type || 'email';
 
   const alerts = useMemo(
-    () => deriveAlerts({ results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, seedType }),
-    [results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, seedType],
+    () => deriveAlerts({ results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, seedType, canonicalTokens: watchlistFilterTokens }),
+    [results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, seedType, watchlistFilterTokens],
   );
 
   const hasBreachData = results?.some(r => r.found && !r.skipped);

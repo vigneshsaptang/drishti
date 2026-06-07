@@ -4,6 +4,7 @@ import FtiScreening from '../components/FtiScreening';
 import ErrorBoundary from '../components/ErrorBoundary';
 import OverviewTab from '../tabs/OverviewTab';
 import { extractIdentifiers } from '../lib/identifierExtract';
+import Provenance from '../components/Provenance';
 
 const SEVERITY_COLORS = {
   red:   'border-l-sap-danger bg-sap-danger-filled/[0.04]',
@@ -221,14 +222,40 @@ function RiskOverview({ riskScore }) {
   );
 }
 
-function LinkedIdentifiers({ results, onPivot }) {
-  const ids = useMemo(() => extractIdentifiers(results || []), [results]);
+// Normalise a profile bucket whose entries may arrive as `{value, sources}`
+// (spec B1) or as bare strings (legacy fallback). Filters out empties.
+function bucketEntries(bucket) {
+  if (!Array.isArray(bucket)) return [];
+  const out = [];
+  for (const e of bucket) {
+    if (e && typeof e === 'object' && 'value' in e) {
+      if (e.value === null || e.value === undefined || e.value === '') continue;
+      out.push({ value: e.value, sources: Array.isArray(e.sources) ? e.sources : [] });
+    } else if (e !== null && e !== undefined && e !== '') {
+      out.push({ value: e, sources: [] });
+    }
+  }
+  return out;
+}
 
-  const groups = [
-    { type: 'phone',    label: 'phones',    values: ids.phones },
-    { type: 'email',    label: 'emails',    values: ids.emails },
-    { type: 'username', label: 'usernames', values: ids.usernames },
-  ].filter(g => g.values.length > 0);
+function LinkedIdentifiers({ results, profile, onPivot }) {
+  // Prefer the per-value entries on `profile` (they carry provenance sources
+  // after spec B1). Fall back to extractIdentifiers when a category is empty,
+  // so we still surface identifiers found purely via raw breach records.
+  const groups = useMemo(() => {
+    const fallback = extractIdentifiers(results || []);
+    const fromFallback = (type) => (fallback[`${type}s`] || []).map(v => ({ value: v, sources: [] }));
+    const build = (type, key) => {
+      const fromProfile = bucketEntries(profile?.[key]);
+      const values = fromProfile.length > 0 ? fromProfile : fromFallback(type);
+      return { type, label: key, values };
+    };
+    return [
+      build('phone',    'phones'),
+      build('email',    'emails'),
+      build('username', 'usernames'),
+    ].filter((g) => g.values.length > 0);
+  }, [results, profile]);
 
   if (groups.length === 0) return null;
 
@@ -242,15 +269,16 @@ function LinkedIdentifiers({ results, onPivot }) {
           <div key={g.type}>
             <span className="text-11 text-sap-muted font-medium">{g.label}</span>
             <div className="flex flex-wrap gap-1.5 mt-1">
-              {g.values.slice(0, 15).map(v => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => onPivot(g.type, v)}
-                  className="text-12 font-mono px-2 py-0.5 rounded border bg-sap-bg border-sap-border-light text-sap-text hover:bg-sap-surface hover:border-sap-border transition-colors cursor-pointer"
-                >
-                  {v}
-                </button>
+              {g.values.slice(0, 15).map(entry => (
+                <Provenance key={entry.value} value={entry.value} sources={entry.sources}>
+                  <button
+                    type="button"
+                    onClick={() => onPivot(g.type, entry.value)}
+                    className="text-12 font-mono px-2 py-0.5 rounded border bg-sap-bg border-sap-border-light text-sap-text hover:bg-sap-surface hover:border-sap-border transition-colors cursor-pointer"
+                  >
+                    {entry.value}
+                  </button>
+                </Provenance>
               ))}
               {g.values.length > 15 && (
                 <span className="text-12 px-2 py-0.5 rounded border bg-sap-bg border-sap-border-light text-sap-muted">
@@ -419,7 +447,7 @@ export default function ReportView({
 
       {/* F. Linked Identifiers */}
       {isTier1 && hasBreachData && (
-        <LinkedIdentifiers results={results} onPivot={onPivot} />
+        <LinkedIdentifiers results={results} profile={profile} onPivot={onPivot} />
       )}
 
       {/* G. Dark Web Summary */}

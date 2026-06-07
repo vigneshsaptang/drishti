@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { getMcaCompany } from '../lib/api';
+import Provenance from './Provenance';
 
 /**
  * Coerce any value to a render-safe string.
@@ -375,6 +376,18 @@ function CrimedataCard({ result, index }) {
   const recordName = asText(src.name);               // canonical record name(s)
   const mcaCompanies = useMemo(() => extractMcaCompanies(result), [result]);
 
+  // Inline-emit the provenance source dict at the render layer. dataset uses
+  // the public category label (e.g. "MCA Disqualified Directors") so the
+  // tooltip stays branded as Saptang Labs Intelligence + Watchlist + dataset.
+  const provSources = [{
+    capability: 'watchlist',
+    dataset: asText(src.category) || 'Crime database',
+    field_key: 'name',
+    via_seed: entityText || null,
+    via_seed_type: 'name',
+    depth: 1,
+  }];
+
   return (
     <div
       className="bg-sap-panel/60 border border-sap-border-light rounded-md p-3 animate-slide-up"
@@ -383,9 +396,11 @@ function CrimedataCard({ result, index }) {
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 min-w-0">
           <StatusBadge found={true} />
-          <span className="text-13 font-semibold text-sap-text truncate" title={recordName || entityText}>
-            {recordName || entityText || '—'}
-          </span>
+          <Provenance value={recordName || entityText} sources={provSources}>
+            <span className="text-13 font-semibold text-sap-text truncate" title={recordName || entityText}>
+              {recordName || entityText || '—'}
+            </span>
+          </Provenance>
         </div>
         <ScoreChip score={result.score} />
       </div>
@@ -449,6 +464,24 @@ function WorldcheckCard({ result, index }) {
 
   const mcaCompanies = useMemo(() => extractMcaCompanies(result), [result]);
 
+  // Pick a representative dataset for the provenance tooltip: prefer the
+  // first keyword source_name when present (public list label like
+  // "Ministry of Corporate Affairs"); fall back to category or the generic
+  // "Sanctions & PEP" label.
+  const firstKeyword = (Array.isArray(extra.keywords) ? extra.keywords : [])
+    .find((k) => k && typeof k.source_name === 'string' && k.source_name.trim());
+  const provDataset = (firstKeyword && firstKeyword.source_name)
+    || asText(extra.category)
+    || 'Sanctions & PEP';
+  const provSources = [{
+    capability: 'watchlist',
+    dataset: provDataset,
+    field_key: 'name',
+    via_seed: entityText || null,
+    via_seed_type: 'name',
+    depth: 1,
+  }];
+
   return (
     <div
       className="bg-sap-panel/60 border border-sap-border-light rounded-md p-3 animate-slide-up"
@@ -458,9 +491,11 @@ function WorldcheckCard({ result, index }) {
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 min-w-0">
           <StatusBadge found={true} />
-          <span className="text-13 font-semibold text-sap-text truncate" title={headlineName}>
-            {headlineName || '—'}
-          </span>
+          <Provenance value={headlineName} sources={provSources}>
+            <span className="text-13 font-semibold text-sap-text truncate" title={headlineName}>
+              {headlineName || '—'}
+            </span>
+          </Provenance>
         </div>
         <ScoreChip score={result.score} />
       </div>

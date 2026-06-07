@@ -2,6 +2,23 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { chooseCanonicalIdentity } from '../lib/canonicalIdentity';
 import { formatCanonicalLocation } from '../lib/canonicalLocation';
 import { ecourtsSearch, getEcourtsByState } from '../lib/api';
+import Provenance from './Provenance';
+
+// Backend (spec B1) ships each value in `profile.{names,emails,phones,...}`
+// as `{ value, sources: [...] }`. Some callers / legacy fallback paths still
+// emit bare strings — normalise so the rest of this file can read .value and
+// .sources uniformly, and wrap chips in <Provenance> with no special casing.
+function toEntry(v) {
+  if (v && typeof v === 'object' && 'value' in v) {
+    return { value: v.value, sources: Array.isArray(v.sources) ? v.sources : [] };
+  }
+  return { value: v, sources: [] };
+}
+
+function entryValue(v) {
+  if (v && typeof v === 'object' && 'value' in v) return v.value;
+  return v;
+}
 
 // Render-only metadata. Classification + value validation happens in the
 // backend (app.engines.identifier_categorizer). The render order here also
@@ -166,13 +183,17 @@ export default function SubjectProfile({
   canonical: canonicalProp, canonicalName, canonicalSource, profile: profileProp, canonicalLocation,
 }) {
   // Backend ships the categorized profile (see app.engines.identifier_categorizer).
-  // Empty arrays are filtered here so empty buckets don't render headers.
+  // Each entry is `{ value, sources }`; legacy callers may still pass bare
+  // strings, so we normalise via `toEntry` and drop empties.
   const profile = useMemo(() => {
     const src = profileProp || {};
     const out = {};
     for (const cat of CATEGORIES) {
-      const values = Array.isArray(src[cat.key]) ? src[cat.key].filter(Boolean) : [];
-      if (values.length > 0) out[cat.key] = values;
+      const raw = Array.isArray(src[cat.key]) ? src[cat.key] : [];
+      const entries = raw
+        .map(toEntry)
+        .filter((e) => e.value !== null && e.value !== undefined && e.value !== '');
+      if (entries.length > 0) out[cat.key] = entries;
     }
     return out;
   }, [profileProp]);
@@ -182,11 +203,13 @@ export default function SubjectProfile({
     [profile],
   );
 
+  // chooseCanonicalIdentity expects plain string arrays — strip per-entry
+  // sources before handing in.
   const canonicalLocal = useMemo(
     () => chooseCanonicalIdentity({
-      names:     profile.names     || [],
-      usernames: profile.usernames || [],
-      emails:    profile.emails    || [],
+      names:     (profile.names     || []).map(entryValue),
+      usernames: (profile.usernames || []).map(entryValue),
+      emails:    (profile.emails    || []).map(entryValue),
     }),
     [profile.names, profile.usernames, profile.emails],
   );
@@ -206,7 +229,8 @@ export default function SubjectProfile({
     const canonicalTokens = nameTokenSet(canonicalName);
     const seen = new Set();
     const extras = [];
-    for (const raw of all) {
+    for (const entry of all) {
+      const raw = entry?.value;
       if (typeof raw !== 'string') continue;
       const trimmed = raw.trim();
       if (!trimmed) continue;
@@ -215,9 +239,9 @@ export default function SubjectProfile({
       seen.add(key);
       const tokens = nameTokenSet(trimmed);
       if (isCanonicalVariant(tokens, canonicalTokens)) continue;
-      extras.push(trimmed);
+      extras.push({ value: trimmed, sources: entry.sources || [] });
     }
-    extras.sort((a, b) => a.localeCompare(b));
+    extras.sort((a, b) => a.value.localeCompare(b.value));
     return extras;
   }, [canonicalSource, canonicalName, profile.names]);
 
@@ -229,8 +253,9 @@ export default function SubjectProfile({
     const names = Array.isArray(profile.names) ? profile.names : [];
     if (names.length === 0) return profile;
     const canonicalTokens = nameTokenSet(canonicalName);
-    const otherKeys = new Set(otherNames.map(n => n.toLowerCase()));
-    const filtered = names.filter((raw) => {
+    const otherKeys = new Set(otherNames.map((n) => n.value.toLowerCase()));
+    const filtered = names.filter((entry) => {
+      const raw = entry?.value;
       if (typeof raw !== 'string') return false;
       const trimmed = raw.trim();
       if (!trimmed) return false;
@@ -252,7 +277,7 @@ export default function SubjectProfile({
   const allTags = useMemo(() => {
     const tags = [];
     CATEGORIES.filter(c => profile[c.key]).forEach(cat => {
-      profile[cat.key].forEach(v => tags.push({ cat: cat.key, value: v }));
+      profile[cat.key].forEach((entry) => tags.push({ cat: cat.key, value: entry.value }));
     });
     return tags;
   }, [profile]);
@@ -366,8 +391,8 @@ export default function SubjectProfile({
       {/* Category grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-sap-border-light">
         {CATEGORIES.filter(cat => gridProfile[cat.key]).map(cat => {
-          const visibleValues = gridProfile[cat.key].filter(
-            v => revealedSet.has(`${cat.key}:${v}`)
+          const visibleEntries = gridProfile[cat.key].filter(
+            (entry) => revealedSet.has(`${cat.key}:${entry.value}`)
           );
           return (
             <ProfileSection
@@ -376,7 +401,7 @@ export default function SubjectProfile({
               label={cat.label}
               icon={cat.icon}
               color={cat.color}
-              values={visibleValues}
+              entries={visibleEntries}
               totalValues={gridProfile[cat.key].length}
               onFocusEntity={onFocusEntity}
               locationData={cat.key === 'locations' ? location : null}
@@ -416,8 +441,8 @@ function buildCourtStates(location) {
 
 // Investigator-provided subject path only: render names discovered in records
 // that don't match the canonical, so the investigator can vet or dismiss them
-// at a glance. Provenance counts/tooltips are a placeholder here; the full
-// hover-provenance work lands in spec B2.
+// at a glance. Each row carries a <Provenance> tooltip sourced from the
+// per-entry payload shipped by spec B1.
 function OtherNamesSection({ names }) {
   if (!names || names.length === 0) return null;
   return (
@@ -433,8 +458,10 @@ function OtherNamesSection({ names }) {
       </div>
       <div className="space-y-0.5">
         {names.map((n) => (
-          <div key={n} className="flex items-center gap-2 py-1 group cursor-default">
-            <span className="text-13 text-sap-text">{n}</span>
+          <div key={n.value} className="flex items-center gap-2 py-1 group cursor-default">
+            <Provenance value={n.value} sources={n.sources}>
+              <span className="text-13 text-sap-text">{n.value}</span>
+            </Provenance>
             <span className="text-11 text-sap-muted ml-auto" aria-hidden />
             <span aria-hidden className="text-sap-muted group-hover:text-sap-text transition-colors">&#x25B8;</span>
           </div>
@@ -563,8 +590,8 @@ function isIdentifierValue(v) {
   return false;                                  // multi-word phrase → description
 }
 
-function ProfileSection({ catKey, label, icon, color, values, totalValues, onFocusEntity, locationData }) {
-  if (values.length === 0 && !(catKey === 'locations' && locationData?.state)) return null;
+function ProfileSection({ catKey, label, icon, color, entries, totalValues, onFocusEntity, locationData }) {
+  if (entries.length === 0 && !(catKey === 'locations' && locationData?.state)) return null;
 
   const isLocation = catKey === 'locations';
   const catAllowsIdentifier = IDENTIFIER_CATS.has(catKey);
@@ -581,7 +608,7 @@ function ProfileSection({ catKey, label, icon, color, values, totalValues, onFoc
         {icon}
         <span className="text-12 font-semibold tracking-tight">{label}</span>
         <span className="text-11 text-sap-muted ml-1 tabular-nums">
-          ({values.length}{values.length < totalValues ? `/${totalValues}` : ''})
+          ({entries.length}{entries.length < totalValues ? `/${totalValues}` : ''})
         </span>
       </div>
 
@@ -590,7 +617,9 @@ function ProfileSection({ catKey, label, icon, color, values, totalValues, onFoc
       )}
 
       <div className="flex flex-wrap gap-1.5">
-        {values.slice(0, 15).map((v, i) => {
+        {entries.slice(0, 15).map((entry, i) => {
+          const v = entry.value;
+          const sources = entry.sources;
           const fontCls = catAllowsIdentifier && isIdentifierValue(v) ? 'font-mono' : '';
           const tagClasses = `${tagClassesBase} ${fontCls}`;
           // Linked accounts: decode common URI schemes at render-time so the
@@ -609,9 +638,8 @@ function ProfileSection({ catKey, label, icon, color, values, totalValues, onFoc
           } else {
             content = v;
           }
-          return isNavigable ? (
+          const chip = isNavigable ? (
             <button
-              key={v}
               type="button"
               onClick={() => onFocusEntity(entityType, v)}
               className={`${tagClasses} cursor-pointer hover:border-sap-accent hover:bg-sap-surface transition-colors`}
@@ -622,13 +650,17 @@ function ProfileSection({ catKey, label, icon, color, values, totalValues, onFoc
             </button>
           ) : (
             <span
-              key={v}
               className={tagClasses}
               style={{ animationDelay: `${i * 30}ms`, animationFillMode: 'both' }}
-              title={v}
+              title={typeof v === 'string' ? v : undefined}
             >
               {content}
             </span>
+          );
+          return (
+            <Provenance key={v} value={v} sources={sources}>
+              {chip}
+            </Provenance>
           );
         })}
         {totalValues > 15 && (

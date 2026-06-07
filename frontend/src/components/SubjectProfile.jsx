@@ -474,15 +474,13 @@ function OtherNamesSection({ names }) {
           · {names.length} additional name{names.length !== 1 ? 's' : ''} appeared — investigate or dismiss
         </span>
       </div>
-      <div className="space-y-0.5">
+      <div className="flex flex-wrap gap-1.5">
         {names.map((n) => (
-          <div key={n.value} className="flex items-center gap-2 py-1 group cursor-default">
-            <Provenance value={n.value} sources={n.sources}>
-              <span className="text-13 text-sap-text">{n.value}</span>
-            </Provenance>
-            <span className="text-11 text-sap-muted ml-auto" aria-hidden />
-            <span aria-hidden className="text-sap-muted group-hover:text-sap-text transition-colors">&#x25B8;</span>
-          </div>
+          <Provenance key={n.value} value={n.value} sources={n.sources}>
+            <span className="inline-flex items-center px-2 py-0.5 rounded border text-12 text-sap-text bg-sap-surface border-sap-border-light">
+              {n.value}
+            </span>
+          </Provenance>
         ))}
       </div>
     </div>

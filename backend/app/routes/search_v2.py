@@ -25,6 +25,7 @@ from app.engines.identifier_categorizer import (
     extract_profile as categorizer_extract_profile,
     flatten_profile as categorizer_flatten_profile,
 )
+from app.engines.name_match import find_variants, dob_compatible
 from app.audit import audit as audit_service
 from app.credits import require_credits, ENGINE_COST_KEYS
 
@@ -382,7 +383,7 @@ def _generate_programmatic_summary(
     return " ".join(parts)
 
 
-def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: list[dict], explicit_name: str | None = None) -> dict:
+def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: list[dict], explicit_name: str | None = None, variants: list[dict] | None = None, dob_enforced: bool = False) -> dict:
     """FTI screening + financial screening (runs in thread).
 
     When ``explicit_name`` is provided, only that single name is screened
@@ -390,6 +391,13 @@ def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: l
     name extraction entirely. This eliminates the "namesake" class of hits,
     because we never look up anyone other than the investigator-named
     subject.
+
+    When ``variants`` is a non-empty list (each entry shaped like
+    ``{"name": ..., "matched_by": ...}`` per ``name_match.find_variants``)
+    and ``explicit_name`` is also provided, the screening expands to
+    ``[explicit_name] + [v['name'] for v in variants]`` — picking up
+    plausible spelling variants of the investigator's subject while still
+    excluding unrelated namesakes.
     """
     events = []
     parsed_fti = []
@@ -401,6 +409,13 @@ def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: l
     if "threat_intel" in engines:
         if explicit_name:
             fullnames = [explicit_name]
+            if variants:
+                seen_lower = {explicit_name.lower()}
+                for v in variants:
+                    nm = (v.get("name") or "").strip()
+                    if nm and nm.lower() not in seen_lower:
+                        fullnames.append(nm)
+                        seen_lower.add(nm.lower())
         else:
             fullnames = _extract_fullnames(all_results)
         names_screened = len(fullnames)
@@ -430,10 +445,17 @@ def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: l
             parsed_fti.append({"query_type": "worldcheck", "entity_value": name, "found": wc_found, "results": wc_results})
 
     fti_ms = round((time.time() - t_fti) * 1000)
+    # Additive fields: ``variants_screened`` lists the spelling variants of
+    # the investigator's subject we also screened (empty when no
+    # explicit_name or no variants discovered); ``dob_enforced`` is a flag
+    # surfaced for the UI even though the actual DOB filter is applied in
+    # the canonical-match pass downstream (see ``_entry_matches_canonical``).
     events.append({"event": "fti:complete", "data": _dumps({
         "total_names_screened": names_screened,
         "crimedata_matches": cd_matches, "worldcheck_matches": wc_matches,
         "total_time_ms": fti_ms,
+        "variants_screened": [v["name"] for v in (variants or []) if v.get("name")],
+        "dob_enforced": bool(dob_enforced),
     })})
 
     t_fin = time.time()
@@ -797,9 +819,23 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
             # FTI/darkmon/financial.
             yield {"event": "profile:ready", "data": _dumps(_build_profile_payload(all_results, req.subject))}
 
+            # Compute spelling variants of the investigator's subject from
+            # discovered breach names so FTI screens canonical + variants
+            # (catches "Sai Krishna Budamgunta" / "S. Budamgunta" forms of
+            # "Saikrishna Budamgunta") without re-introducing namesake noise.
+            _explicit = _explicit_canonical_name(req.subject)
+            _variants: list[dict] = []
+            if _explicit and req.subject:
+                _discovered = _extract_fullnames(all_results)
+                _variants = find_variants(req.subject.model_dump(), _discovered)
+            _dob_enforced = bool(req.subject and req.subject.dob)
+
             def _run_parallel():
                 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                    f_fti = executor.submit(_run_fti_and_financial, engines, all_results, seeds_dicts, _explicit_canonical_name(req.subject))
+                    f_fti = executor.submit(
+                        _run_fti_and_financial, engines, all_results, seeds_dicts,
+                        _explicit, _variants, _dob_enforced,
+                    )
                     f_dm = executor.submit(_run_darkmon, engines, all_results)
 
                     try:
@@ -920,19 +956,91 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
                 t for t in (canonical_name or "").lower().split() if len(t) >= 2
             ]
 
+        # Recompute variants here so the canonical-match filter can accept
+        # entries matching the canonical OR any spelling variant. We
+        # intentionally don't pipe them through from the FTI thread —
+        # _extract_fullnames is cheap and the BFS results in scope are the
+        # source of truth.
+        _summary_variants: list[dict] = []
+        if req.subject and explicit_name:
+            _summary_variants = find_variants(
+                req.subject.model_dump(), _extract_fullnames(all_results)
+            )
+        _subject_dob = req.subject.dob if req.subject else None
+
+        def _hit_dob(entry: dict):
+            """Best-effort DOB extraction from a screening hit's record.
+
+            Tries common field names on the entry itself, on entry['record'],
+            and on the typical EXTRA_DATA blob. Returns the raw string (or
+            None) for ``name_match.dob_compatible`` to parse — that helper
+            no-ops on unparseable input, so we don't need to be clever here.
+            """
+            for key in ("dob", "date_of_birth", "DOB", "DateOfBirth", "birth_date"):
+                v = entry.get(key)
+                if isinstance(v, str) and v.strip():
+                    return v
+            for nested_key in ("record", "EXTRA_DATA", "extra_data", "details", "fields"):
+                blob = entry.get(nested_key)
+                if isinstance(blob, dict):
+                    for key in ("dob", "date_of_birth", "DOB", "DateOfBirth", "birth_date"):
+                        v = blob.get(key)
+                        if isinstance(v, str) and v.strip():
+                            return v
+            # Some FTI hits wrap the matched record inside results[i].fields.
+            for nested_key in ("results", "records"):
+                blob = entry.get(nested_key)
+                if isinstance(blob, list) and blob:
+                    for item in blob[:5]:
+                        if isinstance(item, dict):
+                            for key in ("dob", "date_of_birth", "DOB", "DateOfBirth", "birth_date"):
+                                v = item.get(key)
+                                if isinstance(v, str) and v.strip():
+                                    return v
+            return None
+
+        # Pre-compute per-name token sets so we can accept an entry that
+        # matches the canonical OR any variant.
+        def _name_to_token_sets(name: str) -> tuple[list[str], list[str]]:
+            toks = [t for t in (name or "").lower().split() if t]
+            multi_tokens = [t for t in toks if len(t) >= 2]
+            initial_tokens = [t for t in toks if len(t) == 1]
+            return multi_tokens, initial_tokens
+
         if req.subject and _explicit_canonical_name(req.subject):
+            # Build a list of (multi_tokens, initial_patterns) — one per
+            # name we'll accept (canonical + each spelling variant).
+            _accepted_specs: list[tuple[list[str], list[re.Pattern]]] = []
             multi    = [t for t in canonical_tokens_for_summary if len(t) >= 2]
             initials = [t for t in canonical_tokens_for_summary if len(t) == 1]
             _initial_patterns = [re.compile(rf"\b{re.escape(c)}", re.IGNORECASE) for c in initials]
+            _accepted_specs.append((multi, _initial_patterns))
+            for v in _summary_variants:
+                v_multi, v_inits = _name_to_token_sets(v.get("name", ""))
+                v_patterns = [re.compile(rf"\b{re.escape(c)}", re.IGNORECASE) for c in v_inits]
+                _accepted_specs.append((v_multi, v_patterns))
+
+            def _matches_one_spec(ev: str, spec_multi: list[str], spec_patterns: list[re.Pattern]) -> bool:
+                if not spec_multi and not spec_patterns:
+                    return True
+                if spec_multi and not all(t in ev for t in spec_multi):
+                    return False
+                if spec_patterns and not any(p.search(ev) for p in spec_patterns):
+                    return False
+                return True
 
             def _entry_matches_canonical(entry: dict) -> bool:
                 ev = (entry.get("entity_value") or "").lower()
-                if not multi and not initials:
-                    return True
-                if multi and not all(t in ev for t in multi):
+                name_ok = any(
+                    _matches_one_spec(ev, spec_multi, spec_patterns)
+                    for spec_multi, spec_patterns in _accepted_specs
+                )
+                if not name_ok:
                     return False
-                if initials and not any(p.search(ev) for p in _initial_patterns):
-                    return False
+                # DOB filter — only when investigator supplied a DOB.
+                if _subject_dob:
+                    if not dob_compatible(_subject_dob, _hit_dob(entry)):
+                        return False
                 return True
         else:
             def _entry_matches_canonical(entry: dict) -> bool:

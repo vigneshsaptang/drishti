@@ -1103,6 +1103,7 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
                 "profile_flat": profile_flat,
                 "canonical_location": canonical_location,
                 "canonical_name": canonical_name,
+                "canonical_source": _profile_payload.get("canonical_source"),
             }),
         }
 

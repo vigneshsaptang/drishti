@@ -3,7 +3,11 @@ import * as d3 from 'd3';
 import { buildGraph } from '../lib/api';
 import { EDGE_TYPES } from '../lib/ontology';
 import { classifyBreach, getRecency } from '../lib/breach';
+import { CAPABILITY_LABELS } from '../components/Provenance';
 
+// Legacy per-type palette — kept as a fallback for nodes that haven't received
+// the new origin.capability metadata yet (and as the colour used in the
+// per-type neighbour breakdown inside NodeDetailPanel).
 const NODE_COLORS = {
   phone: '#2563eb', email: '#059669', breach: '#ea580c', darkweb_account: '#7c3aed',
   telegram_group: '#0891b2', upi: '#16a34a', person: '#475569', url: '#6b7280',
@@ -11,6 +15,34 @@ const NODE_COLORS = {
 };
 
 const NODE_RADIUS = { phone: 16, email: 14, breach: 12, upi: 12, bank: 12, crypto: 12, watchlist: 14, default: 11 };
+
+// Capability → sap-* CSS variable for the graph node fill / legend dot.
+// Per spec C Phase FE: nodes are coloured by the capability that surfaced them
+// (carried on node.origin.capability from the backend). Falls back through
+// NODE_COLORS for legacy/unknown shapes.
+const CAPABILITY_COLORS = {
+  seed:      'var(--color-sap-accent)',
+  breach:    'var(--color-sap-warning)',
+  darkweb:   'var(--color-sap-danger)',
+  watchlist: 'var(--color-sap-danger-filled)',
+  court:     'var(--color-sap-dim)',
+  financial: 'var(--color-sap-success)',
+};
+const DEFAULT_CAPABILITY_COLOR = 'var(--color-sap-muted)';
+
+// Capability codes shown in the legend, in display order. Drawn from the
+// CAPABILITY_COLORS keys but with `seed` first so the subject reads as the
+// anchor of the graph.
+const LEGEND_CAPABILITIES = ['seed', 'breach', 'darkweb', 'watchlist', 'court', 'financial'];
+
+// Pick the fill colour for a node — capability takes precedence, fall back to
+// the legacy per-type palette so nodes without origin metadata still render.
+function nodeFill(d) {
+  const cap = d?.origin?.capability;
+  if (cap && CAPABILITY_COLORS[cap]) return CAPABILITY_COLORS[cap];
+  if (cap) return DEFAULT_CAPABILITY_COLOR;
+  return NODE_COLORS[d?.type] || DEFAULT_CAPABILITY_COLOR;
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Depth derivation — BFS from the seed (the node we kicked the search off with)
@@ -319,12 +351,14 @@ export default function GraphTab({ data, onPivot, focusedEntity, onClearFocus })
         </div>
       )}
 
-      {/* Legend */}
+      {/* Legend — keyed on capability, not the legacy per-type palette. Labels
+          come from CAPABILITY_LABELS (Provenance.jsx) so the same wording is
+          used wherever provenance surfaces. */}
       <div className="flex flex-wrap gap-3 mb-3">
-        {Object.entries(NODE_COLORS).map(([type, color]) => (
-          <div key={type} className="flex items-center gap-1.5 text-11 text-sap-muted">
-            <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-            {type.replace('_', ' ')}
+        {LEGEND_CAPABILITIES.map(cap => (
+          <div key={cap} className="flex items-center gap-1.5 text-11 text-sap-muted">
+            <div className="w-2.5 h-2.5 rounded-full" style={{ background: CAPABILITY_COLORS[cap] }} />
+            {CAPABILITY_LABELS[cap] || cap}
           </div>
         ))}
       </div>
@@ -462,7 +496,23 @@ function NodeDetailPanel({ node, graph, data, depth, onClose, onPivot }) {
 
   const ndata = node.data || {};
   const canPivot = (node.type === 'phone' || node.type === 'email') && typeof onPivot === 'function';
-  const accent = NODE_COLORS[node.type] || '#64748b';
+  // Header dot prefers the capability colour (matches the graph node fill) and
+  // falls back to the legacy per-type palette for nodes without origin metadata.
+  const accent = nodeFill(node);
+
+  // Provenance metadata from the backend (spec C Phase BE). May be absent on
+  // older payloads — the block only renders when an origin object is present.
+  const origin = node.origin || null;
+  const capLabel = origin?.capability ? CAPABILITY_LABELS[origin.capability] : null;
+  const originDepth = typeof origin?.depth === 'number' ? origin.depth : depth;
+  const metaParts = [];
+  if (capLabel) metaParts.push(capLabel);
+  if (typeof originDepth === 'number') metaParts.push(`reached at depth ${originDepth}`);
+  const metaLine = metaParts.join(' · ');
+  const evidenceCount = typeof origin?.evidence_count === 'number' ? origin.evidence_count : null;
+  const datasets = Array.isArray(origin?.datasets) ? origin.datasets.filter(d => typeof d === 'string' && d.trim()) : [];
+  const visibleDatasets = datasets.slice(0, 3);
+  const extraDatasets = datasets.length - visibleDatasets.length;
 
   // Type-specific enrichment — surfaces fields beyond the bare graph node
   const detailRows = [];
@@ -597,6 +647,62 @@ function NodeDetailPanel({ node, graph, data, depth, onClose, onPivot }) {
       </div>
 
       <div className="px-4 py-3">
+        {/* Provenance — branded Saptang Labs Intelligence block. Renders only
+            when the backend supplied origin metadata. Per PROVENANCE_BRANDING.md
+            the top line is literally "Saptang Labs Intelligence"; internal
+            engine names never appear. Capability label comes from the
+            CAPABILITY_LABELS map imported from components/Provenance. */}
+        {origin && (
+          <div className="mb-3 pb-3 border-b border-sap-border-light">
+            <div className="text-12 font-semibold text-sap-text leading-tight">
+              Saptang Labs Intelligence
+            </div>
+            {metaLine && (
+              <div className="text-11 text-sap-dim leading-tight mt-0.5">
+                {metaLine}
+              </div>
+            )}
+
+            {origin.via_seed && (
+              <div className="mt-2.5">
+                <div className="text-11 text-sap-muted mb-0.5">Found via seed</div>
+                <div className="text-12 font-mono text-sap-text break-all leading-snug">
+                  {origin.via_seed}
+                  {origin.via_seed_type && (
+                    <span className="ml-1 font-sans text-11 text-sap-muted">
+                      ({origin.via_seed_type})
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {evidenceCount != null && (
+              <div className="mt-2.5 text-12 text-sap-dim tabular-nums">
+                Mentioned in {evidenceCount} record{evidenceCount === 1 ? '' : 's'}
+              </div>
+            )}
+
+            {visibleDatasets.length > 0 && (
+              <div className="mt-2.5">
+                <div className="text-11 text-sap-muted mb-0.5">Datasets</div>
+                <div className="space-y-0.5">
+                  {visibleDatasets.map(d => (
+                    <div key={d} className="text-12 text-sap-text leading-snug truncate">
+                      {d}
+                    </div>
+                  ))}
+                  {extraDatasets > 0 && (
+                    <div className="text-11 text-sap-dim leading-snug">
+                      +{extraDatasets} more
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Headline label */}
         <p className="font-mono text-13 font-medium text-sap-text leading-snug break-words mb-3">
           {node.label}
@@ -725,7 +831,7 @@ function renderForceGraph(svgEl, containerEl, graph, onSelectNode) {
     .append('circle')
     .attr('r', d => (NODE_RADIUS[d.type] || NODE_RADIUS.default) + 6)
     .attr('fill', 'none')
-    .attr('stroke', d => NODE_COLORS[d.type] || '#64748b')
+    .attr('stroke', nodeFill)
     .attr('stroke-width', 2)
     .attr('stroke-opacity', 0.5)
     .attr('pointer-events', 'none')
@@ -733,8 +839,8 @@ function renderForceGraph(svgEl, containerEl, graph, onSelectNode) {
 
   node.append('circle')
     .attr('r', d => NODE_RADIUS[d.type] || NODE_RADIUS.default)
-    .attr('fill',   d => NODE_COLORS[d.type] || '#64748b')
-    .attr('stroke', d => NODE_COLORS[d.type] || '#64748b')
+    .attr('fill',   nodeFill)
+    .attr('stroke', nodeFill)
     .attr('stroke-width', d => d._isFocus ? 4 : 2)
     .attr('stroke-opacity', d => d._isFocus ? 0.9 : 0.3)
     .attr('cursor', 'pointer')
@@ -870,8 +976,8 @@ function renderHierarchyGraph(svgEl, containerEl, graph, depths, opts, onSelectN
 
   node.append('circle')
     .attr('r', d => NODE_RADIUS[d.type] || NODE_RADIUS.default)
-    .attr('fill',   d => NODE_COLORS[d.type] || '#64748b')
-    .attr('stroke', d => NODE_COLORS[d.type] || '#64748b')
+    .attr('fill',   nodeFill)
+    .attr('stroke', nodeFill)
     .attr('stroke-width', 2).attr('stroke-opacity', 0.35).attr('cursor', 'pointer')
     .on('click', (event, d) => {
       event.stopPropagation();

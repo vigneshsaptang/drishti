@@ -158,6 +158,31 @@ function RawRecord({ record }) {
 }
 
 /**
+ * Tiny chevron used to indicate an expandable variant list. Matches the
+ * shape used in CommandBar's expand affordance.
+ */
+function Chevron({ open }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 12 12"
+      width="10"
+      height="10"
+      className={`transition-transform ${open ? 'rotate-90' : ''}`}
+    >
+      <path
+        d="M4 2 L8 6 L4 10"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
  * Shield icon SVG for the card header.
  */
 function ShieldIcon({ className }) {
@@ -571,13 +596,15 @@ function ClearSection({ label, muted }) {
   );
 }
 
-export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTokens, canonicalName, canonicalSource }) {
+export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTokens, canonicalName, canonicalSource, variantsScreened, dobEnforced }) {
   const [filterToCanonical, setFilterToCanonical] = useState(true);   // default ON
   const [prevFtiResults, setPrevFtiResults] = useState(ftiResults);
+  const [variantsExpanded, setVariantsExpanded] = useState(false);
   if (ftiResults !== prevFtiResults) {
     setPrevFtiResults(ftiResults);
     if (!filterToCanonical) setFilterToCanonical(true);
   }
+  const variants = Array.isArray(variantsScreened) ? variantsScreened : [];
 
   // Split results by query_type; track raw totals AND filtered sets separately.
   const {
@@ -706,12 +733,41 @@ export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTo
           inferred-canonical + operator toggle. */}
       {canonicalSource === 'investigator' ? (
         totalAllMatches > 0 && (
-          <div className="px-4 py-2 border-b border-sap-border-light flex items-center gap-2 text-12 bg-sap-bg">
-            <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-sap-accent" />
-            <span className="text-sap-muted">Screened against</span>
-            <span className="text-sap-text font-semibold">&ldquo;{canonicalName}&rdquo;</span>
-            <span className="text-sap-muted">· investigator-provided</span>
-          </div>
+          <>
+            <div className="px-4 py-2 border-b border-sap-border-light flex items-center gap-2 text-12 bg-sap-bg">
+              <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-sap-accent" />
+              <span className="text-sap-muted">Screened against</span>
+              <span className="text-sap-text font-semibold">&ldquo;{canonicalName}&rdquo;</span>
+              {variants.length > 0 && (
+                <>
+                  <span className="text-sap-muted">+</span>
+                  <button
+                    type="button"
+                    onClick={() => setVariantsExpanded(e => !e)}
+                    className="text-12 text-sap-accent hover:text-sap-text transition-colors inline-flex items-center gap-1"
+                  >
+                    {variants.length} spelling variant{variants.length !== 1 ? 's' : ''}
+                    <Chevron open={variantsExpanded} />
+                  </button>
+                </>
+              )}
+              <span className="text-sap-muted">· investigator-provided</span>
+              {dobEnforced && (
+                <span className="text-11 text-sap-muted">· DOB filtering on</span>
+              )}
+            </div>
+            {variantsExpanded && variants.length > 0 && (
+              <div className="px-4 py-2 border-b border-sap-border-light bg-sap-bg text-12 text-sap-dim">
+                <span className="text-sap-muted">Also screened:</span>
+                <span className="font-mono ml-2">
+                  {variants.slice(0, 8).join(', ')}
+                  {variants.length > 8 && (
+                    <span className="text-sap-muted"> +{variants.length - 8} more</span>
+                  )}
+                </span>
+              </div>
+            )}
+          </>
         )
       ) : totalAllMatches > 0 ? (
         <div className={`px-4 py-2 border-b border-sap-border-light flex items-center gap-2 text-12 ${

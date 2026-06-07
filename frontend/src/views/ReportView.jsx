@@ -376,7 +376,7 @@ function ReportProgress({ loading, results, ftiMeta, darkmonMeta, profile, riskS
 export default function ReportView({
   results, data, loading, aiSummary, riskScore, canonical, canonicalName, canonicalSource, watchlistFilterTokens,
   profile, canonicalLocation,
-  ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults,
+  ftiResults, ftiMeta, variantsScreened, dobEnforced, darkmonResults, darkmonMeta, financialResults,
   onPivot, onFocusEntity, onSwitchTab,
 }) {
   const seedType = data?.seed?.type || 'email';
@@ -415,6 +415,7 @@ export default function ReportView({
           canonicalSource={canonicalSource}
           profile={profile}
           canonicalLocation={canonicalLocation}
+          variantsScreened={variantsScreened}
         />
       </ErrorBoundary>
 
@@ -441,6 +442,8 @@ export default function ReportView({
             canonicalTokens={watchlistFilterTokens}
             canonicalName={canonicalName || canonical?.canonical || null}
             canonicalSource={canonicalSource}
+            variantsScreened={variantsScreened}
+            dobEnforced={dobEnforced}
           />
         </ErrorBoundary>
       )}

@@ -178,9 +178,18 @@ function decodeAccountValue(raw) {
   return { label: v, mono: true };
 }
 
+// Normalise a name string for variant-equality membership tests: trim, lower,
+// collapse internal whitespace. Used to exclude D1 backend-confirmed spelling
+// variants from the "Other names found in records" section.
+function normalizeName(s) {
+  if (typeof s !== 'string') return '';
+  return s.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 export default function SubjectProfile({
   loading, onFocusEntity, onSwitchTab, aiSummary,
   canonical: canonicalProp, canonicalName, canonicalSource, profile: profileProp, canonicalLocation,
+  variantsScreened,
 }) {
   // Backend ships the categorized profile (see app.engines.identifier_categorizer).
   // Each entry is `{ value, sources }`; legacy callers may still pass bare
@@ -217,6 +226,13 @@ export default function SubjectProfile({
   const canonical = canonicalProp || canonicalLocal;
   const location = canonicalLocation || null;
 
+  // D1 backend-confirmed spelling variants of the canonical — those names are
+  // the subject, just spelled differently, and must not appear in "Other names".
+  const variantSet = useMemo(
+    () => new Set((variantsScreened || []).map(normalizeName).filter(Boolean)),
+    [variantsScreened],
+  );
+
   // Investigator-confirmed path only: split `profile.names` into the
   // canonical (variants/subsets of the investigator-provided name) and the
   // "other" names that need vetting. When source !== 'investigator' we keep
@@ -239,11 +255,12 @@ export default function SubjectProfile({
       seen.add(key);
       const tokens = nameTokenSet(trimmed);
       if (isCanonicalVariant(tokens, canonicalTokens)) continue;
+      if (variantSet.has(normalizeName(trimmed))) continue;
       extras.push({ value: trimmed, sources: entry.sources || [] });
     }
     extras.sort((a, b) => a.value.localeCompare(b.value));
     return extras;
-  }, [canonicalSource, canonicalName, profile.names]);
+  }, [canonicalSource, canonicalName, profile.names, variantSet]);
 
   // When the new section is active, drop any name it (or the canonical)
   // already represents from the Identity category so the grid below doesn't
@@ -262,6 +279,7 @@ export default function SubjectProfile({
       if (otherKeys.has(trimmed.toLowerCase())) return false;
       const tokens = nameTokenSet(trimmed);
       if (isCanonicalVariant(tokens, canonicalTokens)) return false;
+      if (variantSet.has(normalizeName(trimmed))) return false;
       return true;
     });
     if (filtered.length === names.length) return profile;
@@ -272,7 +290,7 @@ export default function SubjectProfile({
       next.names = filtered;
     }
     return next;
-  }, [profile, otherNames, canonicalSource, canonicalName]);
+  }, [profile, otherNames, canonicalSource, canonicalName, variantSet]);
 
   const allTags = useMemo(() => {
     const tags = [];

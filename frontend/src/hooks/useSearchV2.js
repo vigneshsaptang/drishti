@@ -22,6 +22,8 @@ export function useSearchV2() {
   const [results, setResults] = useState([]);
   const [ftiResults, setFtiResults] = useState([]);
   const [ftiMeta, setFtiMeta] = useState(null);
+  const [variantsScreened, setVariantsScreened] = useState([]);
+  const [dobEnforced, setDobEnforced] = useState(false);
   const [darkmonResults, setDarkmonResults] = useState([]);
   const [darkmonMeta, setDarkmonMeta] = useState(null);
   const [financialResults, setFinancialResults] = useState([]);
@@ -99,6 +101,8 @@ export function useSearchV2() {
     setResults([]);
     setFtiResults([]);
     setFtiMeta(null);
+    setVariantsScreened([]);
+    setDobEnforced(false);
     setDarkmonResults([]);
     setDarkmonMeta(null);
     setFinancialResults([]);
@@ -196,6 +200,8 @@ export function useSearchV2() {
 
                 case 'fti:complete':
                   setFtiMeta(parsed);
+                  setVariantsScreened(Array.isArray(parsed.variants_screened) ? parsed.variants_screened : []);
+                  setDobEnforced(!!parsed.dob_enforced);
                   break;
 
                 case 'financial:result':
@@ -290,6 +296,8 @@ export function useSearchV2() {
     setResults([]);
     setFtiResults([]);
     setFtiMeta(null);
+    setVariantsScreened([]);
+    setDobEnforced(false);
     setDarkmonResults([]);
     setDarkmonMeta(null);
     setFinancialResults([]);
@@ -303,5 +311,5 @@ export function useSearchV2() {
     setSearchMeta(null);
   }, [cancelSearch]);
 
-  return { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, profile, canonicalLocation, canonicalName, canonicalSource, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults };
+  return { results, ftiResults, ftiMeta, variantsScreened, dobEnforced, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, profile, canonicalLocation, canonicalName, canonicalSource, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults };
 }

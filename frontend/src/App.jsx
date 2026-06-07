@@ -72,7 +72,7 @@ function LazyFallback() {
 }
 
 export default function App() {
-  const { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, profile, canonicalLocation, canonicalName, canonicalSource, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults } = useSearchV2();
+  const { results, ftiResults, ftiMeta, variantsScreened, dobEnforced, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, profile, canonicalLocation, canonicalName, canonicalSource, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults } = useSearchV2();
   const [activeTab, setActiveTab] = useState('report');
   const [focusedEntity, setFocusedEntity] = useState(null);
   const [overlay, setOverlay] = useState(null);
@@ -195,6 +195,8 @@ export default function App() {
         canonicalLocation={canonicalLocation}
         ftiResults={ftiResults}
         ftiMeta={ftiMeta}
+        variantsScreened={variantsScreened}
+        dobEnforced={dobEnforced}
         darkmonResults={darkmonResults}
         darkmonMeta={darkmonMeta}
         financialResults={financialResults}

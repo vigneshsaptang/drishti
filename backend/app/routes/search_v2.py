@@ -21,7 +21,10 @@ from app.engines.credmon import (
     search_master as credmon_search_master,
     fetch_record_by_id as credmon_fetch_record,
 )
-from app.engines.identifier_categorizer import extract_profile as categorizer_extract_profile
+from app.engines.identifier_categorizer import (
+    extract_profile as categorizer_extract_profile,
+    flatten_profile as categorizer_flatten_profile,
+)
 from app.audit import audit as audit_service
 from app.credits import require_credits, ENGINE_COST_KEYS
 
@@ -215,25 +218,51 @@ def _build_profile_payload(all_results: list[dict], subject: SubjectName | None 
     """Compute the profile + canonical_location pair from current results.
 
     Used both for the early ``profile:ready`` SSE event (emitted right after
-    CREDMON so the report's Subject section appears before screening engines
-    run) and for the final ``summary`` event.
+    the breach engine seeds entity sets, so the report's Subject section
+    appears before screening engines run) and for the final ``summary`` event.
+
+    Emits two profile shapes:
+
+      * ``profile`` — the provenance-rich shape produced by
+        ``categorizer_extract_profile``. Each value is a
+        ``{"value": ..., "sources": [...]}`` dict so the frontend can render
+        the Saptang-Labs-Intelligence-branded provenance block per chip.
+      * ``profile_flat`` — the legacy ``dict[str, list[str]]`` shape, kept
+        for backwards compatibility with any frontend consumers (and a few
+        internal call sites here) that still read bare strings.
     """
-    profile = categorizer_extract_profile(all_results)
-    profile["source_count"] = sum(len(r.get("sources", [])) for r in all_results if r.get("found"))
-    profile["total_entities"] = len(all_results)
-    profile["total_found"] = sum(1 for r in all_results if r.get("found"))
-    if "dobs" not in profile:
-        profile["dobs"] = profile.get("dob", [])
+    profile_rich = categorizer_extract_profile(all_results, subject=subject)
+    profile_flat = categorizer_flatten_profile(profile_rich)
+
+    # Aggregate summary counters live on the flat shape (legacy consumers).
+    profile_flat["source_count"] = sum(
+        len(r.get("sources", [])) for r in all_results if r.get("found")
+    )
+    profile_flat["total_entities"] = len(all_results)
+    profile_flat["total_found"] = sum(1 for r in all_results if r.get("found"))
+    profile_flat["dobs"] = profile_flat.get("dob", [])
+
+    # Mirror the aggregate counters onto the rich shape so any frontend code
+    # reading them via `profile.source_count` doesn't break during the
+    # rich/flat transition.
+    profile_rich["source_count"] = profile_flat["source_count"]
+    profile_rich["total_entities"] = profile_flat["total_entities"]
+    profile_rich["total_found"] = profile_flat["total_found"]
+    profile_rich["dobs"] = profile_flat["dobs"]
+
     canonical_location = geo.resolve_canonical_location(all_results)
     explicit_name = _explicit_canonical_name(subject)
     if explicit_name:
         canonical_name = explicit_name
         canonical_source = "investigator"
     else:
-        canonical_name = profile.get("names", [None])[0] if profile.get("names") else None
+        # Internal canonical-name derivation reads the LEGACY flat shape.
+        names_flat = profile_flat.get("names") or []
+        canonical_name = names_flat[0] if names_flat else None
         canonical_source = "inferred" if canonical_name else None
     return {
-        "profile": profile,
+        "profile": profile_rich,
+        "profile_flat": profile_flat,
         "canonical_location": canonical_location,
         "canonical_name": canonical_name,
         "canonical_source": canonical_source,
@@ -264,7 +293,12 @@ def _generate_programmatic_summary(
     financial_summary: dict,
     canonical_location: dict | None = None,
 ) -> str:
-    """Build a deterministic prose intelligence summary from profile data."""
+    """Build a deterministic prose intelligence summary from profile data.
+
+    Expects the LEGACY flat profile shape (``dict[str, list[str]]``) —
+    callers should pass ``profile_flat`` from ``_build_profile_payload``, not
+    the provenance-rich ``profile`` dict.
+    """
     parts: list[str] = []
 
     # Lead with identified subject
@@ -857,7 +891,8 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
         # 8. Programmatic summary — reuse the same helper that built the
         # early profile:ready event so frontend sees a consistent payload.
         _profile_payload = _build_profile_payload(all_results, req.subject)
-        profile = _profile_payload["profile"]
+        profile = _profile_payload["profile"]                # rich (with sources)
+        profile_flat = _profile_payload["profile_flat"]      # legacy strings
         canonical_location = _profile_payload["canonical_location"]
 
         # Apply the canonical-name token filter to FTI hits before counting, so
@@ -868,7 +903,9 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
             canonical_name = explicit_name
             canonical_tokens_for_summary = _explicit_canonical_tokens(req.subject)
         else:
-            canonical_name = profile.get("names", [None])[0] if profile.get("names") else None
+            # Internal canonical-name derivation reads the legacy flat shape.
+            names_flat = profile_flat.get("names") or []
+            canonical_name = names_flat[0] if names_flat else None
             canonical_tokens_for_summary = [
                 t for t in (canonical_name or "").lower().split() if len(t) >= 2
             ]
@@ -918,16 +955,19 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
         }
 
         summary_text = _generate_programmatic_summary(
-            profile, fti_summary, darkmon_summary, financial_summary,
+            profile_flat, fti_summary, darkmon_summary, financial_summary,
             canonical_location=canonical_location,
         )
         # Always emit the summary event so profile + canonical_location reach
-        # the frontend even when no prose summary is generated.
+        # the frontend even when no prose summary is generated. Ship BOTH the
+        # rich (provenance-bearing) shape and the legacy flat shape so any
+        # consumer that hasn't migrated yet keeps working.
         yield {
             "event": "summary",
             "data": _dumps({
                 "text": summary_text or None,
                 "profile": profile,
+                "profile_flat": profile_flat,
                 "canonical_location": canonical_location,
                 "canonical_name": canonical_name,
             }),

@@ -292,20 +292,30 @@ def _generate_programmatic_summary(
     darkmon_summary: dict,
     financial_summary: dict,
     canonical_location: dict | None = None,
+    canonical_name: str | None = None,
 ) -> str:
     """Build a deterministic prose intelligence summary from profile data.
 
     Expects the LEGACY flat profile shape (``dict[str, list[str]]``) —
     callers should pass ``profile_flat`` from ``_build_profile_payload``, not
     the provenance-rich ``profile`` dict.
+
+    When ``canonical_name`` is provided (investigator-named subject or
+    inferred canonical) it takes precedence over ``profile["names"][0]``
+    for the lead sentence — so the summary never silently mis-identifies
+    the subject as one of the discovered namesakes from breach data.
     """
     parts: list[str] = []
 
-    # Lead with identified subject
+    # Lead with identified subject. Prefer the canonical name (explicit
+    # from investigator, or inferred from breach evidence) over the raw
+    # first name in profile.names, which is order-dependent and may be a
+    # namesake / breach artefact.
     names = profile.get("names", [])
     locations = profile.get("locations", [])
-    if names:
-        lead = f"Subject identified as {names[0]}"
+    lead_name = (canonical_name or "").strip() or (names[0] if names else "")
+    if lead_name:
+        lead = f"Subject identified as {lead_name}"
         # Prefer the canonical resolved location (City, State) over the first
         # raw address from profile.locations — the latter is verbose street
         # addressing, not "where is the subject."
@@ -957,6 +967,7 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
         summary_text = _generate_programmatic_summary(
             profile_flat, fti_summary, darkmon_summary, financial_summary,
             canonical_location=canonical_location,
+            canonical_name=canonical_name,
         )
         # Always emit the summary event so profile + canonical_location reach
         # the frontend even when no prose summary is generated. Ship BOTH the

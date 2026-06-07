@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { chooseCanonicalIdentity } from '../lib/canonicalIdentity';
 import { formatCanonicalLocation } from '../lib/canonicalLocation';
-import { ecourtsSearch, getEcourtsByState } from '../lib/api';
+import { ecourtsSearch, getEcourtsByState, getPincodeInfo } from '../lib/api';
 import Provenance from './Provenance';
 
 // Backend (spec B1) ships each value in `profile.{names,emails,phones,...}`
@@ -847,6 +847,26 @@ function CourtSearchSection({ name, location, onSwitchTab }) {
   );
 }
 
+// Small async fetcher — when a pincode is rendered, look up the post-office /
+// district / state from the India Post directory so the investigator sees the
+// actual locality instead of an opaque 6-digit code.
+function PincodeDetails({ pin }) {
+  const [info, setInfo] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    getPincodeInfo(pin).then(d => { if (!cancelled) setInfo(d); });
+    return () => { cancelled = true; };
+  }, [pin]);
+  if (!info || !info.found) return null;
+  const parts = [info.po, info.district, info.state].filter(Boolean);
+  if (parts.length === 0) return null;
+  return (
+    <span className="text-11 text-sap-dim">
+      {parts.join(' · ')}
+    </span>
+  );
+}
+
 function LocationIntel({ location }) {
   const { pincode, evidence } = location;
   const stateVotes = evidence?.state_votes || {};
@@ -897,9 +917,10 @@ function LocationIntel({ location }) {
         </div>
       )}
       {pincode && (
-        <div>
-          <span className="text-11 text-sap-muted font-semibold mr-2">Pincode</span>
+        <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5">
+          <span className="text-11 text-sap-muted font-semibold mr-1">Pincode</span>
           <span className="px-2 py-0.5 rounded text-12 font-mono text-sap-dim bg-sap-panel border border-sap-border-light">{pincode}</span>
+          <PincodeDetails pin={pincode} />
         </div>
       )}
     </div>

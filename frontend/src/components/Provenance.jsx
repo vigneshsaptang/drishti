@@ -132,7 +132,7 @@ export default function Provenance({ value, sources, children }) {
       {open && (
         <span
           role="tooltip"
-          className="absolute z-50 top-full right-0 mt-1 w-72 p-3 rounded-md border border-sap-border-light bg-sap-surface shadow-[0_4px_12px_rgba(15,23,42,0.08)] text-left animate-fade-in pointer-events-none"
+          className="absolute z-50 top-full left-0 mt-1 w-72 max-w-[calc(100vw-2rem)] p-3 rounded-md border border-sap-border-light bg-sap-surface shadow-[0_4px_12px_rgba(15,23,42,0.08)] text-left animate-fade-in pointer-events-none"
         >
           <span className="block text-11 font-semibold text-sap-text leading-tight">
             Saptang Labs Intelligence

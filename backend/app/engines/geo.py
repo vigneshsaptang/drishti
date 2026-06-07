@@ -207,6 +207,66 @@ def state_from_pincode(pin) -> Optional[str]:
     return _PIN_PREFIX.get(prefix)
 
 
+# Lazy-built pincode -> {po, district, state, lat, lng} from the India Post
+# directory CSV. ~165k rows; built once on first lookup. ~16MB in memory.
+_PINCODE_INDEX: Optional[dict] = None
+
+
+def _build_pincode_index() -> dict:
+    """Read the India Post CSV bundled at data/ and produce a map keyed by
+    6-digit pincode → first matching post-office record (representative).
+    """
+    import csv
+    import os
+    out: dict[str, dict] = {}
+    # CSV lives at <repo-root>/data/. From this module (backend/app/engines/),
+    # go up three to reach repo root.
+    here = os.path.dirname(os.path.abspath(__file__))
+    csv_path = os.path.join(here, "..", "..", "..", "data",
+                            "5c2f62fe-5afa-4119-a499-fec9d604d5bd.csv")
+    csv_path = os.path.normpath(csv_path)
+    if not os.path.exists(csv_path):
+        return out
+    try:
+        with open(csv_path, "r", encoding="utf-8", errors="replace") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                pin = (row.get("pincode") or "").strip()
+                if not _PIN_SHAPE.match(pin):
+                    continue
+                if pin in out:
+                    continue  # first wins (representative)
+                out[pin] = {
+                    "pincode":  pin,
+                    "po":       _titleish(row.get("officename") or ""),
+                    "district": _titleish(row.get("district") or ""),
+                    "state":    _titleish(row.get("statename") or ""),
+                    "lat":      row.get("latitude") or None,
+                    "lng":      row.get("longitude") or None,
+                }
+    except Exception:
+        # Best-effort; if anything fails return whatever we built so far.
+        pass
+    return out
+
+
+def resolve_pincode(pin) -> Optional[dict]:
+    """Resolve a 6-digit pincode to a representative post-office record.
+
+    Returns ``{pincode, po, district, state, lat, lng}`` or ``None`` when
+    the pincode shape is invalid or not in the directory.
+    """
+    global _PINCODE_INDEX
+    if pin is None:
+        return None
+    s = str(pin).strip()
+    if not _PIN_SHAPE.match(s):
+        return None
+    if _PINCODE_INDEX is None:
+        _PINCODE_INDEX = _build_pincode_index()
+    return _PINCODE_INDEX.get(s)
+
+
 # ---------------------------------------------------------------------------
 # Vote-based canonical location resolver
 # ---------------------------------------------------------------------------

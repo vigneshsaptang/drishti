@@ -759,3 +759,22 @@ export async function getAdminStatusMessages() {
   if (!res.ok) return { messages: [], total: 0 };
   return res.json();
 }
+
+// Resolve a 6-digit pincode to a representative post-office record.
+// Returns { pincode, po, district, state, lat, lng, found: true } or
+// { pincode, found: false } when not in the directory.
+const _PINCODE_CACHE = new Map();
+export async function getPincodeInfo(pincode) {
+  const pin = String(pincode || '').trim();
+  if (!/^\d{6}$/.test(pin)) return null;
+  if (_PINCODE_CACHE.has(pin)) return _PINCODE_CACHE.get(pin);
+  try {
+    const res = await apiFetch(`${API}/geo/pincode/${pin}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    _PINCODE_CACHE.set(pin, data);
+    return data;
+  } catch {
+    return null;
+  }
+}

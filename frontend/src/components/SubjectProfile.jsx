@@ -112,6 +112,32 @@ const CATEGORIES = [
 
 const TAG_STAGGER_MS = 80;
 
+// Tokenise a name for canonical-equivalence comparison: lowercase, split on
+// whitespace, drop tokens shorter than 2 chars (initials etc.). Empty/null
+// inputs yield an empty set so they never match the canonical.
+function nameTokenSet(value) {
+  if (typeof value !== 'string') return new Set();
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return new Set();
+  return new Set(
+    trimmed.split(/\s+/).filter(tok => tok.length >= 2),
+  );
+}
+
+// True when one token set is a (non-empty) subset of the other — used to
+// decide whether a discovered name is just a variant/substring of the
+// canonical and should therefore be excluded from "Other names".
+function isCanonicalVariant(nameTokens, canonicalTokens) {
+  if (nameTokens.size === 0 || canonicalTokens.size === 0) return false;
+  const [small, large] = nameTokens.size <= canonicalTokens.size
+    ? [nameTokens, canonicalTokens]
+    : [canonicalTokens, nameTokens];
+  for (const tok of small) {
+    if (!large.has(tok)) return false;
+  }
+  return true;
+}
+
 // Decode common URI schemes seen in Linked accounts so the rendered chip
 // shows something a human can read. The raw value remains available via the
 // chip's title attribute.
@@ -167,6 +193,61 @@ export default function SubjectProfile({
 
   const canonical = canonicalProp || canonicalLocal;
   const location = canonicalLocation || null;
+
+  // Investigator-confirmed path only: split `profile.names` into the
+  // canonical (variants/subsets of the investigator-provided name) and the
+  // "other" names that need vetting. When source !== 'investigator' we keep
+  // today's flat Identity category, so this memo evaluates to an empty list.
+  const otherNames = useMemo(() => {
+    if (canonicalSource !== 'investigator') return [];
+    if (!canonicalName) return [];
+    const all = Array.isArray(profile.names) ? profile.names : [];
+    if (all.length === 0) return [];
+    const canonicalTokens = nameTokenSet(canonicalName);
+    const seen = new Set();
+    const extras = [];
+    for (const raw of all) {
+      if (typeof raw !== 'string') continue;
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      const key = trimmed.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const tokens = nameTokenSet(trimmed);
+      if (isCanonicalVariant(tokens, canonicalTokens)) continue;
+      extras.push(trimmed);
+    }
+    extras.sort((a, b) => a.localeCompare(b));
+    return extras;
+  }, [canonicalSource, canonicalName, profile.names]);
+
+  // When the new section is active, drop any name it (or the canonical)
+  // already represents from the Identity category so the grid below doesn't
+  // duplicate them. Inferred path passes through unchanged.
+  const gridProfile = useMemo(() => {
+    if (canonicalSource !== 'investigator') return profile;
+    const names = Array.isArray(profile.names) ? profile.names : [];
+    if (names.length === 0) return profile;
+    const canonicalTokens = nameTokenSet(canonicalName);
+    const otherKeys = new Set(otherNames.map(n => n.toLowerCase()));
+    const filtered = names.filter((raw) => {
+      if (typeof raw !== 'string') return false;
+      const trimmed = raw.trim();
+      if (!trimmed) return false;
+      if (otherKeys.has(trimmed.toLowerCase())) return false;
+      const tokens = nameTokenSet(trimmed);
+      if (isCanonicalVariant(tokens, canonicalTokens)) return false;
+      return true;
+    });
+    if (filtered.length === names.length) return profile;
+    const next = { ...profile };
+    if (filtered.length === 0) {
+      delete next.names;
+    } else {
+      next.names = filtered;
+    }
+    return next;
+  }, [profile, otherNames, canonicalSource, canonicalName]);
 
   const allTags = useMemo(() => {
     const tags = [];
@@ -266,6 +347,13 @@ export default function SubjectProfile({
       ) : canonical.canonical && canonical.confidence > 0 && !isRevealing ? (
         <IdentifiedSubjectBanner canonical={canonical} location={location} />
       ) : null}
+
+      {/* Other names found in records — only on the investigator-confirmed
+          path, when extras exist. Inferred path leaves this branch dormant. */}
+      {canonicalSource === 'investigator' && !isRevealing && otherNames.length > 0 && (
+        <OtherNamesSection names={otherNames} />
+      )}
+
       {/* Court search — always shown when location has a resolved state */}
       {location?.state && !isRevealing && (
         <CourtSearchSection
@@ -277,8 +365,8 @@ export default function SubjectProfile({
 
       {/* Category grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-sap-border-light">
-        {CATEGORIES.filter(cat => profile[cat.key]).map(cat => {
-          const visibleValues = profile[cat.key].filter(
+        {CATEGORIES.filter(cat => gridProfile[cat.key]).map(cat => {
+          const visibleValues = gridProfile[cat.key].filter(
             v => revealedSet.has(`${cat.key}:${v}`)
           );
           return (
@@ -289,7 +377,7 @@ export default function SubjectProfile({
               icon={cat.icon}
               color={cat.color}
               values={visibleValues}
-              totalValues={profile[cat.key].length}
+              totalValues={gridProfile[cat.key].length}
               onFocusEntity={onFocusEntity}
               locationData={cat.key === 'locations' ? location : null}
             />
@@ -324,6 +412,36 @@ function buildCourtStates(location) {
     entries.push({ code: location.stateCode, name: STATE_CODE_TO_NAME[location.stateCode] || location.stateCode });
   }
   return entries;
+}
+
+// Investigator-provided subject path only: render names discovered in records
+// that don't match the canonical, so the investigator can vet or dismiss them
+// at a glance. Provenance counts/tooltips are a placeholder here; the full
+// hover-provenance work lands in spec B2.
+function OtherNamesSection({ names }) {
+  if (!names || names.length === 0) return null;
+  return (
+    <div className="px-4 py-3 bg-sap-warning-soft/40 border-b border-sap-border-light">
+      <div className="flex items-center gap-2 mb-2">
+        <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-sap-warning-filled" />
+        <span className="text-11 font-semibold tracking-tight text-sap-warning">
+          Other names found in records
+        </span>
+        <span className="text-11 text-sap-muted">
+          · {names.length} additional name{names.length !== 1 ? 's' : ''} appeared — investigate or dismiss
+        </span>
+      </div>
+      <div className="space-y-0.5">
+        {names.map((n) => (
+          <div key={n} className="flex items-center gap-2 py-1 group cursor-default">
+            <span className="text-13 text-sap-text">{n}</span>
+            <span className="text-11 text-sap-muted ml-auto" aria-hidden />
+            <span aria-hidden className="text-sap-muted group-hover:text-sap-text transition-colors">&#x25B8;</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function IdentifiedSubjectBanner({ canonical, location, investigatorProvided = false }) {

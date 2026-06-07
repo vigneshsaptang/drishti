@@ -25,7 +25,7 @@ from app.engines.identifier_categorizer import (
     extract_profile as categorizer_extract_profile,
     flatten_profile as categorizer_flatten_profile,
 )
-from app.engines.name_match import find_variants, dob_compatible
+from app.engines.name_match import find_variants, dob_compatible, infer_canonical_name
 from app.audit import audit as audit_service
 from app.credits import require_credits, ENGINE_COST_KEYS
 
@@ -258,8 +258,15 @@ def _build_profile_payload(all_results: list[dict], subject: SubjectName | None 
         canonical_source = "investigator"
     else:
         # Internal canonical-name derivation reads the LEGACY flat shape.
+        # Use anchor-based inference (name tokens overlapping email local-parts
+        # / usernames) so a namesake that happens to be names[0] doesn't win.
         names_flat = profile_flat.get("names") or []
-        canonical_name = names_flat[0] if names_flat else None
+        emails_flat = profile_flat.get("emails") or []
+        usernames_flat = profile_flat.get("usernames") or []
+        canonical_name = (
+            infer_canonical_name(names_flat, emails_flat, usernames_flat)
+            or (names_flat[0] if names_flat else None)
+        )
         canonical_source = "inferred" if canonical_name else None
     return {
         "profile": profile_rich,
@@ -950,8 +957,15 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
             canonical_tokens_for_summary = _explicit_canonical_tokens(req.subject)
         else:
             # Internal canonical-name derivation reads the legacy flat shape.
+            # Anchor-based pick (overlaps with email local-parts / usernames)
+            # avoids namesakes that happen to be ordering-first in names[].
             names_flat = profile_flat.get("names") or []
-            canonical_name = names_flat[0] if names_flat else None
+            emails_flat = profile_flat.get("emails") or []
+            usernames_flat = profile_flat.get("usernames") or []
+            canonical_name = (
+                infer_canonical_name(names_flat, emails_flat, usernames_flat)
+                or (names_flat[0] if names_flat else None)
+            )
             canonical_tokens_for_summary = [
                 t for t in (canonical_name or "").lower().split() if len(t) >= 2
             ]

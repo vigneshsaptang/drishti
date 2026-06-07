@@ -372,6 +372,62 @@ def find_variants(subject: dict | None, discovered_names) -> list[dict]:
     return out
 
 
+# ── Canonical-name inference (anchor-based) ───────────────────────────
+#
+# When the investigator does NOT provide a subject name, the backend has
+# to pick *some* canonical name from the discovered names list. The naive
+# "names[0]" pick is order-dependent and frequently lands on a namesake
+# (a different person whose name happens to appear in the same breach
+# records).
+#
+# This inference mirrors the frontend's chooseCanonicalIdentity heuristic
+# in shape (not 1-for-1): score each candidate name by how much its tokens
+# overlap with the *anchors* (email local-parts, usernames) and pick the
+# best. A name whose tokens are also present in the seed identifier(s) is
+# almost always the actual subject; a namesake whose tokens never appear
+# in the email/username soup is almost never the subject.
+
+
+def infer_canonical_name(
+    names: list[str],
+    emails: list[str] | None = None,
+    usernames: list[str] | None = None,
+) -> str | None:
+    """Pick the most likely canonical name from a candidate list.
+
+    Scoring per candidate (descending priority):
+      1. Anchor hits: how many of the name's tokens (>= 3 chars, lowercased)
+         appear as substrings in any email local-part or username.
+      2. Token count: more name tokens win ties (a 2-token "Saikrishna
+         Budamgunta" beats a 1-token "Madhav").
+      3. Order in the input list (earlier wins) as final tie-break.
+
+    Returns the original-cased string for the winner, or None when names is
+    empty.
+    """
+    if not names:
+        return None
+    emails = emails or []
+    usernames = usernames or []
+
+    # Token soup from non-name sources (potential anchors)
+    soup: list[str] = []
+    for e in emails:
+        if isinstance(e, str) and "@" in e:
+            soup.append(e.split("@", 1)[0].lower())
+    for u in usernames:
+        if isinstance(u, str):
+            soup.append(u.lower())
+
+    def _score(idx_name: tuple[int, str]):
+        idx, name = idx_name
+        toks = [t.lower() for t in name.replace(",", " ").split() if len(t) >= 3]
+        anchor_hits = sum(1 for t in toks if any(t in blob for blob in soup))
+        return (anchor_hits, len(toks), -idx)
+
+    return max(enumerate(names), key=_score)[1]
+
+
 # ── DOB compatibility ─────────────────────────────────────────────────
 
 

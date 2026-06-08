@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-// Release content for v1.1.0 — kept as a pure data + small JSX module so
+// Release content for v1.1.0. Kept as a pure data + small JSX module so
 // the WhatsNewView can render it and the ReleaseTeaserModal can pluck the top
 // three highlights from the same source.
 
@@ -19,7 +19,7 @@ export const HIGHLIGHTS = [
     category: 'Search',
     title: 'Name the subject up-front, kill the namesake noise',
     body:
-      'The Command Bar now has a Name details panel — First / Middle / Last / ' +
+      'The Command Bar now has a Name details panel: First, Middle, Last, ' +
       'Initials / DOB. When filled, screening locks onto the named subject ' +
       'plus its spelling variants. Searches that previously screened ten ' +
       'unrelated namesakes and timed out now return one focused result in ' +
@@ -42,8 +42,8 @@ export const HIGHLIGHTS = [
     title: 'Saptang Labs Intelligence provenance on every chip',
     body:
       'Every identifier renders with a provenance tooltip naming the ' +
-      'capability that surfaced it — "Breach records", "Watchlist", ' +
-      '"Court records" — never the internal engine codename. Graph nodes ' +
+      'capability that surfaced it: "Breach records", "Watchlist", ' +
+      '"Court records". Never the internal engine codename. Graph nodes ' +
       'carry the same branding.',
     metric: null,
   },
@@ -52,8 +52,8 @@ export const HIGHLIGHTS = [
     category: 'Search',
     title: 'Smart name-variant matcher with DOB compatibility',
     body:
-      'Tiered Levenshtein + first-name rules catch "Sai Krishna" / ' +
-      '"S. Krishna" / "Saikrishna" as the same person. DOB filtering ' +
+      'Tiered Levenshtein + first-name rules catch "Anjali Mehta" / ' +
+      '"A. Mehta" / "Anjalimehta" as the same person. DOB filtering ' +
       'enforces ±2-year compatibility when investigator provides a date.',
     metric: null,
   },
@@ -74,7 +74,7 @@ export const HIGHLIGHTS = [
     title: 'Anchor-based canonical name when no subject is provided',
     body:
       'When the investigator does not name a subject, canonical is picked ' +
-      'by token overlap with email local-parts and usernames — not by ' +
+      'by token overlap with email local-parts and usernames, not by ' +
       'whichever name happened to be first in the array.',
     metric: null,
   },
@@ -83,7 +83,7 @@ export const HIGHLIGHTS = [
     category: 'Report',
     title: 'Risk promoted to the hero panel; profile arrives first',
     body:
-      'Subject profile now ships the moment breach BFS finishes — the ' +
+      'Subject profile now ships the moment breach BFS finishes. The ' +
       'report no longer waits for FTI/financial/darkweb to draw an ' +
       'identity. Risk panel moved to the top of the report flow.',
     metric: null,
@@ -94,7 +94,7 @@ export const HIGHLIGHTS = [
     title: 'Audit log now records v3 search fields',
     body:
       'Every search records canonical_source (investigator vs inferred), ' +
-      'variants_screened, dob_enforced, and noise_dropped — the measurement ' +
+      'variants_screened, dob_enforced, and noise_dropped, the measurement ' +
       'surface we needed to track how the investigator override is being ' +
       'used.',
     metric: null,
@@ -105,7 +105,7 @@ export const HIGHLIGHTS = [
     title: 'Top-3 cap on namesake screening prevents silent timeouts',
     body:
       'Without an investigator subject, the inferred path used to screen ' +
-      'ten candidates and routinely bust the 60s wall — quietly returning ' +
+      'ten candidates and routinely bust the 60s wall, quietly returning ' +
       'zero. The cap is now three, ordered for stability, so the ' +
       'no-investigator path still produces real results.',
     metric: null,

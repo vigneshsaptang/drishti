@@ -3,7 +3,7 @@ import { HIGHLIGHTS, RELEASE_NAME } from '../content/releases/v1_1_0';
 /* global __APP_VERSION__ */
 const VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.1.0';
 
-// Show the top three highlights — same ordering as the full page.
+// Show the top three highlights. Same ordering as the full page.
 const TOP_THREE = HIGHLIGHTS.slice(0, 3);
 
 export default function ReleaseTeaserModal({ onViewAll, onDismiss }) {

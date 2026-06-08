@@ -312,7 +312,7 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
                   type="text"
                   value={nameFirst}
                   onChange={e => setNameFirst(e.target.value)}
-                  placeholder="e.g. Saikrishna"
+                  placeholder="e.g. Anjali"
                   className="h-8 rounded-md border border-sap-border-light bg-sap-surface px-2.5 text-12 text-sap-text placeholder:text-sap-muted outline-none focus:border-sap-accent focus:ring-4 focus:ring-sap-accent/10"
                 />
               </div>
@@ -323,7 +323,7 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
                   type="text"
                   value={nameInitials}
                   onChange={e => setNameInitials(e.target.value)}
-                  placeholder="e.g. BVS"
+                  placeholder="e.g. AM"
                   className="h-8 rounded-md border border-sap-border-light bg-sap-surface px-2.5 text-12 text-sap-text placeholder:text-sap-muted outline-none focus:border-sap-accent focus:ring-4 focus:ring-sap-accent/10"
                 />
               </div>
@@ -334,7 +334,7 @@ export default function CommandBar({ onSearch, loading, onCancel, onClear, colla
                   type="text"
                   value={nameLast}
                   onChange={e => setNameLast(e.target.value)}
-                  placeholder="e.g. Budamgunta"
+                  placeholder="e.g. Mehta"
                   className="h-8 rounded-md border border-sap-border-light bg-sap-surface px-2.5 text-12 text-sap-text placeholder:text-sap-muted outline-none focus:border-sap-accent focus:ring-4 focus:ring-sap-accent/10"
                 />
               </div>

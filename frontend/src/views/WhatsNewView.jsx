@@ -31,11 +31,11 @@ function HighlightCard({ item }) {
         {item.metric && (
           <dl className="grid grid-cols-2 gap-2 rounded border border-sap-border-light bg-sap-panel px-3 py-2">
             <div>
-              <dt className="text-11 text-sap-muted">{item.metric.label} — before</dt>
+              <dt className="text-11 text-sap-muted">{item.metric.label} (before)</dt>
               <dd className="text-13 text-sap-danger tabular-nums">{item.metric.before}</dd>
             </div>
             <div>
-              <dt className="text-11 text-sap-muted">{item.metric.label} — after</dt>
+              <dt className="text-11 text-sap-muted">{item.metric.label} (after)</dt>
               <dd className="text-13 text-sap-success tabular-nums">{item.metric.after}</dd>
             </div>
           </dl>

@@ -645,9 +645,9 @@ export default function FtiScreening({ ftiResults, ftiMeta, loading, canonicalTo
 
   // Predicate: every significant token of the canonical name must appear in
   // BOTH the parent search term AND the matched record's name. Single-token
-  // (substring-on-first-name) match leaks namesakes — e.g. "DASARI, Saikrishna"
-  // and "MUMMALANENI, Saikrishna" share the first name with the subject but
-  // are different people. Requiring both "saikrishna" AND "budamgunta" filters
+  // (substring-on-first-name) match leaks namesakes. e.g. "SHARMA, Anjali"
+  // and "VERMA, Anjali" share the first name with the subject but
+  // are different people. Requiring both "anjali" AND "mehta" filters
   // those out while still tolerating "LAST, FIRST" vs "First Last" ordering
   // (it's an order-independent set intersection, not a literal substring).
   const tokens = useMemo(() => canonicalTokens || [], [canonicalTokens]);

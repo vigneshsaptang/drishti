@@ -9,6 +9,7 @@ import DashboardIdle from './components/DashboardIdle';
 import FeedbackFab from './components/FeedbackFab';
 import FeedbackModal from './components/FeedbackModal';
 import ErrorBoundary from './components/ErrorBoundary';
+import ReleaseTeaserModal from './components/ReleaseTeaserModal';
 
 // Keep static: ReportView is the default view (always shown first)
 import ReportView from './views/ReportView';
@@ -16,6 +17,7 @@ import ReportView from './views/ReportView';
 // Lazy: views loaded on demand
 const EvidenceView = lazy(() => import('./views/EvidenceView'));
 const ToolsView = lazy(() => import('./views/ToolsView'));
+const WhatsNewView = lazy(() => import('./views/WhatsNewView'));
 
 // Lazy: overlays/admin (rarely accessed)
 const ProfileDialog = lazy(() => import('./components/ProfileDialog'));
@@ -43,6 +45,10 @@ import { extractIdentifiers } from './lib/identifierExtract';
 import { openReport } from './lib/reportGenerator';
 import { useNotifications } from './hooks/useNotifications';
 
+// One per release: bump when the next /whats-new entry should re-trigger the
+// teaser modal for users with a stale "seen" flag.
+const RELEASE_SEEN_KEY = 'seen_release_v1_1_0';
+
 
 function v2ToLegacyData(results, searchMeta, darkmonResults) {
   const breach = {
@@ -66,7 +72,7 @@ function LazyFallback() {
   return (
     <div className="flex items-center justify-center p-12">
       <div className="h-2 w-2 rounded-full bg-sap-accent animate-pulse" />
-      <span className="ml-3 text-xs font-mono text-sap-dim">Loading module...</span>
+      <span className="ml-3 text-12 text-sap-dim">Loading module...</span>
     </div>
   );
 }
@@ -77,6 +83,32 @@ export default function App() {
   const [focusedEntity, setFocusedEntity] = useState(null);
   const [overlay, setOverlay] = useState(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [whatsNewUnseen, setWhatsNewUnseen] = useState(() => {
+    try { return sessionStorage.getItem(RELEASE_SEEN_KEY) !== '1'; }
+    catch { return false; }
+  });
+  // Pop the teaser once per session immediately on mount — driven by the same
+  // sessionStorage check so we never need a synchronizing effect.
+  const [teaserOpen, setTeaserOpen] = useState(() => {
+    try { return sessionStorage.getItem(RELEASE_SEEN_KEY) !== '1'; }
+    catch { return false; }
+  });
+
+  const markReleaseSeen = useCallback(() => {
+    try { sessionStorage.setItem(RELEASE_SEEN_KEY, '1'); } catch { /* ignore */ }
+    setWhatsNewUnseen(false);
+  }, []);
+
+  const handleOpenWhatsNew = useCallback(() => {
+    setTeaserOpen(false);
+    setOverlay('whats-new');
+    markReleaseSeen();
+  }, [markReleaseSeen]);
+
+  const handleDismissTeaser = useCallback(() => {
+    setTeaserOpen(false);
+    markReleaseSeen();
+  }, [markReleaseSeen]);
   const { unreadCount, notifications: notifList, loading: notifLoading, fetchNotifications, markRead, markAllRead } = useNotifications();
 
   const handleFocusEntity = useCallback((type, value) => {
@@ -140,8 +172,8 @@ export default function App() {
   const renderBody = () => {
     if (error) {
       return (
-        <div className="rounded-lg border border-entity-drug/40 p-8 text-center max-w-lg mx-auto">
-          <p className="text-entity-drug font-mono text-sm">Error: {error}</p>
+        <div className="rounded-lg border border-sap-danger/40 p-8 text-center max-w-lg mx-auto">
+          <p className="text-sap-danger text-13">Error: {error}</p>
         </div>
       );
     }
@@ -221,6 +253,8 @@ export default function App() {
         onShowApiKeys={() => setOverlay('apikeys')}
         onShowAdmin={() => setOverlay('admin-users')}
         onShowCredits={() => setOverlay('credits')}
+        onShowWhatsNew={handleOpenWhatsNew}
+        whatsNewUnseen={whatsNewUnseen}
         notifications={{
           unreadCount, notifList, notifLoading, fetchNotifications, markRead, markAllRead,
           onNotificationClick: (n) => { if (n.link?.target === 'ticket_detail') setOverlay('my-tickets'); },
@@ -264,7 +298,15 @@ export default function App() {
         {overlay === 'admin-faq' && <FaqManager />}
         {overlay === 'admin-status' && <StatusManager />}
         {overlay === 'health' && <ErrorBoundary name="HealthDashboard"><HealthDashboard onClose={() => setOverlay(null)} /></ErrorBoundary>}
+        {overlay === 'whats-new' && <WhatsNewView onClose={() => setOverlay(null)} />}
       </Suspense>
+
+      {teaserOpen && (
+        <ReleaseTeaserModal
+          onViewAll={handleOpenWhatsNew}
+          onDismiss={handleDismissTeaser}
+        />
+      )}
 
       <FeedbackFab onClick={() => setFeedbackOpen(true)} unreadCount={unreadCount} />
       <FeedbackModal

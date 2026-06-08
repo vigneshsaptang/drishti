@@ -85,10 +85,10 @@ export function getRecency(fields) {
   const ageYears = (Date.now() - latest.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
 
   let color, label;
-  if (ageYears < 1) { color = 'text-emerald-400'; label = 'Recent'; }
-  else if (ageYears < 3) { color = 'text-yellow-400'; label = `${Math.floor(ageYears)}y ago`; }
-  else if (ageYears < 5) { color = 'text-orange-400'; label = `${Math.floor(ageYears)}y ago`; }
-  else { color = 'text-entity-drug'; label = `${Math.floor(ageYears)}y ago`; }
+  if (ageYears < 1) { color = 'text-sap-success'; label = 'Recent'; }
+  else if (ageYears < 3) { color = 'text-sap-warning'; label = `${Math.floor(ageYears)}y ago`; }
+  else if (ageYears < 5) { color = 'text-sap-warning'; label = `${Math.floor(ageYears)}y ago`; }
+  else { color = 'text-sap-danger'; label = `${Math.floor(ageYears)}y ago`; }
 
   return {
     date: latest.toISOString().slice(0, 10),
@@ -220,8 +220,8 @@ export function extractGeoIntel(fields) {
       label: address || city || 'Coordinates from record',
       confidence: 'exact',
       badge: 'Exact coordinates',
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50 border-emerald-200',
+      color: 'text-sap-success',
+      bgColor: 'bg-sap-success-soft border-sap-success',
       source: `Field: ${source}`,
     };
   }
@@ -236,8 +236,8 @@ export function extractGeoIntel(fields) {
         label: `${city.charAt(0).toUpperCase() + city.slice(1)}${state ? ', ' + state.charAt(0).toUpperCase() + state.slice(1) : ''}${pincode ? ' — ' + pincode : ''}`,
         confidence: hasPin ? 'high' : 'medium',
         badge: hasPin ? 'City + Pincode' : 'City-level',
-        color: hasPin ? 'text-blue-600' : 'text-blue-500',
-        bgColor: hasPin ? 'bg-blue-50 border-blue-200' : 'bg-blue-50 border-blue-200',
+        color: 'text-sap-accent',
+        bgColor: 'bg-sap-accent/10 border-sap-accent',
         source: `City: ${city}${pincode ? ', PIN: ' + pincode : ''}`,
       };
     }
@@ -253,8 +253,8 @@ export function extractGeoIntel(fields) {
         label: `Pincode area ${pincode}${state ? ', ' + state.charAt(0).toUpperCase() + state.slice(1) : ''}`,
         confidence: 'medium',
         badge: 'Pincode area',
-        color: 'text-amber-600',
-        bgColor: 'bg-amber-50 border-amber-200',
+        color: 'text-sap-warning',
+        bgColor: 'bg-sap-warning-soft border-sap-warning',
         source: `PIN: ${pincode}`,
       };
     }
@@ -269,8 +269,8 @@ export function extractGeoIntel(fields) {
         label: state.charAt(0).toUpperCase() + state.slice(1),
         confidence: 'low',
         badge: 'State-level only',
-        color: 'text-orange-500',
-        bgColor: 'bg-orange-50 border-orange-200',
+        color: 'text-sap-warning',
+        bgColor: 'bg-sap-warning-soft border-sap-warning',
         source: `State: ${state}`,
       };
     }
@@ -286,8 +286,8 @@ export function extractGeoIntel(fields) {
           label: `${cityName.charAt(0).toUpperCase() + cityName.slice(1)} (from address)`,
           confidence: 'medium',
           badge: 'Address parsed',
-          color: 'text-blue-500',
-          bgColor: 'bg-blue-50 border-blue-200',
+          color: 'text-sap-accent',
+          bgColor: 'bg-sap-accent/10 border-sap-accent',
           source: `Address contains: ${cityName}`,
         };
       }

@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # App code is volume-mounted at runtime for hot-reload
 COPY backend/app/ ./app/
+COPY VERSION ./VERSION
 
 EXPOSE 8888
 

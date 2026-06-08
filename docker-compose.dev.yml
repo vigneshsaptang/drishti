@@ -25,6 +25,7 @@ services:
       - "${BACKEND_PORT:-8888}:8888"
     volumes:
       - ./backend/app:/app/app    # live code changes → uvicorn --reload picks them up
+      - ./VERSION:/app/VERSION:ro # canonical version string, read at startup
     networks:
       - dev
 

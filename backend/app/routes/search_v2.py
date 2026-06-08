@@ -137,7 +137,14 @@ def _extract_usernames(results: list[dict]) -> list[dict]:
 
 
 def _extract_fullnames(results: list[dict]) -> list[str]:
-    """Extract unique fullnames from CREDMON entity results (capped at 10)."""
+    """Extract unique fullnames from CREDMON entity results (capped at 3).
+
+    The cap was 10 — observed in v1.1 testing that ten serial FTI screen calls
+    on a slow Mongo cluster regularly busted the 60s wall timeout, returning
+    zero data instead of a partial result. Three keeps the worst-case under the
+    timeout while still giving the inferred path a fair shot at finding the
+    real subject.
+    """
     seen: set[str] = set()
 
     for result in results:
@@ -164,8 +171,8 @@ def _extract_fullnames(results: list[dict]) -> list[str]:
                         ):
                             seen.add(val.strip())
 
-    # Cap at 10 names
-    return list(seen)[:10]
+    # Sort for stable ordering, cap at 3. See note above.
+    return sorted(seen)[:3]
 
 
 def _explicit_canonical_name(subject: SubjectName | None) -> str | None:
@@ -788,6 +795,9 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
         collected_phone_intel_results = []
         collected_ecourts_results = []
         collected_mca_results = []
+        variants_screened: list[str] = []
+        dob_enforced = False
+        raw_names_extracted = 0
 
         seed_type = seeds_dicts[0]["type"]
 
@@ -832,10 +842,13 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
             # "Saikrishna Budamgunta") without re-introducing namesake noise.
             _explicit = _explicit_canonical_name(req.subject)
             _variants: list[dict] = []
+            _discovered = _extract_fullnames(all_results)
+            raw_names_extracted = len(_discovered)
             if _explicit and req.subject:
-                _discovered = _extract_fullnames(all_results)
                 _variants = find_variants(req.subject.model_dump(), _discovered)
             _dob_enforced = bool(req.subject and req.subject.dob)
+            variants_screened = [v["name"] for v in _variants if v.get("name")]
+            dob_enforced = _dob_enforced
 
             def _run_parallel():
                 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
@@ -851,7 +864,7 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
                         log.error("FTI/financial thread failed or timed out", exc_info=True)
                         fti_result = {
                             "events": [
-                                {"event": "fti:complete", "data": _dumps({"total_names_screened": 0, "crimedata_matches": 0, "worldcheck_matches": 0, "total_time_ms": 0})},
+                                {"event": "fti:complete", "data": _dumps({"total_names_screened": 0, "crimedata_matches": 0, "worldcheck_matches": 0, "total_time_ms": 0, "variants_screened": [], "dob_enforced": False})},
                                 {"event": "financial:complete", "data": _dumps({"total_phones_screened": 0, "total_upi_hits": 0, "total_time_ms": 0})},
                             ],
                             "names_screened": 0, "cd_matches": 0, "wc_matches": 0, "fti_ms": 0,
@@ -1173,6 +1186,10 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
                 "fti_time_ms": fti_total_time_ms,
                 "darkmon_time_ms": darkmon_total_time_ms,
                 "total_time_ms": total_time_ms,
+                "canonical_source": _profile_payload.get("canonical_source"),
+                "variants_screened": variants_screened,
+                "dob_enforced": dob_enforced,
+                "noise_dropped": max(0, raw_names_extracted - total_names_screened),
             },
         )
 

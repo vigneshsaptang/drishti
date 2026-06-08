@@ -1,297 +1,301 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { chooseCanonicalIdentity } from '../lib/canonicalIdentity';
-import { chooseCanonicalLocation, formatCanonicalLocation } from '../lib/canonicalLocation';
-import { ecourtsSearch, getEcourtsByState } from '../lib/api';
+import { formatCanonicalLocation } from '../lib/canonicalLocation';
+import { ecourtsSearch, getEcourtsByState, getPincodeInfo } from '../lib/api';
+import Provenance from './Provenance';
 
+// Backend (spec B1) ships each value in `profile.{names,emails,phones,...}`
+// as `{ value, sources: [...] }`. Some callers / legacy fallback paths still
+// emit bare strings — normalise so the rest of this file can read .value and
+// .sources uniformly, and wrap chips in <Provenance> with no special casing.
+function toEntry(v) {
+  if (v && typeof v === 'object' && 'value' in v) {
+    return { value: v.value, sources: Array.isArray(v.sources) ? v.sources : [] };
+  }
+  return { value: v, sources: [] };
+}
+
+function entryValue(v) {
+  if (v && typeof v === 'object' && 'value' in v) return v.value;
+  return v;
+}
+
+// Render-only metadata. Classification + value validation happens in the
+// backend (app.engines.identifier_categorizer). The render order here also
+// drives the category grid order.
 const CATEGORIES = [
   {
     key: 'names',
     label: 'Identity',
+    color: 'text-sap-text',
     icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
       </svg>
     ),
-    color: 'text-sap-text',
-    match: k => /^(name|fullname|full_name|first_?name|last_?name|middle_?name|display_?name|displayname|real_?name)$/i.test(k),
   },
   {
     key: 'usernames',
     label: 'Usernames',
+    color: 'text-entity-darkweb',
     icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9" />
       </svg>
     ),
-    color: 'text-entity-darkweb',
-    match: k => /^(user_?name|username|nick(?:name)?|screen_?name|handle|loginname|user_?id|username_?2)$/i.test(k),
-    validate: v => typeof v === 'string'
-      && v.trim().length >= 3
-      && !/^\d{8,}$/.test(v.trim())
-      && !/^\d{4}[-/]\d{2}[-/]\d{2}/.test(v.trim())
-      && !/^\d{2}-[A-Z]{3}-\d{2,4}$/i.test(v.trim())
-      && !/^\d{2}\/\d{2}\/\d{4}$/.test(v.trim()),
   },
   {
     key: 'emails',
     label: 'Emails',
+    color: 'text-entity-email',
     icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
       </svg>
     ),
-    color: 'text-entity-email',
-    match: k => /^(e-?mail|mail|email_?address)$/i.test(k),
-    validate: v => typeof v === 'string' && v.includes('@'),
   },
   {
     key: 'phones',
-    label: 'Phone Numbers',
+    label: 'Phone numbers',
+    color: 'text-entity-phone',
     icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
       </svg>
     ),
-    color: 'text-entity-phone',
-    match: k => /phone|mobile|cell|telephone|contact_?number|contactnumber/i.test(k)
-      && !/email/i.test(k),
-    validate: v => typeof v === 'string' && /\d{7,}/.test(v.replace(/\D/g, '')),
   },
   {
     key: 'ips',
-    label: 'IP Addresses',
+    label: 'IP addresses',
+    color: 'text-entity-telegram',
     icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
       </svg>
     ),
-    color: 'text-entity-telegram',
-    match: k => /^(ip|ip_?address|last_?ip|signup_?ip|login_?ip|created_?ip|register_?ip|reg_?ip)$/i.test(k),
-    validate: v => typeof v === 'string' && /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(v),
   },
   {
     key: 'locations',
     label: 'Locations',
+    color: 'text-sap-dim',
     icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     ),
-    color: 'text-emerald-600',
-    match: k => /city|state|country|region|zip|zipcode|postal|address|location|geo|pincode|district|area/i.test(k)
-      && !/ip/i.test(k) && !/email/i.test(k),
   },
   {
     key: 'devices',
-    label: 'Device / Browser',
+    label: 'Device / browser',
+    color: 'text-sap-dim',
     icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
       </svg>
     ),
-    color: 'text-sap-dim',
-    match: k => /device|browser|user_?agent|os|platform|device_?id|imei|mac_?address/i.test(k),
   },
   {
     key: 'accounts',
-    label: 'Linked Accounts',
+    label: 'Linked accounts',
+    color: 'text-entity-darkweb',
     icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
       </svg>
     ),
-    color: 'text-entity-darkweb',
-    match: k => /facebook|linkedin|twitter|instagram|telegram|skype|discord|steam|truecaller|whatsapp|snapchat|tiktok|reddit|github|spotify|netflix|amazon|apple_?id|google|yahoo|outlook|profile_?url|website|url|homepage|social/i.test(k),
   },
   {
     key: 'financial',
     label: 'Financial',
+    color: 'text-entity-upi',
     icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
       </svg>
     ),
-    color: 'text-entity-upi',
-    match: k => /upi|bank|ifsc|account_?number|card|pan|aadhaar|aadhar|cibil|payment|wallet/i.test(k)
-      && !/wallet_?balance/i.test(k),
   },
   {
     key: 'dob',
-    label: 'Date of Birth',
+    label: 'Date of birth',
+    color: 'text-sap-dim',
     icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
       </svg>
     ),
-    color: 'text-sap-dim',
-    match: k => /dob|date_?of_?birth|birth_?date|birthday/i.test(k),
   },
 ];
 
-const SKIP_VALUES = new Set(['', 'null', 'None', 'none', 'undefined', 'N/A', 'n/a', '-', '0', 'false']);
+const TAG_STAGGER_MS = 80;
 
-function isUseful(v) {
-  if (!v || typeof v !== 'string') return false;
-  const trimmed = v.trim();
-  if (SKIP_VALUES.has(trimmed)) return false;
-  if (trimmed.length < 2 || trimmed.length > 500) return false;
+// Tokenise a name for canonical-equivalence comparison: lowercase, split on
+// whitespace, drop tokens shorter than 2 chars (initials etc.). Empty/null
+// inputs yield an empty set so they never match the canonical.
+function nameTokenSet(value) {
+  if (typeof value !== 'string') return new Set();
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return new Set();
+  return new Set(
+    trimmed.split(/\s+/).filter(tok => tok.length >= 2),
+  );
+}
+
+// True when one token set is a (non-empty) subset of the other — used to
+// decide whether a discovered name is just a variant/substring of the
+// canonical and should therefore be excluded from "Other names".
+function isCanonicalVariant(nameTokens, canonicalTokens) {
+  if (nameTokens.size === 0 || canonicalTokens.size === 0) return false;
+  const [small, large] = nameTokens.size <= canonicalTokens.size
+    ? [nameTokens, canonicalTokens]
+    : [canonicalTokens, nameTokens];
+  for (const tok of small) {
+    if (!large.has(tok)) return false;
+  }
   return true;
 }
 
-const NAME_COMPOSITE_KEYS = new Set(['fullname', 'full_name', 'displayname', 'display_name', 'real_name', 'name']);
-const NAME_COMPONENT_KEYS = new Set(['first_name', 'firstname', 'last_name', 'lastname', 'middle_name', 'middlename']);
-const ADDR_PART_KEYS = ['address1', 'address2', 'building', 'area', 'street', 'landmark', 'city', 'district', 'state', 'zip', 'zipcode', 'postal', 'pincode', 'country'];
-const ADDR_PART_SET = new Set(ADDR_PART_KEYS);
-const COUNTRY_EXPAND = { IN: 'India', US: 'United States', UK: 'United Kingdom', AU: 'Australia', CA: 'Canada', SG: 'Singapore', AE: 'United Arab Emirates', NZ: 'New Zealand', DE: 'Germany', FR: 'France', GB: 'United Kingdom' };
-
-function composeName(fields) {
-  const consumed = new Set();
-  for (const k of Object.keys(fields)) {
-    if (NAME_COMPOSITE_KEYS.has(k.toLowerCase())) {
-      const v = fields[k];
-      if (isUseful(v)) {
-        consumed.add(k.toLowerCase());
-        [...NAME_COMPONENT_KEYS].forEach(ck => consumed.add(ck));
-        return [v.trim(), consumed];
-      }
-    }
+// Decode common URI schemes seen in Linked accounts so the rendered chip
+// shows something a human can read. The raw value remains available via the
+// chip's title attribute.
+function decodeAccountValue(raw) {
+  if (typeof raw !== 'string') return { label: String(raw ?? ''), mono: false };
+  const v = raw.trim();
+  if (!v) return { label: v, mono: false };
+  if (v.startsWith('android://')) {
+    return { label: 'Google Ad ID: ', mono: true, suffix: v.slice('android://'.length) };
   }
-  const parts = [];
-  for (const partKey of ['first_name', 'firstname', 'middle_name', 'middlename', 'last_name', 'lastname']) {
-    const v = fields[partKey] || fields[partKey.replace('_', '')];
-    if (v && isUseful(v)) parts.push(v.trim());
+  if (v.startsWith('mailto:')) {
+    return { label: v.slice('mailto:'.length), mono: true };
   }
-  if (parts.length > 0) {
-    [...NAME_COMPOSITE_KEYS, ...NAME_COMPONENT_KEYS].forEach(ck => consumed.add(ck));
-    return [parts.join(' '), consumed];
+  if (v.startsWith('tel:')) {
+    return { label: v.slice('tel:'.length), mono: true };
   }
-  return [null, consumed];
+  const m = v.match(/^https?:\/\/([^/?#]+)/i);
+  if (m) {
+    return { label: m[1], mono: true };
+  }
+  return { label: v, mono: true };
 }
 
-function composeAddress(fields) {
-  const consumed = new Set();
-  const fieldsLower = {};
-  for (const k of Object.keys(fields)) fieldsLower[k.toLowerCase()] = { key: k, val: fields[k] };
-
-  const parts = [];
-  const countryEntry = fieldsLower['country'];
-  let countryVal = countryEntry && isUseful(countryEntry.val) ? countryEntry.val.trim() : null;
-  if (countryVal && /^[A-Z]{2}$/i.test(countryVal)) {
-    countryVal = COUNTRY_EXPAND[countryVal.toUpperCase()] || null;
-  }
-
-  for (const partKey of ADDR_PART_KEYS) {
-    if (partKey === 'country') continue;
-    const entry = fieldsLower[partKey];
-    if (!entry || !isUseful(entry.val)) continue;
-    const v = entry.val.trim();
-    if (/^\d{1,6}$/.test(v)) { consumed.add(partKey); continue; }
-    if (v.length < 4) { consumed.add(partKey); continue; }
-    if (v === '#') { consumed.add(partKey); continue; }
-    parts.push(v);
-    consumed.add(partKey);
-  }
-  if (countryEntry) consumed.add('country');
-  if (countryVal) parts.push(countryVal);
-
-  if (parts.length === 0) return [null, consumed];
-  const deduped = parts.filter((p, i) => i === 0 || p.toLowerCase() !== parts[i - 1].toLowerCase());
-  return [deduped.join(', '), consumed];
+// Normalise a name string for variant-equality membership tests: trim, lower,
+// collapse internal whitespace. Used to exclude D1 backend-confirmed spelling
+// variants from the "Other names found in records" section.
+function normalizeName(s) {
+  if (typeof s !== 'string') return '';
+  return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function extractProfile(results) {
-  const buckets = {};
-  CATEGORIES.forEach(c => { buckets[c.key] = new Map(); });
-
-  for (const entity of (results || [])) {
-    if (!entity.found) continue;
-    for (const src of (entity.sources || [])) {
-      for (const rec of (src.records || [])) {
-        const fields = rec.fields || {};
-
-        const [composedName, nameConsumed] = composeName(fields);
-        if (composedName && isUseful(composedName)) {
-          const n = composedName.trim();
-          if (!buckets.names.has(n.toLowerCase())) buckets.names.set(n.toLowerCase(), n);
-        }
-
-        const [composedAddr, addrConsumed] = composeAddress(fields);
-        if (composedAddr && isUseful(composedAddr)) {
-          const a = composedAddr.trim();
-          if (!buckets.locations.has(a.toLowerCase())) buckets.locations.set(a.toLowerCase(), a);
-        }
-
-        for (const [key, val] of Object.entries(fields)) {
-          if (!isUseful(val)) continue;
-          const keyLower = key.toLowerCase();
-
-          if (nameConsumed.has(keyLower)) continue;
-          if (addrConsumed.has(keyLower) || ADDR_PART_SET.has(keyLower)) continue;
-
-          for (const cat of CATEGORIES) {
-            if (cat.key === 'names' || cat.key === 'locations') continue;
-            if (cat.match(key)) {
-              if (cat.validate && !cat.validate(val)) break;
-              const normalized = val.trim();
-              if (!buckets[cat.key].has(normalized.toLowerCase())) {
-                buckets[cat.key].set(normalized.toLowerCase(), normalized);
-              }
-              break;
-            }
-          }
-        }
-      }
+export default function SubjectProfile({
+  loading, onFocusEntity, onSwitchTab, aiSummary,
+  canonical: canonicalProp, canonicalName, canonicalSource, profile: profileProp, canonicalLocation,
+  variantsScreened,
+}) {
+  // Backend ships the categorized profile (see app.engines.identifier_categorizer).
+  // Each entry is `{ value, sources }`; legacy callers may still pass bare
+  // strings, so we normalise via `toEntry` and drop empties.
+  const profile = useMemo(() => {
+    const src = profileProp || {};
+    const out = {};
+    for (const cat of CATEGORIES) {
+      const raw = Array.isArray(src[cat.key]) ? src[cat.key] : [];
+      const entries = raw
+        .map(toEntry)
+        .filter((e) => e.value !== null && e.value !== undefined && e.value !== '');
+      if (entries.length > 0) out[cat.key] = entries;
     }
+    return out;
+  }, [profileProp]);
 
-    if (entity.entity_type === 'email' && entity.entity_value) {
-      const v = entity.entity_value.trim();
-      if (!buckets.emails.has(v.toLowerCase())) {
-        buckets.emails.set(v.toLowerCase(), v);
-      }
-    }
-    if (entity.entity_type === 'phone' && entity.entity_value) {
-      const v = entity.entity_value.trim();
-      if (!buckets.phones.has(v.toLowerCase())) {
-        buckets.phones.set(v.toLowerCase(), v);
-      }
-    }
-  }
+  const totalCount = useMemo(
+    () => CATEGORIES.reduce((sum, c) => sum + (profile[c.key]?.length || 0), 0),
+    [profile],
+  );
 
-  const profile = {};
-  let totalCount = 0;
-  CATEGORIES.forEach(cat => {
-    const values = [...buckets[cat.key].values()];
-    if (values.length > 0) {
-      profile[cat.key] = values;
-      totalCount += values.length;
-    }
-  });
-  return { profile, totalCount };
-}
-
-const TAG_STAGGER_MS = 80;
-
-export default function SubjectProfile({ results, loading, onFocusEntity, onSwitchTab, aiSummary, canonical: canonicalProp }) {
-  const { profile, totalCount } = useMemo(() => extractProfile(results), [results]);
-
+  // chooseCanonicalIdentity expects plain string arrays — strip per-entry
+  // sources before handing in.
   const canonicalLocal = useMemo(
     () => chooseCanonicalIdentity({
-      names:     profile.names     || [],
-      usernames: profile.usernames || [],
-      emails:    profile.emails    || [],
+      names:     (profile.names     || []).map(entryValue),
+      usernames: (profile.usernames || []).map(entryValue),
+      emails:    (profile.emails    || []).map(entryValue),
     }),
     [profile.names, profile.usernames, profile.emails],
   );
 
   const canonical = canonicalProp || canonicalLocal;
+  const location = canonicalLocation || null;
 
-  const location = useMemo(() => chooseCanonicalLocation(results), [results]);
+  // D1 backend-confirmed spelling variants of the canonical — those names are
+  // the subject, just spelled differently, and must not appear in "Other names".
+  const variantSet = useMemo(
+    () => new Set((variantsScreened || []).map(normalizeName).filter(Boolean)),
+    [variantsScreened],
+  );
+
+  // Investigator-confirmed path only: split `profile.names` into the
+  // canonical (variants/subsets of the investigator-provided name) and the
+  // "other" names that need vetting. When source !== 'investigator' we keep
+  // today's flat Identity category, so this memo evaluates to an empty list.
+  const otherNames = useMemo(() => {
+    if (canonicalSource !== 'investigator') return [];
+    if (!canonicalName) return [];
+    const all = Array.isArray(profile.names) ? profile.names : [];
+    if (all.length === 0) return [];
+    const canonicalTokens = nameTokenSet(canonicalName);
+    const seen = new Set();
+    const extras = [];
+    for (const entry of all) {
+      const raw = entry?.value;
+      if (typeof raw !== 'string') continue;
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      const key = trimmed.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const tokens = nameTokenSet(trimmed);
+      if (isCanonicalVariant(tokens, canonicalTokens)) continue;
+      if (variantSet.has(normalizeName(trimmed))) continue;
+      extras.push({ value: trimmed, sources: entry.sources || [] });
+    }
+    extras.sort((a, b) => a.value.localeCompare(b.value));
+    return extras;
+  }, [canonicalSource, canonicalName, profile.names, variantSet]);
+
+  // When the new section is active, drop any name it (or the canonical)
+  // already represents from the Identity category so the grid below doesn't
+  // duplicate them. Inferred path passes through unchanged.
+  const gridProfile = useMemo(() => {
+    if (canonicalSource !== 'investigator') return profile;
+    const names = Array.isArray(profile.names) ? profile.names : [];
+    if (names.length === 0) return profile;
+    const canonicalTokens = nameTokenSet(canonicalName);
+    const otherKeys = new Set(otherNames.map((n) => n.value.toLowerCase()));
+    const filtered = names.filter((entry) => {
+      const raw = entry?.value;
+      if (typeof raw !== 'string') return false;
+      const trimmed = raw.trim();
+      if (!trimmed) return false;
+      if (otherKeys.has(trimmed.toLowerCase())) return false;
+      const tokens = nameTokenSet(trimmed);
+      if (isCanonicalVariant(tokens, canonicalTokens)) return false;
+      if (variantSet.has(normalizeName(trimmed))) return false;
+      return true;
+    });
+    if (filtered.length === names.length) return profile;
+    const next = { ...profile };
+    if (filtered.length === 0) {
+      delete next.names;
+    } else {
+      next.names = filtered;
+    }
+    return next;
+  }, [profile, otherNames, canonicalSource, canonicalName, variantSet]);
 
   const allTags = useMemo(() => {
     const tags = [];
     CATEGORIES.filter(c => profile[c.key]).forEach(cat => {
-      profile[cat.key].forEach(v => tags.push({ cat: cat.key, value: v }));
+      profile[cat.key].forEach((entry) => tags.push({ cat: cat.key, value: entry.value }));
     });
     return tags;
   }, [profile]);
@@ -327,39 +331,39 @@ export default function SubjectProfile({ results, loading, onFocusEntity, onSwit
   const isRevealing = revealedTags < allTags.length;
 
   return (
-    <div className="rounded-lg border border-sap-border bg-sap-surface shadow-sm overflow-hidden mb-5 animate-fade-in">
+    <div className="rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden animate-fade-in">
       {/* AI Summary — shown when available */}
       {aiSummary && (
-        <div className="px-5 py-3.5 bg-sap-accent/5 border-b border-sap-accent/15">
-          <p className="text-sm text-sap-dim leading-relaxed">{aiSummary}</p>
+        <div className="px-4 py-3 bg-sap-accent-glow/40 border-b border-sap-border-light">
+          <p className="text-13 text-sap-dim leading-relaxed">{aiSummary}</p>
         </div>
       )}
 
       {/* Header */}
-      <div className="px-5 py-3.5 bg-sap-panel/50 border-b border-sap-border flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-sap-accent/10 border border-sap-accent/20 flex items-center justify-center">
+      <div className="px-4 py-2.5 border-b border-sap-border-light flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="h-7 w-7 rounded-full bg-sap-accent-glow border border-sap-accent/20 flex items-center justify-center shrink-0">
             {(loading || isRevealing) ? (
-              <div className="h-4 w-4 rounded-full border-2 border-sap-accent/30 border-t-sap-accent animate-spin" />
+              <div className="h-3.5 w-3.5 rounded-full border-2 border-sap-accent/30 border-t-sap-accent animate-spin" />
             ) : (
-              <svg className="w-4.5 h-4.5 text-sap-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 text-sap-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0" />
               </svg>
             )}
           </div>
-          <div>
-            <h3 className="text-sm font-semibold text-sap-text">Subject Profile</h3>
-            <p className="text-xs font-mono text-sap-muted">
+          <div className="min-w-0">
+            <h3 className="text-12 font-semibold tracking-tight text-sap-text">Subject profile</h3>
+            <p className="text-11 text-sap-muted">
               {(loading || isRevealing)
-                ? <span className="animate-scan">{revealedTags}/{allTags.length} identifiers resolving...</span>
-                : <span>{totalCount} identifiers extracted</span>
+                ? <span className="animate-scan tabular-nums">{revealedTags}/{allTags.length} identifiers resolving…</span>
+                : <span className="tabular-nums">{totalCount} identifiers extracted</span>
               }
             </p>
           </div>
         </div>
         {(loading || isRevealing) && (
           <div className="flex items-center gap-2">
-            <div className="h-1.5 w-24 rounded-full bg-sap-panel overflow-hidden">
+            <div className="h-1 w-24 rounded-full bg-sap-panel overflow-hidden">
               <div
                 className="h-full bg-sap-accent rounded-full transition-all duration-300 ease-out"
                 style={{ width: `${allTags.length ? (revealedTags / allTags.length) * 100 : 0}%` }}
@@ -369,24 +373,44 @@ export default function SubjectProfile({ results, loading, onFocusEntity, onSwit
         )}
       </div>
 
-      {/* Identified subject banner */}
-      {canonical.canonical && canonical.confidence > 0 && !isRevealing && (
+      {/* Identified subject banner.
+
+          When the investigator named the subject explicitly (canonicalSource
+          === 'investigator'), the inferred confidence percentage is
+          meaningless — we know who this is. Show a "Confirmed by
+          investigator" treatment instead. Otherwise fall back to the
+          inferred banner using canonical from chooseCanonicalIdentity.
+      */}
+      {canonicalSource === 'investigator' && canonicalName && !isRevealing ? (
+        <IdentifiedSubjectBanner
+          canonical={{ canonical: canonicalName, anchor: null, alternates: [], source: 'investigator', confidence: 1 }}
+          location={location}
+          investigatorProvided
+        />
+      ) : canonical.canonical && canonical.confidence > 0 && !isRevealing ? (
         <IdentifiedSubjectBanner canonical={canonical} location={location} />
+      ) : null}
+
+      {/* Other names found in records — only on the investigator-confirmed
+          path, when extras exist. Inferred path leaves this branch dormant. */}
+      {canonicalSource === 'investigator' && !isRevealing && otherNames.length > 0 && (
+        <OtherNamesSection names={otherNames} />
       )}
+
       {/* Court search — always shown when location has a resolved state */}
       {location?.state && !isRevealing && (
         <CourtSearchSection
-          name={canonical?.canonical || canonical?.anchor || null}
+          name={canonicalName || canonical?.canonical || canonical?.anchor || null}
           location={location}
           onSwitchTab={onSwitchTab}
         />
       )}
 
       {/* Category grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-sap-border/50">
-        {CATEGORIES.filter(cat => profile[cat.key]).map(cat => {
-          const visibleValues = profile[cat.key].filter(
-            v => revealedSet.has(`${cat.key}:${v}`)
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-sap-border-light">
+        {CATEGORIES.filter(cat => gridProfile[cat.key]).map(cat => {
+          const visibleEntries = gridProfile[cat.key].filter(
+            (entry) => revealedSet.has(`${cat.key}:${entry.value}`)
           );
           return (
             <ProfileSection
@@ -395,8 +419,8 @@ export default function SubjectProfile({ results, loading, onFocusEntity, onSwit
               label={cat.label}
               icon={cat.icon}
               color={cat.color}
-              values={visibleValues}
-              totalValues={profile[cat.key].length}
+              entries={visibleEntries}
+              totalValues={gridProfile[cat.key].length}
               onFocusEntity={onFocusEntity}
               locationData={cat.key === 'locations' ? location : null}
             />
@@ -433,65 +457,120 @@ function buildCourtStates(location) {
   return entries;
 }
 
-function IdentifiedSubjectBanner({ canonical, location }) {
+// Investigator-provided subject path only: render names discovered in records
+// that don't match the canonical, so the investigator can vet or dismiss them
+// at a glance. Each row carries a <Provenance> tooltip sourced from the
+// per-entry payload shipped by spec B1.
+function OtherNamesSection({ names }) {
+  if (!names || names.length === 0) return null;
+  return (
+    <div className="px-4 py-3 bg-sap-warning-soft/40 border-b border-sap-border-light">
+      <div className="flex items-center gap-2 mb-2">
+        <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-sap-warning-filled" />
+        <span className="text-11 font-semibold tracking-tight text-sap-warning">
+          Other names found in records
+        </span>
+        <span className="text-11 text-sap-muted">
+          · {names.length} additional name{names.length !== 1 ? 's' : ''} appeared — investigate or dismiss
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {names.map((n) => (
+          <Provenance key={n.value} value={n.value} sources={n.sources}>
+            <span className="inline-flex items-center px-2 py-0.5 rounded border text-12 text-sap-text bg-sap-surface border-sap-border-light">
+              {n.value}
+            </span>
+          </Provenance>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function IdentifiedSubjectBanner({ canonical, location, investigatorProvided = false }) {
   const { canonical: name, anchor, confidence, alternates = [], source } = canonical;
   const isInferred = source === 'inferred';
   const locString = formatCanonicalLocation(location);
-  const pct = Math.round(confidence * 100);
 
+  // Investigator-provided: no probability, no "tier", no progress bar.
+  // The investigator told us who this is; the report just confirms it.
+  if (investigatorProvided) {
+    return (
+      <div className="px-4 py-3 bg-sap-bg border-b border-sap-border-light">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span aria-hidden className="relative flex">
+            <span className="w-2 h-2 rounded-full bg-sap-accent" />
+            <span className="absolute inset-0 w-2 h-2 rounded-full bg-sap-accent animate-ping opacity-50" />
+          </span>
+          <span className="text-11 font-semibold tracking-tight text-sap-accent">
+            Subject confirmed
+          </span>
+          <span className="text-11 text-sap-muted">·</span>
+          <span className="text-11 font-medium text-sap-dim">Provided by investigator</span>
+        </div>
+
+        <p className="text-17 leading-tight tracking-tight font-semibold text-sap-text">{name}</p>
+        {locString && (
+          <p className="text-12 text-sap-dim mt-0.5">{locString}</p>
+        )}
+      </div>
+    );
+  }
+
+  const pct = Math.round(confidence * 100);
   const tier =
     confidence >= 0.7 ? 'high' :
     confidence >= 0.4 ? 'medium' :
     'low';
 
   const palette = {
-    high:   { dot: 'bg-emerald-500',  ring: 'shadow-[0_0_8px_#10b981]', text: 'text-emerald-700', bar: 'bg-emerald-500',  label: 'High Confidence' },
-    medium: { dot: 'bg-amber-500',    ring: 'shadow-[0_0_8px_#f59e0b]', text: 'text-amber-700',   bar: 'bg-amber-500',    label: 'Probable Subject' },
-    low:    { dot: 'bg-sap-muted',    ring: '',                          text: 'text-sap-dim',     bar: 'bg-sap-muted',    label: 'Best Guess'         },
+    high:   { dot: 'bg-sap-success-filled', text: 'text-sap-success', bar: 'bg-sap-success-filled', label: 'High confidence' },
+    medium: { dot: 'bg-sap-warning-filled', text: 'text-sap-warning', bar: 'bg-sap-warning-filled', label: 'Probable subject' },
+    low:    { dot: 'bg-sap-muted',          text: 'text-sap-dim',     bar: 'bg-sap-muted',          label: 'Best guess' },
   }[tier];
 
   return (
-    <div className="px-5 py-3.5 bg-sap-bg/60 border-b border-sap-border">
+    <div className="px-4 py-3 bg-sap-bg border-b border-sap-border-light">
       <div className="flex items-center justify-between gap-4 flex-wrap mb-1.5">
         <div className="flex items-center gap-2">
           <span aria-hidden className="relative flex">
-            <span className={`w-2 h-2 rounded-full ${palette.dot} relative ${palette.ring}`} />
+            <span className={`w-2 h-2 rounded-full ${palette.dot}`} />
             {tier === 'high' && (
               <span className={`absolute inset-0 w-2 h-2 rounded-full ${palette.dot} animate-ping opacity-50`} />
             )}
           </span>
-          <span className={`text-[10px] font-mono font-bold uppercase tracking-[0.2em] ${palette.text}`}>
-            Identified Subject
+          <span className={`text-11 font-semibold tracking-tight ${palette.text}`}>
+            Identified subject
           </span>
-          <span className="text-[10px] font-mono text-sap-muted">·</span>
-          <span className={`text-[10px] font-mono font-semibold ${palette.text}`}>{palette.label}</span>
+          <span className="text-11 text-sap-muted">·</span>
+          <span className={`text-11 font-medium ${palette.text}`}>{palette.label}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-sap-muted tabular-nums">{pct}% confidence</span>
-          <div className="h-1.5 w-20 rounded-full bg-sap-panel overflow-hidden">
+          <span className="text-11 text-sap-muted tabular-nums">{pct}% confidence</span>
+          <div className="h-1 w-20 rounded-full bg-sap-panel overflow-hidden">
             <div className={`h-full ${palette.bar} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
           </div>
         </div>
       </div>
 
-      <p className={`text-base sm:text-lg leading-tight tracking-tight ${isInferred ? 'font-medium italic text-sap-dim' : 'font-semibold text-sap-text'}`}>
+      <p className={`text-17 leading-tight tracking-tight ${isInferred ? 'font-medium italic text-sap-dim' : 'font-semibold text-sap-text'}`}>
         {name}
-        {isInferred && <span className="ml-2 text-[10px] font-mono not-italic text-sap-muted font-normal">(inferred)</span>}
+        {isInferred && <span className="ml-2 text-11 not-italic text-sap-muted font-normal">(inferred)</span>}
       </p>
       {locString && (
-        <p className="text-xs font-mono text-sap-dim mt-0.5">{locString}</p>
+        <p className="text-12 text-sap-dim mt-0.5">{locString}</p>
       )}
 
-      <div className="mt-1 flex items-baseline gap-2 flex-wrap text-[11px] font-mono">
+      <div className="mt-1 flex items-baseline gap-2 flex-wrap text-11">
         {anchor && (
           <span className="text-sap-muted">
-            anchor: <span className="text-sap-dim">{anchor}</span>
+            Anchor: <span className="text-sap-dim font-mono">{anchor}</span>
           </span>
         )}
         {alternates.length > 0 && (
           <>
             <span className="text-sap-muted">·</span>
-            <span className="text-sap-muted">also seen as:</span>
+            <span className="text-sap-muted">Also seen as:</span>
             <span className="text-sap-dim truncate">{alternates.slice(0, 4).join(' · ')}</span>
             {alternates.length > 4 && (
               <span className="text-sap-muted">+{alternates.length - 4} more</span>
@@ -505,13 +584,36 @@ function IdentifiedSubjectBanner({ canonical, location }) {
 
 const CAT_TO_ENTITY_TYPE = { phones: 'phone', emails: 'email' };
 
-function ProfileSection({ catKey, label, icon, color, values, totalValues, onFocusEntity, locationData }) {
-  if (values.length === 0 && !(catKey === 'locations' && locationData?.state)) return null;
+// Categories whose values *may* contain identifiers — mono is only allowed inside these.
+// Within them, per-value heuristic decides; descriptive text like "Active" stays in sans.
+const IDENTIFIER_CATS = new Set(['usernames', 'emails', 'phones', 'ips', 'accounts', 'financial']);
+
+// Returns true if the value reads as a machine identifier (mono-worthy) rather than
+// human-readable description. Heuristic — errs on the side of sans for ambiguous cases.
+function isIdentifierValue(v) {
+  if (typeof v !== 'string') return false;
+  const s = v.trim();
+  if (!s) return false;
+  if (s.includes('@')) return true;              // email
+  if (s.includes('://')) return true;            // URI / account scheme
+  if (/^[\d\s\-+()]{6,}$/.test(s)) return true;  // phone / numeric id
+  if (!s.includes(' ')) {                        // single token
+    if (/[._\-+/]/.test(s)) return true;         // has separators → handle / id
+    if (/\d/.test(s)) return true;               // contains a digit → id-ish
+    if (s === s.toLowerCase() && s.length >= 4) return true; // lowercase handle
+    return false;                                // single TitleCase / UPPER word → description
+  }
+  return false;                                  // multi-word phrase → description
+}
+
+function ProfileSection({ catKey, label, icon, color, entries, totalValues, onFocusEntity, locationData }) {
+  if (entries.length === 0 && !(catKey === 'locations' && locationData?.state)) return null;
 
   const isLocation = catKey === 'locations';
-  const tagClasses = isLocation
-    ? 'inline-block px-2 py-0.5 rounded text-xs font-mono bg-sap-panel border border-sap-border text-sap-text whitespace-normal break-words leading-snug max-w-full animate-slide-up'
-    : 'inline-block px-2 py-0.5 rounded text-xs font-mono bg-sap-panel border border-sap-border text-sap-text truncate max-w-56 animate-slide-up';
+  const catAllowsIdentifier = IDENTIFIER_CATS.has(catKey);
+  const tagClassesBase = isLocation
+    ? 'inline-block px-2 py-0.5 rounded text-12 bg-sap-panel border border-sap-border-light text-sap-text whitespace-normal break-words leading-snug max-w-full animate-slide-up'
+    : 'inline-block px-2 py-0.5 rounded text-12 bg-sap-panel border border-sap-border-light text-sap-text truncate max-w-56 animate-slide-up';
 
   const entityType = CAT_TO_ENTITY_TYPE[catKey];
   const isNavigable = !!entityType && !!onFocusEntity;
@@ -520,9 +622,9 @@ function ProfileSection({ catKey, label, icon, color, values, totalValues, onFoc
     <div className="bg-sap-surface px-4 py-3 animate-fade-in">
       <div className={`flex items-center gap-1.5 mb-2 ${color}`}>
         {icon}
-        <span className="text-xs font-mono uppercase tracking-wider font-semibold">{label}</span>
-        <span className="text-xs font-mono text-sap-muted ml-1">
-          ({values.length}{values.length < totalValues ? `/${totalValues}` : ''})
+        <span className="text-12 font-semibold tracking-tight">{label}</span>
+        <span className="text-11 text-sap-muted ml-1 tabular-nums">
+          ({entries.length}{entries.length < totalValues ? `/${totalValues}` : ''})
         </span>
       </div>
 
@@ -531,31 +633,54 @@ function ProfileSection({ catKey, label, icon, color, values, totalValues, onFoc
       )}
 
       <div className="flex flex-wrap gap-1.5">
-        {values.slice(0, 15).map((v, i) => (
-          isNavigable ? (
+        {entries.slice(0, 15).map((entry, i) => {
+          const v = entry.value;
+          const sources = entry.sources;
+          const fontCls = catAllowsIdentifier && isIdentifierValue(v) ? 'font-mono' : '';
+          const tagClasses = `${tagClassesBase} ${fontCls}`;
+          // Linked accounts: decode common URI schemes at render-time so the
+          // chip shows something human-readable instead of `android://…`.
+          let content;
+          if (catKey === 'accounts') {
+            const decoded = decodeAccountValue(v);
+            content = decoded.suffix !== undefined ? (
+              <>
+                <span className="font-sans">{decoded.label}</span>
+                <span className="font-mono">{decoded.suffix}</span>
+              </>
+            ) : (
+              <span className={decoded.mono ? 'font-mono' : ''}>{decoded.label}</span>
+            );
+          } else {
+            content = v;
+          }
+          const chip = isNavigable ? (
             <button
-              key={v}
               type="button"
               onClick={() => onFocusEntity(entityType, v)}
-              className={`${tagClasses} cursor-pointer hover:border-sap-accent/50 bg-transparent`}
+              className={`${tagClasses} cursor-pointer hover:border-sap-accent hover:bg-sap-surface transition-colors`}
               style={{ animationDelay: `${i * 30}ms`, animationFillMode: 'both' }}
               title={`View ${v} in network map`}
             >
-              {v}<span className="ml-1 opacity-60">&#x2197;</span>
+              {content}<span className="ml-1 opacity-60">&#x2197;</span>
             </button>
           ) : (
             <span
-              key={v}
               className={tagClasses}
               style={{ animationDelay: `${i * 30}ms`, animationFillMode: 'both' }}
-              title={v}
+              title={typeof v === 'string' ? v : undefined}
             >
-              {v}
+              {content}
             </span>
-          )
-        ))}
+          );
+          return (
+            <Provenance key={v} value={v} sources={sources}>
+              {chip}
+            </Provenance>
+          );
+        })}
         {totalValues > 15 && (
-          <span className="inline-block px-2 py-0.5 rounded text-xs font-mono bg-sap-panel border border-sap-border text-sap-muted">
+          <span className="inline-block px-2 py-0.5 rounded text-12 bg-sap-panel border border-sap-border-light text-sap-muted">
             +{totalValues - 15} more
           </span>
         )}
@@ -634,16 +759,16 @@ function CourtSearchSection({ name, location, onSwitchTab }) {
   if (courtStates.length === 0) return null;
 
   return (
-    <div className="px-5 py-3.5 bg-sap-bg/60 border-b border-sap-border">
-      <div className="flex items-center flex-wrap gap-x-4 gap-y-2">
-        <span className="text-[10px] font-mono uppercase tracking-wider text-sap-muted font-semibold shrink-0">Court search</span>
+    <div className="px-4 py-3 bg-sap-bg border-b border-sap-border-light">
+      <div className="flex items-center flex-wrap gap-x-3 gap-y-2">
+        <span className="text-11 text-sap-muted font-semibold shrink-0">Court search</span>
         <div className="flex flex-wrap gap-1.5">
           {courtStates.map(({ code, name: sName }) => {
             const on = courtChecked.has(code);
             return (
               <button key={code} type="button" onClick={() => toggleCourtState(code)}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono border transition-colors ${
-                  on ? 'bg-sap-accent/10 border-sap-accent/30 text-sap-accent' : 'bg-sap-panel border-sap-border text-sap-dim'
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-11 border transition-colors duration-150 ${
+                  on ? 'bg-sap-accent/[0.10] border-sap-accent/30 text-sap-text' : 'bg-sap-panel border-sap-border-light text-sap-dim hover:text-sap-text'
                 }`}
               >
                 <span className={`w-2.5 h-2.5 rounded-sm border flex items-center justify-center ${on ? 'bg-sap-accent border-sap-accent' : 'border-sap-border bg-sap-bg'}`}>
@@ -659,27 +784,27 @@ function CourtSearchSection({ name, location, onSwitchTab }) {
             const on = courtKinds.has(kind);
             return (
               <button key={kind} type="button" onClick={() => toggleCourtKind(kind)}
-                className={`px-2 py-0.5 rounded text-[11px] font-mono border transition-colors ${
-                  on ? 'bg-sap-accent/10 border-sap-accent/30 text-sap-accent' : 'bg-sap-panel border-sap-border text-sap-dim'
+                className={`px-2 py-0.5 rounded text-11 border transition-colors duration-150 ${
+                  on ? 'bg-sap-accent/[0.10] border-sap-accent/30 text-sap-text' : 'bg-sap-panel border-sap-border-light text-sap-dim hover:text-sap-text'
                 }`}
               >{label}</button>
             );
           })}
         </div>
         <button type="button" onClick={handleCourtSearch} disabled={!canSearchCourt}
-          className={`px-3 py-1 rounded text-[11px] font-mono font-semibold uppercase tracking-wider transition-colors ${
+          className={`px-3 h-6 rounded text-11 font-semibold transition-colors duration-150 ${
             canSearchCourt ? 'bg-sap-accent text-white hover:bg-sap-accent/90' : 'bg-sap-panel text-sap-muted cursor-not-allowed'
           }`}
         >
           {courtLoading ? (
-            <span className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
               Searching
             </span>
           ) : 'Search'}
         </button>
         {courtCountInfo != null && (
-          <span className="text-[10px] font-mono text-sap-muted tabular-nums">
+          <span className="text-11 text-sap-muted tabular-nums">
             {courtCountInfo.total} court{courtCountInfo.total !== 1 ? 's' : ''}
             {courtCountInfo.perState.length > 1 && (
               <span className="ml-1 text-sap-muted/70">
@@ -691,32 +816,52 @@ function CourtSearchSection({ name, location, onSwitchTab }) {
       </div>
 
       {courtError && (
-        <p className="mt-2 text-[11px] font-mono text-entity-drug">{courtError}</p>
+        <p className="mt-2 text-11 text-sap-danger">{courtError}</p>
       )}
 
       {courtResult && (
-        <div className="mt-2 flex items-center gap-3 text-[11px] font-mono">
-          <span className={`font-semibold ${courtCases.length > 0 ? 'text-entity-breach' : 'text-emerald-600'}`}>
+        <div className="mt-2 flex items-center gap-3 text-11">
+          <span className={`font-semibold ${courtCases.length > 0 ? 'text-sap-warning' : 'text-sap-success'}`}>
             {courtCases.length > 0 ? `${courtCases.length} case${courtCases.length !== 1 ? 's' : ''} found` : 'No cases found'}
           </span>
           {courtCases.length > 0 && (
             <>
               {courtCases.filter(c => (c.caseStatus || c.case_status) === 'PENDING').length > 0 && (
-                <span className="text-amber-600">
+                <span className="text-sap-warning">
                   {courtCases.filter(c => (c.caseStatus || c.case_status) === 'PENDING').length} pending
                 </span>
               )}
               {onSwitchTab && (
                 <button type="button" onClick={() => onSwitchTab('ecourts')}
-                  className="text-sap-accent hover:text-sap-accent/80 underline underline-offset-2"
-                >View in eCourts</button>
+                  className="text-sap-accent hover:text-sap-text underline underline-offset-2 transition-colors"
+                >View in courts</button>
               )}
             </>
           )}
-          {courtResult._cached && <span className="text-sap-muted px-1 py-0.5 bg-sap-panel rounded text-[10px]">cached</span>}
+          {courtResult._cached && <span className="text-sap-muted px-1 py-0.5 bg-sap-panel rounded text-11">cached</span>}
         </div>
       )}
     </div>
+  );
+}
+
+// Small async fetcher — when a pincode is rendered, look up the post-office /
+// district / state from the India Post directory so the investigator sees the
+// actual locality instead of an opaque 6-digit code.
+function PincodeDetails({ pin }) {
+  const [info, setInfo] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    getPincodeInfo(pin).then(d => { if (!cancelled) setInfo(d); });
+    return () => { cancelled = true; };
+  }, [pin]);
+  if (!info || !info.found) return null;
+  const parts = [info.po, info.district, info.state].filter(Boolean);
+  if (parts.length === 0) return null;
+  return (
+    <span className="text-11 text-sap-dim">
+      {parts.join(' · ')}
+    </span>
   );
 }
 
@@ -731,19 +876,19 @@ function LocationIntel({ location }) {
     <div className="mb-2.5 space-y-2">
       {sortedStates.length > 0 && (
         <div>
-          <span className="text-[10px] font-mono uppercase tracking-wider text-sap-muted font-semibold mr-2">States</span>
+          <span className="text-11 text-sap-muted font-semibold mr-2">States</span>
           <div className="inline-flex flex-wrap gap-1.5 mt-0.5">
             {sortedStates.map(([s, count], i) => (
               <span
                 key={s}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono border ${
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-12 border ${
                   i === 0
-                    ? 'bg-sap-accent/10 text-sap-accent border-sap-accent/20 font-medium'
-                    : 'bg-sap-panel text-sap-dim border-sap-border'
+                    ? 'bg-sap-accent/[0.10] text-sap-text border-sap-accent/30 font-medium'
+                    : 'bg-sap-panel text-sap-dim border-sap-border-light'
                 }`}
               >
                 {s}
-                <span className={`text-[10px] ${i === 0 ? 'text-sap-accent/60' : 'text-sap-muted'}`}>{count}</span>
+                <span className={`text-11 tabular-nums ${i === 0 ? 'text-sap-accent' : 'text-sap-muted'}`}>{count}</span>
               </span>
             ))}
           </div>
@@ -751,28 +896,29 @@ function LocationIntel({ location }) {
       )}
       {sortedCities.length > 0 && (
         <div>
-          <span className="text-[10px] font-mono uppercase tracking-wider text-sap-muted font-semibold mr-2">Cities</span>
+          <span className="text-11 text-sap-muted font-semibold mr-2">Cities</span>
           <div className="inline-flex flex-wrap gap-1.5 mt-0.5">
             {sortedCities.map(([c, count], i) => (
               <span
                 key={c}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono border ${
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-12 border ${
                   i === 0
-                    ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20 font-medium'
-                    : 'bg-sap-panel text-sap-dim border-sap-border'
+                    ? 'bg-sap-success-soft text-sap-text border-sap-success/30 font-medium'
+                    : 'bg-sap-panel text-sap-dim border-sap-border-light'
                 }`}
               >
                 {c}
-                <span className={`text-[10px] ${i === 0 ? 'text-emerald-600/60' : 'text-sap-muted'}`}>{count}</span>
+                <span className={`text-11 tabular-nums ${i === 0 ? 'text-sap-success' : 'text-sap-muted'}`}>{count}</span>
               </span>
             ))}
           </div>
         </div>
       )}
       {pincode && (
-        <div>
-          <span className="text-[10px] font-mono uppercase tracking-wider text-sap-muted font-semibold mr-2">Pincode</span>
-          <span className="px-2 py-0.5 rounded text-xs font-mono text-sap-dim bg-sap-panel border border-sap-border">{pincode}</span>
+        <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5">
+          <span className="text-11 text-sap-muted font-semibold mr-1">Pincode</span>
+          <span className="px-2 py-0.5 rounded text-12 font-mono text-sap-dim bg-sap-panel border border-sap-border-light">{pincode}</span>
+          <PincodeDetails pin={pincode} />
         </div>
       )}
     </div>

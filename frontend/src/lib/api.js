@@ -127,6 +127,13 @@ export async function listBankAccounts(limit = 50) {
   return res.json();
 }
 
+export async function listCryptoWallets(limit = 50, search = '') {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (search) params.set('search', search);
+  const res = await apiFetch(`${API}/financial/crypto-wallets?${params}`);
+  return res.json();
+}
+
 export async function buildGraph(searchResults) {
   const res = await apiFetch(`${API}/graph/build`, {
     method: 'POST',
@@ -751,4 +758,23 @@ export async function getAdminStatusMessages() {
   const res = await apiFetch(`${API}/support/admin/status`);
   if (!res.ok) return { messages: [], total: 0 };
   return res.json();
+}
+
+// Resolve a 6-digit pincode to a representative post-office record.
+// Returns { pincode, po, district, state, lat, lng, found: true } or
+// { pincode, found: false } when not in the directory.
+const _PINCODE_CACHE = new Map();
+export async function getPincodeInfo(pincode) {
+  const pin = String(pincode || '').trim();
+  if (!/^\d{6}$/.test(pin)) return null;
+  if (_PINCODE_CACHE.has(pin)) return _PINCODE_CACHE.get(pin);
+  try {
+    const res = await apiFetch(`${API}/geo/pincode/${pin}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    _PINCODE_CACHE.set(pin, data);
+    return data;
+  } catch {
+    return null;
+  }
 }

@@ -2,7 +2,6 @@ import EntityBadge from '../components/EntityBadge';
 import OnionLink from '../components/OnionLink';
 import { getDarkwebAuthor } from '../lib/api';
 import { useState } from 'react';
-import Shimmer from '../components/Shimmer';
 
 export default function DarkwebTab({ data, onPivot, darkmonResults = [], darkmonMeta = null }) {
   const dw = data?.darkweb || {};
@@ -29,48 +28,12 @@ export default function DarkwebTab({ data, onPivot, darkmonResults = [], darkmon
 
   const hasSearchData = streamedMatches.length > 0 || threads.length > 0 || posts.length > 0 || uMatches.length > 0;
 
-  if (!data) {
-    return (
-      <div className="space-y-4 p-4 animate-fade-in">
-        <div className="flex gap-3">
-          <Shimmer className="h-10 flex-1" />
-          <Shimmer className="h-10 w-24" />
-        </div>
-        <div className="bg-sap-surface border border-sap-border rounded-lg p-4 space-y-3">
-          <div className="flex items-center gap-4">
-            <Shimmer className="h-12 w-12 rounded-full" />
-            <div className="space-y-2 flex-1">
-              <Shimmer className="h-4 w-40" />
-              <Shimmer className="h-3 w-24" />
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-4 pt-3">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="text-center space-y-2">
-                <Shimmer className="h-6 w-16 mx-auto" />
-                <Shimmer className="h-3 w-12 mx-auto" />
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="space-y-3">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="bg-sap-surface border border-sap-border rounded-lg p-4 space-y-2">
-              <Shimmer className="h-4 w-3/4" />
-              <Shimmer className="h-3 w-full" />
-              <Shimmer className="h-3 w-2/3" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-5 animate-fade-in">
       {error && (
-        <div className="rounded-lg border border-entity-drug/30 bg-entity-drug/5 p-4">
-          <p className="text-entity-drug font-mono text-sm">{error}</p>
+        <div className="rounded-lg border border-entity-darkweb/30 bg-entity-darkweb/5 p-4">
+          <p className="text-entity-darkweb font-mono text-sm">{error}</p>
           <button
             type="button"
             onClick={() => { setError(null); handleAuthorSearch(); }}
@@ -81,12 +44,12 @@ export default function DarkwebTab({ data, onPivot, darkmonResults = [], darkmon
         </div>
       )}
       {/* ── Author Lookup ── */}
-      <form onSubmit={handleAuthorSearch} className="flex gap-2 max-w-lg">
+      <form onSubmit={handleAuthorSearch} className="flex gap-3 items-center max-w-2xl">
         <input type="text" value={authorQuery} onChange={e => setAuthorQuery(e.target.value)}
           placeholder="Lookup dark web author..."
-          className="flex-1 bg-sap-panel border border-sap-border rounded-lg px-3 py-2.5 text-sm font-mono text-sap-text outline-none focus:border-entity-darkweb placeholder:text-sap-muted" />
+          className="flex-1 bg-sap-panel border border-sap-border rounded-lg px-4 py-2.5 text-sm font-mono text-sap-text outline-none focus:border-entity-darkweb placeholder:text-sap-muted" />
         <button type="submit" disabled={searching}
-          className="bg-entity-darkweb/10 hover:bg-entity-darkweb/20 text-entity-darkweb border border-entity-darkweb/30 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40">
+          className="bg-entity-darkweb/10 hover:bg-entity-darkweb/20 text-entity-darkweb border border-entity-darkweb/30 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40">
           {searching ? 'Searching...' : 'Lookup Author'}
         </button>
       </form>
@@ -138,7 +101,7 @@ export default function DarkwebTab({ data, onPivot, darkmonResults = [], darkmon
 
       {/* ── Empty state ── */}
       {!hasSearchData && !authorResult && !darkmonMeta && darkmonResults.length === 0 && (
-        <div className="text-center py-12">
+        <div className="text-center py-10">
           <p className="text-sm text-sap-muted">Run a search to surface dark web forum activity linked to the subject.</p>
           <p className="text-xs text-sap-dim mt-1">Usernames discovered in breach data are automatically checked against forum databases.</p>
         </div>

@@ -16,6 +16,11 @@ research/
 scripts/
 specs/
 scopes/
+
+# Shared build infra (kept under tracking despite the broad ignores above)
+!scripts/build_india_geo.py
+!backend/app/engines/data/
+!backend/app/engines/data/**
 HANDOFF.md
 WORKTREE_PLAN.md
 

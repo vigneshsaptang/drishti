@@ -22,11 +22,18 @@ export function useSearchV2() {
   const [results, setResults] = useState([]);
   const [ftiResults, setFtiResults] = useState([]);
   const [ftiMeta, setFtiMeta] = useState(null);
+  const [variantsScreened, setVariantsScreened] = useState([]);
+  const [dobEnforced, setDobEnforced] = useState(false);
   const [darkmonResults, setDarkmonResults] = useState([]);
   const [darkmonMeta, setDarkmonMeta] = useState(null);
   const [financialResults, setFinancialResults] = useState([]);
   const [financialMeta, setFinancialMeta] = useState(null);
   const [aiSummary, setAiSummary] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [canonicalLocation, setCanonicalLocation] = useState(null);
+  const [canonicalName, setCanonicalName] = useState(null);
+  const [canonicalSource, setCanonicalSource] = useState(null);
+  const [riskScore, setRiskScore] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchMeta, setSearchMeta] = useState(null);
@@ -82,7 +89,7 @@ export function useSearchV2() {
     financialBufferRef.current = [];
   }, []);
 
-  const doSearch = useCallback(async (seeds, maxDepth = 2, engines = null) => {
+  const doSearch = useCallback(async (seeds, maxDepth = 2, engines = null, subject = null) => {
     if (!seeds || seeds.length === 0) return;
 
     // Abort any previous search and clear stale buffers
@@ -94,28 +101,41 @@ export function useSearchV2() {
     setResults([]);
     setFtiResults([]);
     setFtiMeta(null);
+    setVariantsScreened([]);
+    setDobEnforced(false);
     setDarkmonResults([]);
     setDarkmonMeta(null);
     setFinancialResults([]);
     setFinancialMeta(null);
     setAiSummary(null);
+    setProfile(null);
+    setCanonicalLocation(null);
+    setCanonicalName(null);
+    setCanonicalSource(null);
+    setRiskScore(null);
     setLoading(true);
     setError(null);
     setSearchMeta(null);
 
     let searchCompleted = false;
+    let authFailed = false;
 
     try {
       const res = await fetch('/api/v2/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ seeds, max_depth: maxDepth, ...(engines ? { engines } : {}) }),
+        body: JSON.stringify({
+          seeds,
+          max_depth: maxDepth,
+          ...(engines ? { engines } : {}),
+          ...(subject ? { subject } : {}),
+        }),
         signal: controller.signal,
       });
 
       onUnauthorized(res);
       if (!res.ok) {
-        if (res.status === 401) return;
+        if (res.status === 401) { authFailed = true; return; }
         if (res.status === 402) {
           const body = await res.json().catch(() => ({}));
           throw new Error(body.detail?.error === 'insufficient_credits'
@@ -180,6 +200,8 @@ export function useSearchV2() {
 
                 case 'fti:complete':
                   setFtiMeta(parsed);
+                  setVariantsScreened(Array.isArray(parsed.variants_screened) ? parsed.variants_screened : []);
+                  setDobEnforced(!!parsed.dob_enforced);
                   break;
 
                 case 'financial:result':
@@ -200,8 +222,26 @@ export function useSearchV2() {
                   setDarkmonMeta(parsed);
                   break;
 
+                case 'risk:score':
+                  setRiskScore(parsed);
+                  break;
+
+                case 'profile:ready':
+                  // Early profile emit — backend ships this right after
+                  // CREDMON, before screening engines run, so the report
+                  // shows subject identity without waiting on screening.
+                  if (parsed.profile) setProfile(parsed.profile);
+                  if (parsed.canonical_location) setCanonicalLocation(parsed.canonical_location);
+                  if (parsed.canonical_name) setCanonicalName(parsed.canonical_name);
+                  if (parsed.canonical_source) setCanonicalSource(parsed.canonical_source);
+                  break;
+
                 case 'summary':
                   setAiSummary(parsed.text || null);
+                  if (parsed.profile) setProfile(parsed.profile);
+                  if (parsed.canonical_location) setCanonicalLocation(parsed.canonical_location);
+                  if (parsed.canonical_name) setCanonicalName(parsed.canonical_name);
+                  if (parsed.canonical_source) setCanonicalSource(parsed.canonical_source);
                   break;
 
                 case 'search:complete':
@@ -234,7 +274,7 @@ export function useSearchV2() {
       if (e.name === 'AbortError') return;
       setError(e.message);
     } finally {
-      if (!searchCompleted && !controller.signal.aborted) {
+      if (!searchCompleted && !controller.signal.aborted && !authFailed) {
         setError('Search stream ended unexpectedly — results may be incomplete');
       }
       setLoading(false);
@@ -256,13 +296,20 @@ export function useSearchV2() {
     setResults([]);
     setFtiResults([]);
     setFtiMeta(null);
+    setVariantsScreened([]);
+    setDobEnforced(false);
     setDarkmonResults([]);
     setDarkmonMeta(null);
     setFinancialResults([]);
     setFinancialMeta(null);
     setAiSummary(null);
+    setProfile(null);
+    setCanonicalLocation(null);
+    setCanonicalName(null);
+    setCanonicalSource(null);
+    setRiskScore(null);
     setSearchMeta(null);
   }, [cancelSearch]);
 
-  return { results, ftiResults, ftiMeta, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, loading, error, searchMeta, doSearch, cancelSearch, clearResults };
+  return { results, ftiResults, ftiMeta, variantsScreened, dobEnforced, darkmonResults, darkmonMeta, financialResults, financialMeta, aiSummary, profile, canonicalLocation, canonicalName, canonicalSource, riskScore, loading, error, searchMeta, doSearch, cancelSearch, clearResults };
 }

@@ -292,6 +292,40 @@ def get_wallet_info(wallet_address: str) -> dict | None:
         return None
 
 
+def list_wallets(limit: int = 50, search: str = "") -> list[dict]:
+    """List known crypto wallets from the darkweb-aggregated wallet_info collection.
+
+    Args:
+        limit: max wallets to return (caller caps via Query(le=...)).
+        search: optional case-insensitive substring match on wallet_address.
+    """
+    db = get_darkmon()["forums_market"]
+    try:
+        query: dict = {}
+        if search:
+            query["wallet_address"] = {"$regex": search, "$options": "i"}
+        cursor = (
+            db["wallet_info"]
+            .find(query, {
+                "wallet_address": 1,
+                "blockchain_type": 1,
+                "balance": 1,
+                "total_received": 1,
+                "total_sent": 1,
+                "transactions_count": 1,
+                "tags": 1,
+                "wallet_explorer_info": 1,
+                "first_seen": 1,
+                "last_seen": 1,
+            })
+            .limit(limit)
+        )
+        return [_clean(w) for w in cursor]
+    except Exception:
+        log.exception("list_wallets failed: search=%r limit=%d", search, limit)
+        return []
+
+
 def get_wallet_transactions(wallet_address: str, limit: int = 50) -> list[dict]:
     """Get transactions for a wallet."""
     db = get_darkmon()["forums_market"]

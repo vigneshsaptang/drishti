@@ -12,9 +12,20 @@ from datetime import datetime
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Request
 from sse_starlette.sse import EventSourceResponse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
-from app.engines import credmon, darkmon, fti
+from app.engines import credmon, darkmon, fti, risk_ingestor, risk_scorer, geo
+from app.engines.credmon import (
+    _get_leak_schema,
+    _flatten_record,
+    search_master as credmon_search_master,
+    fetch_record_by_id as credmon_fetch_record,
+)
+from app.engines.identifier_categorizer import (
+    extract_profile as categorizer_extract_profile,
+    flatten_profile as categorizer_flatten_profile,
+)
+from app.engines.name_match import find_variants, dob_compatible, infer_canonical_name
 from app.audit import audit as audit_service
 from app.credits import require_credits, ENGINE_COST_KEYS
 
@@ -65,10 +76,25 @@ class SeedItem(BaseModel):
 
 VALID_ENGINES = {"breach", "threat_intel", "darkweb", "financial", "ecourts"}
 
+
+class SubjectName(BaseModel):
+    first:    str | None = None
+    middle:   str | None = None
+    last:     str | None = None
+    initials: str | None = None
+    dob:      str | None = None
+
+    @model_validator(mode="after")
+    def at_least_one_part(self) -> "SubjectName":
+        # If the whole object is empty, treat as absent at the caller layer.
+        return self
+
+
 class SearchRequestV2(BaseModel):
     seeds: list[SeedItem]
     max_depth: int = 2
     engines: list[str] | None = None
+    subject: SubjectName | None = None
 
     @field_validator("seeds")
     @classmethod
@@ -111,7 +137,14 @@ def _extract_usernames(results: list[dict]) -> list[dict]:
 
 
 def _extract_fullnames(results: list[dict]) -> list[str]:
-    """Extract unique fullnames from CREDMON entity results (capped at 10)."""
+    """Extract unique fullnames from CREDMON entity results (capped at 3).
+
+    The cap was 10 — observed in v1.1 testing that ten serial FTI screen calls
+    on a slow Mongo cluster regularly busted the 60s wall timeout, returning
+    zero data instead of a partial result. Three keeps the worst-case under the
+    timeout while still giving the inferred path a fair shot at finding the
+    real subject.
+    """
     seen: set[str] = set()
 
     for result in results:
@@ -138,79 +171,134 @@ def _extract_fullnames(results: list[dict]) -> list[str]:
                         ):
                             seen.add(val.strip())
 
-    # Cap at 10 names
-    return list(seen)[:10]
+    # Sort for stable ordering, cap at 3. See note above.
+    return sorted(seen)[:3]
 
 
-_NAME_KEYS = {"fullname", "full_name", "name", "first_name", "last_name", "display_name", "displayname"}
-_USERNAME_KEYS = {"username", "user_name", "nickname", "handle", "screen_name", "loginname"}
-_EMAIL_KEYS = {"email", "e-mail", "mail", "email_address"}
-_PHONE_KEYS = {"phone", "mobile", "cell", "telephone", "contact_number"}
-_IP_KEYS = {"ip", "ip_address", "last_ip", "signup_ip", "login_ip"}
-_DOB_KEYS = {"dob", "date_of_birth", "birth_date", "birthday"}
-_LOCATION_KEYS = {"city", "state", "country", "region", "district", "address", "pincode", "zip"}
-_ACCOUNT_KEYS = {"facebook", "linkedin", "twitter", "instagram", "telegram", "discord", "github", "reddit"}
-_SKIP_VALUES = {"", "null", "None", "none", "undefined", "N/A", "n/a", "-", "0", "false"}
+def _explicit_canonical_name(subject: SubjectName | None) -> str | None:
+    """Build a display name from structured subject input.
+
+    Returns None when subject is absent or all of first/last/initials empty.
+    """
+    if subject is None:
+        return None
+    parts = [p for p in (subject.first, subject.middle, subject.last) if p]
+    if parts:
+        extra = subject.initials.strip() if subject.initials else ""
+        return (" ".join(parts) + (f" {extra}" if extra and not subject.middle else "")).strip()
+    if subject.initials:
+        letters = [ch for ch in subject.initials if ch.isalpha()]
+        if letters:
+            return ".".join(letters).upper() + "."
+    return None
 
 
-def _extract_profile_for_summary(results: list[dict]) -> dict:
-    """Build a compact profile dict for the AI summary prompt."""
-    names: set[str] = set()
-    emails: set[str] = set()
-    phones: set[str] = set()
-    usernames: set[str] = set()
-    ips: set[str] = set()
-    dobs: set[str] = set()
-    locations: set[str] = set()
-    accounts: set[str] = set()
-    source_count = 0
+def _explicit_canonical_tokens(subject: SubjectName | None) -> list[str]:
+    """Tokens for the FTI canonical filter when structured subject is provided.
 
-    for result in results:
-        if not result.get("found"):
-            continue
-        if result.get("entity_type") == "email" and result.get("entity_value"):
-            emails.add(result["entity_value"])
-        if result.get("entity_type") == "phone" and result.get("entity_value"):
-            phones.add(result["entity_value"])
-        source_count += len(result.get("sources", []))
+    Multi-char tokens (full first/middle/last) appear as-is, lowercased.
+    Initials contribute single-letter tokens. Empty list when nothing usable.
+    """
+    if subject is None:
+        return []
+    tokens: list[str] = []
+    for k in ("last", "first", "middle"):
+        v = getattr(subject, k, None)
+        if v:
+            vv = v.strip().lower()
+            if len(vv) >= 2:
+                tokens.append(vv)
+    if subject.initials:
+        for ch in subject.initials.replace(" ", "").replace(".", ""):
+            if ch.isalpha():
+                tokens.append(ch.lower())
+    # dedupe preserving order
+    seen: set[str] = set()
+    out: list[str] = []
+    for t in tokens:
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out
 
-        for source in result.get("sources", []):
-            for record in source.get("records", []):
-                for key, val in record.get("fields", {}).items():
-                    if not val or not isinstance(val, str) or val.strip() in _SKIP_VALUES:
-                        continue
-                    v = val.strip()
-                    kl = key.lower()
-                    if kl in _NAME_KEYS and len(v) > 3 and "@" not in v and not v.isdigit():
-                        names.add(v)
-                    elif kl in _USERNAME_KEYS and len(v) >= 3 and "@" not in v and not v.isdigit():
-                        usernames.add(v)
-                    elif kl in _EMAIL_KEYS and "@" in v:
-                        emails.add(v)
-                    elif any(pk in kl for pk in _PHONE_KEYS) and re.search(r"\d{7,}", v.replace(" ", "")):
-                        phones.add(v)
-                    elif kl in _IP_KEYS and re.match(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", v):
-                        ips.add(v)
-                    elif kl in _DOB_KEYS:
-                        dobs.add(v)
-                    elif kl in _LOCATION_KEYS and len(v) > 2:
-                        locations.add(v)
-                    elif kl in _ACCOUNT_KEYS:
-                        accounts.add(v)
 
+def _build_profile_payload(all_results: list[dict], subject: SubjectName | None = None) -> dict:
+    """Compute the profile + canonical_location pair from current results.
+
+    Used both for the early ``profile:ready`` SSE event (emitted right after
+    the breach engine seeds entity sets, so the report's Subject section
+    appears before screening engines run) and for the final ``summary`` event.
+
+    Emits two profile shapes:
+
+      * ``profile`` — the provenance-rich shape produced by
+        ``categorizer_extract_profile``. Each value is a
+        ``{"value": ..., "sources": [...]}`` dict so the frontend can render
+        the Saptang-Labs-Intelligence-branded provenance block per chip.
+      * ``profile_flat`` — the legacy ``dict[str, list[str]]`` shape, kept
+        for backwards compatibility with any frontend consumers (and a few
+        internal call sites here) that still read bare strings.
+    """
+    profile_rich = categorizer_extract_profile(all_results, subject=subject)
+    profile_flat = categorizer_flatten_profile(profile_rich)
+
+    # Aggregate summary counters live on the flat shape (legacy consumers).
+    profile_flat["source_count"] = sum(
+        len(r.get("sources", [])) for r in all_results if r.get("found")
+    )
+    profile_flat["total_entities"] = len(all_results)
+    profile_flat["total_found"] = sum(1 for r in all_results if r.get("found"))
+    profile_flat["dobs"] = profile_flat.get("dob", [])
+
+    # Mirror the aggregate counters onto the rich shape so any frontend code
+    # reading them via `profile.source_count` doesn't break during the
+    # rich/flat transition.
+    profile_rich["source_count"] = profile_flat["source_count"]
+    profile_rich["total_entities"] = profile_flat["total_entities"]
+    profile_rich["total_found"] = profile_flat["total_found"]
+    profile_rich["dobs"] = profile_flat["dobs"]
+
+    canonical_location = geo.resolve_canonical_location(all_results)
+    explicit_name = _explicit_canonical_name(subject)
+    if explicit_name:
+        canonical_name = explicit_name
+        canonical_source = "investigator"
+    else:
+        # Internal canonical-name derivation reads the LEGACY flat shape.
+        # Use anchor-based inference (name tokens overlapping email local-parts
+        # / usernames) so a namesake that happens to be names[0] doesn't win.
+        names_flat = profile_flat.get("names") or []
+        emails_flat = profile_flat.get("emails") or []
+        usernames_flat = profile_flat.get("usernames") or []
+        canonical_name = (
+            infer_canonical_name(names_flat, emails_flat, usernames_flat)
+            or (names_flat[0] if names_flat else None)
+        )
+        canonical_source = "inferred" if canonical_name else None
     return {
-        "names": list(names)[:15],
-        "emails": list(emails)[:15],
-        "phones": list(phones)[:10],
-        "usernames": list(usernames)[:10],
-        "ips": list(ips)[:10],
-        "dobs": list(dobs)[:3],
-        "locations": list(locations)[:10],
-        "accounts": list(accounts)[:10],
-        "source_count": source_count,
-        "total_entities": len(results),
-        "total_found": sum(1 for r in results if r.get("found")),
+        "profile": profile_rich,
+        "profile_flat": profile_flat,
+        "canonical_location": canonical_location,
+        "canonical_name": canonical_name,
+        "canonical_source": canonical_source,
     }
+
+
+def _format_canonical_location_str(loc: dict | None) -> str | None:
+    """Render a canonical_location dict as 'City, State' / 'District, State' / 'State'.
+
+    Prefers city > district > locality for the place portion. Returns None if the
+    location couldn't be resolved.
+    """
+    if not loc:
+        return None
+    state = loc.get("state")
+    if not state:
+        return None
+    place = loc.get("city") or loc.get("district") or loc.get("locality")
+    if place and place.lower() != state.lower():
+        return f"{place}, {state}"
+    return state
 
 
 def _generate_programmatic_summary(
@@ -218,16 +306,38 @@ def _generate_programmatic_summary(
     fti_summary: dict,
     darkmon_summary: dict,
     financial_summary: dict,
+    canonical_location: dict | None = None,
+    canonical_name: str | None = None,
 ) -> str:
-    """Build a deterministic prose intelligence summary from profile data."""
+    """Build a deterministic prose intelligence summary from profile data.
+
+    Expects the LEGACY flat profile shape (``dict[str, list[str]]``) —
+    callers should pass ``profile_flat`` from ``_build_profile_payload``, not
+    the provenance-rich ``profile`` dict.
+
+    When ``canonical_name`` is provided (investigator-named subject or
+    inferred canonical) it takes precedence over ``profile["names"][0]``
+    for the lead sentence — so the summary never silently mis-identifies
+    the subject as one of the discovered namesakes from breach data.
+    """
     parts: list[str] = []
 
-    # Lead with identified subject
+    # Lead with identified subject. Prefer the canonical name (explicit
+    # from investigator, or inferred from breach evidence) over the raw
+    # first name in profile.names, which is order-dependent and may be a
+    # namesake / breach artefact.
     names = profile.get("names", [])
     locations = profile.get("locations", [])
-    if names:
-        lead = f"Subject identified as {names[0]}"
-        if locations:
+    lead_name = (canonical_name or "").strip() or (names[0] if names else "")
+    if lead_name:
+        lead = f"Subject identified as {lead_name}"
+        # Prefer the canonical resolved location (City, State) over the first
+        # raw address from profile.locations — the latter is verbose street
+        # addressing, not "where is the subject."
+        canon_loc_str = _format_canonical_location_str(canonical_location)
+        if canon_loc_str:
+            lead += f", located in {canon_loc_str}"
+        elif locations:
             lead += f", located in {locations[0]}"
         lead += "."
         parts.append(lead)
@@ -287,16 +397,41 @@ def _generate_programmatic_summary(
     return " ".join(parts)
 
 
-def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: list[dict]) -> dict:
-    """FTI screening + financial screening (runs in thread)."""
+def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: list[dict], explicit_name: str | None = None, variants: list[dict] | None = None, dob_enforced: bool = False) -> dict:
+    """FTI screening + financial screening (runs in thread).
+
+    When ``explicit_name`` is provided, only that single name is screened
+    against the watchlist / crime database — bypassing the breach-record
+    name extraction entirely. This eliminates the "namesake" class of hits,
+    because we never look up anyone other than the investigator-named
+    subject.
+
+    When ``variants`` is a non-empty list (each entry shaped like
+    ``{"name": ..., "matched_by": ...}`` per ``name_match.find_variants``)
+    and ``explicit_name`` is also provided, the screening expands to
+    ``[explicit_name] + [v['name'] for v in variants]`` — picking up
+    plausible spelling variants of the investigator's subject while still
+    excluding unrelated namesakes.
+    """
     events = []
+    parsed_fti = []
     t_fti = time.time()
     names_screened = 0
     cd_matches = 0
     wc_matches = 0
 
     if "threat_intel" in engines:
-        fullnames = _extract_fullnames(all_results)
+        if explicit_name:
+            fullnames = [explicit_name]
+            if variants:
+                seen_lower = {explicit_name.lower()}
+                for v in variants:
+                    nm = (v.get("name") or "").strip()
+                    if nm and nm.lower() not in seen_lower:
+                        fullnames.append(nm)
+                        seen_lower.add(nm.lower())
+        else:
+            fullnames = _extract_fullnames(all_results)
         names_screened = len(fullnames)
         for name in fullnames:
             t_q = time.time()
@@ -309,6 +444,7 @@ def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: l
                 "query_type": "crimedata", "entity_value": name,
                 "found": cd_found, "results": cd_results, "search_time_ms": cd_time,
             })})
+            parsed_fti.append({"query_type": "crimedata", "entity_value": name, "found": cd_found, "results": cd_results})
 
             t_q = time.time()
             wc_results = fti.screen_worldcheck(name)
@@ -320,17 +456,28 @@ def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: l
                 "query_type": "worldcheck", "entity_value": name,
                 "found": wc_found, "results": wc_results, "search_time_ms": wc_time,
             })})
+            parsed_fti.append({"query_type": "worldcheck", "entity_value": name, "found": wc_found, "results": wc_results})
 
     fti_ms = round((time.time() - t_fti) * 1000)
+    # Additive fields: ``variants_screened`` lists the spelling variants of
+    # the investigator's subject we also screened (empty when no
+    # explicit_name or no variants discovered); ``dob_enforced`` is a flag
+    # surfaced for the UI even though the actual DOB filter is applied in
+    # the canonical-match pass downstream (see ``_entry_matches_canonical``).
     events.append({"event": "fti:complete", "data": _dumps({
         "total_names_screened": names_screened,
         "crimedata_matches": cd_matches, "worldcheck_matches": wc_matches,
         "total_time_ms": fti_ms,
+        "variants_screened": [v["name"] for v in (variants or []) if v.get("name")],
+        "dob_enforced": bool(dob_enforced),
     })})
 
     t_fin = time.time()
     phones_screened = 0
     upi_hits = 0
+    parsed_financial = []
+    parsed_telegram = []
+    parsed_phone_intel = []
 
     if "financial" in engines:
         phones: set[str] = set()
@@ -351,10 +498,40 @@ def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: l
             upi_found = len(upi_results) > 0
             if upi_found:
                 upi_hits += 1
+                parsed_financial.append({"type": "upi", "phone": phone, "records": upi_results})
             events.append({"event": "financial:result", "data": _dumps({
                 "phone": phone, "found": upi_found,
                 "upi_records": upi_results, "search_time_ms": q_time,
             })})
+
+        for phone in list(phones)[:10]:
+            try:
+                bank_results = fti.search_bank_accounts(phone)
+                if bank_results:
+                    parsed_financial.append({"type": "bank", "phone": phone, "records": bank_results})
+            except Exception:
+                pass
+
+        for phone in list(phones)[:10]:
+            try:
+                tg_result = fti.search_telegram_mentions(phone)
+                if tg_result and tg_result.get("total_mentions", 0) > 0:
+                    parsed_telegram.append({
+                        "phone": phone,
+                        "found": True,
+                        "total_mentions": tg_result.get("total_mentions", 0),
+                        "unique_groups": tg_result.get("unique_groups", 0),
+                    })
+            except Exception:
+                pass
+
+        for phone in list(phones)[:10]:
+            try:
+                mobile_results = fti.search_mobile_numbers(phone)
+                if mobile_results:
+                    parsed_phone_intel.append({"phone": phone, "found": True, "records": mobile_results})
+            except Exception:
+                pass
 
     fin_ms = round((time.time() - t_fin) * 1000)
     events.append({"event": "financial:complete", "data": _dumps({
@@ -364,17 +541,22 @@ def _run_fti_and_financial(engines: set, all_results: list[dict], seeds_dicts: l
 
     return {
         "events": events,
+        "parsed_fti": parsed_fti,
         "names_screened": names_screened,
         "cd_matches": cd_matches, "wc_matches": wc_matches,
         "fti_ms": fti_ms,
         "phones_screened": phones_screened, "upi_hits": upi_hits,
         "fin_ms": fin_ms,
+        "parsed_financial": parsed_financial,
+        "parsed_telegram": parsed_telegram,
+        "parsed_phone_intel": parsed_phone_intel,
     }
 
 
 def _run_darkmon(engines: set, all_results: list[dict]) -> dict:
     """DARKMON username search (runs in thread)."""
     events = []
+    parsed_darkmon = []
     t_dm = time.time()
     unames_searched = 0
     dm_matches = 0
@@ -402,6 +584,7 @@ def _run_darkmon(engines: set, all_results: list[dict]) -> dict:
                 "author_profile": uh.get("author_profile"),
                 "found": has_data, "search_time_ms": q_time,
             })})
+            parsed_darkmon.append({"username": uname, "found": has_data, "threads": uh.get("threads", []), "posts": uh.get("posts", []), "author_profile": uh.get("author_profile")})
 
     dm_ms = round((time.time() - t_dm) * 1000)
     events.append({"event": "darkmon:complete", "data": _dumps({
@@ -411,8 +594,144 @@ def _run_darkmon(engines: set, all_results: list[dict]) -> dict:
 
     return {
         "events": events,
+        "parsed_darkmon": parsed_darkmon,
         "unames_searched": unames_searched,
         "dm_matches": dm_matches, "dm_ms": dm_ms,
+    }
+
+
+def _run_credmon_shallow(seed_type: str, seed_value: str) -> list[dict]:
+    """Shallow CREDMON lookup — fetch breach records for a single entity, no BFS."""
+    t0 = time.time()
+    hit = credmon_search_master(seed_type, seed_value)
+    search_time_ms = round((time.time() - t0) * 1000)
+
+    if not hit:
+        return [{
+            "depth": 0,
+            "entity_type": seed_type,
+            "entity_value": seed_value,
+            "found": False,
+            "search_time_ms": search_time_ms,
+        }]
+
+    source_results = []
+    for src in hit["sources"]:
+        col_name = src["collection"]
+        record_ids = src.get("id", [])
+        schema_info = _get_leak_schema(col_name)
+
+        records = []
+        for rid in record_ids[:3]:
+            rec = credmon_fetch_record(col_name, rid)
+            if rec:
+                flat = _flatten_record(rec)
+                records.append({
+                    "record_id": str(rid),
+                    "fields": flat,
+                })
+
+        if records:
+            leak_info = schema_info or {}
+            source_results.append({
+                "collection": col_name,
+                "leak_name": leak_info.get("leak_name", col_name),
+                "breach_date": str(leak_info.get("breach_date", "")),
+                "records_count": leak_info.get("records_count"),
+                "records": records,
+            })
+
+    return [{
+        "depth": 0,
+        "entity_type": seed_type,
+        "entity_value": seed_value,
+        "found": True,
+        "search_time_ms": search_time_ms,
+        "sources": source_results,
+        "new_emails_found": [],
+        "new_phones_found": [],
+    }]
+
+
+def _run_darkmon_direct(username: str) -> dict:
+    """DARKMON search for a single known username (Tier 2a)."""
+    events = []
+    parsed_darkmon = []
+    t_dm = time.time()
+    dm_matches = 0
+
+    try:
+        uh = darkmon.search_by_username(username)
+    except Exception:
+        log.warning("darkmon search_by_username failed: uname=%s", username, exc_info=True)
+        uh = {"threads": [], "posts": [], "author_profile": None}
+
+    q_time = round((time.time() - t_dm) * 1000)
+    has_data = bool(uh.get("threads") or uh.get("posts") or uh.get("author_profile"))
+    if has_data:
+        dm_matches = 1
+
+    events.append({"event": "darkmon:result", "data": _dumps({
+        "username": username, "breach_sources": [],
+        "threads": uh.get("threads", []), "posts": uh.get("posts", []),
+        "author_profile": uh.get("author_profile"),
+        "found": has_data, "search_time_ms": q_time,
+    })})
+    parsed_darkmon.append({"username": username, "found": has_data, "threads": uh.get("threads", []), "posts": uh.get("posts", []), "author_profile": uh.get("author_profile")})
+
+    events.append({"event": "darkmon:complete", "data": _dumps({
+        "total_usernames_searched": 1,
+        "total_matches": dm_matches, "total_time_ms": q_time,
+    })})
+
+    return {"events": events, "parsed_darkmon": parsed_darkmon, "unames_searched": 1, "dm_matches": dm_matches, "dm_ms": q_time}
+
+
+def _run_fti_direct(fullname: str) -> dict:
+    """FTI screening for a single known fullname (Tier 2b)."""
+    events = []
+    parsed_fti = []
+    t_fti = time.time()
+    cd_matches = 0
+    wc_matches = 0
+
+    t_q = time.time()
+    cd_results = fti.screen_crimedata(fullname)
+    cd_time = round((time.time() - t_q) * 1000)
+    cd_found = len(cd_results) > 0
+    if cd_found:
+        cd_matches = 1
+    events.append({"event": "fti:result", "data": _dumps({
+        "query_type": "crimedata", "entity_value": fullname,
+        "found": cd_found, "results": cd_results, "search_time_ms": cd_time,
+    })})
+    parsed_fti.append({"query_type": "crimedata", "entity_value": fullname, "found": cd_found, "results": cd_results})
+
+    t_q = time.time()
+    wc_results = fti.screen_worldcheck(fullname)
+    wc_time = round((time.time() - t_q) * 1000)
+    wc_found = len(wc_results) > 0
+    if wc_found:
+        wc_matches = 1
+    events.append({"event": "fti:result", "data": _dumps({
+        "query_type": "worldcheck", "entity_value": fullname,
+        "found": wc_found, "results": wc_results, "search_time_ms": wc_time,
+    })})
+    parsed_fti.append({"query_type": "worldcheck", "entity_value": fullname, "found": wc_found, "results": wc_results})
+
+    fti_ms = round((time.time() - t_fti) * 1000)
+    events.append({"event": "fti:complete", "data": _dumps({
+        "total_names_screened": 1,
+        "crimedata_matches": cd_matches, "worldcheck_matches": wc_matches,
+        "total_time_ms": fti_ms,
+    })})
+
+    return {
+        "events": events,
+        "parsed_fti": parsed_fti,
+        "names_screened": 1,
+        "cd_matches": cd_matches, "wc_matches": wc_matches,
+        "fti_ms": fti_ms,
     }
 
 
@@ -454,92 +773,321 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
                 }),
             }
 
-        # 2. BFS — run the blocking generator in a thread, collect results
+        # 2. Route by seed type
         total_entities_searched = 0
         total_found = 0
         max_depth_reached = 0
         all_results = []
+        total_names_screened = 0
+        crimedata_matches = 0
+        worldcheck_matches = 0
+        fti_total_time_ms = 0
+        total_phones_screened = 0
+        total_upi_hits = 0
+        fin_total_time_ms = 0
+        total_usernames_searched = 0
+        total_darkmon_matches = 0
+        darkmon_total_time_ms = 0
+        collected_fti_results = []
+        collected_darkmon_results = []
+        collected_financial_results = []
+        collected_telegram_results = []
+        collected_phone_intel_results = []
+        collected_ecourts_results = []
+        collected_mca_results = []
+        variants_screened: list[str] = []
+        dob_enforced = False
+        raw_names_extracted = 0
 
-        def _run_bfs():
-            results = []
-            for result in credmon.run_pipeline_streaming(
-                seeds=seeds_dicts,
-                max_depth=req.max_depth,
-            ):
-                results.append(result)
-            return results
+        seed_type = seeds_dicts[0]["type"]
 
-        bfs_results = await asyncio.to_thread(_run_bfs)
+        if seed_type in ("phone", "email"):
+            # === TIER 1: Full BFS pipeline (unchanged) ===
 
-        for result in bfs_results:
-            total_entities_searched += 1
-            if result.get("found"):
-                total_found += 1
-            entity_depth = result.get("depth", 0)
-            if entity_depth > max_depth_reached:
-                max_depth_reached = entity_depth
+            def _run_bfs():
+                results = []
+                for result in credmon.run_pipeline_streaming(
+                    seeds=seeds_dicts,
+                    max_depth=req.max_depth,
+                ):
+                    results.append(result)
+                return results
 
-            all_results.append(result)
+            bfs_results = await asyncio.to_thread(_run_bfs)
 
-            yield {
-                "event": "entity:result",
-                "data": _dumps(result),
-            }
+            for result in bfs_results:
+                total_entities_searched += 1
+                if result.get("found"):
+                    total_found += 1
+                entity_depth = result.get("depth", 0)
+                if entity_depth > max_depth_reached:
+                    max_depth_reached = entity_depth
 
-        # 3. FTI + Financial + DARKMON — run in parallel via asyncio.to_thread
+                all_results.append(result)
 
-        def _run_parallel():
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                f_fti = executor.submit(_run_fti_and_financial, engines, all_results, seeds_dicts)
-                f_dm = executor.submit(_run_darkmon, engines, all_results)
+                yield {
+                    "event": "entity:result",
+                    "data": _dumps(result),
+                }
 
-                try:
-                    fti_result = f_fti.result(timeout=60)
-                except Exception:
-                    log.error("FTI/financial thread failed or timed out", exc_info=True)
-                    fti_result = {
-                        "events": [
-                            {"event": "fti:complete", "data": _dumps({"total_names_screened": 0, "crimedata_matches": 0, "worldcheck_matches": 0, "total_time_ms": 0})},
-                            {"event": "financial:complete", "data": _dumps({"total_phones_screened": 0, "total_upi_hits": 0, "total_time_ms": 0})},
-                        ],
-                        "names_screened": 0, "cd_matches": 0, "wc_matches": 0, "fti_ms": 0,
-                        "phones_screened": 0, "upi_hits": 0, "fin_ms": 0,
-                    }
+            # Emit subject profile + canonical location early — before the
+            # screening engines run — so the report surfaces the subject
+            # identity as soon as breach data is in, instead of waiting on
+            # FTI/darkmon/financial.
+            yield {"event": "profile:ready", "data": _dumps(_build_profile_payload(all_results, req.subject))}
 
-                try:
-                    dm_result = f_dm.result(timeout=60)
-                except Exception:
-                    log.error("DARKMON thread failed or timed out", exc_info=True)
-                    dm_result = {
-                        "events": [{"event": "darkmon:complete", "data": _dumps({"total_usernames_searched": 0, "total_matches": 0, "total_time_ms": 0})}],
-                        "unames_searched": 0, "dm_matches": 0, "dm_ms": 0,
-                    }
+            # Compute spelling variants of the investigator's subject from
+            # discovered breach names so FTI screens canonical + variants
+            # (catches "Sai Krishna Budamgunta" / "S. Budamgunta" forms of
+            # "Saikrishna Budamgunta") without re-introducing namesake noise.
+            _explicit = _explicit_canonical_name(req.subject)
+            _variants: list[dict] = []
+            _discovered = _extract_fullnames(all_results)
+            raw_names_extracted = len(_discovered)
+            if _explicit and req.subject:
+                _variants = find_variants(req.subject.model_dump(), _discovered)
+            _dob_enforced = bool(req.subject and req.subject.dob)
+            variants_screened = [v["name"] for v in _variants if v.get("name")]
+            dob_enforced = _dob_enforced
 
-                return fti_result, dm_result
+            def _run_parallel():
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                    f_fti = executor.submit(
+                        _run_fti_and_financial, engines, all_results, seeds_dicts,
+                        _explicit, _variants, _dob_enforced,
+                    )
+                    f_dm = executor.submit(_run_darkmon, engines, all_results)
 
-        fti_result, dm_result = await asyncio.to_thread(_run_parallel)
+                    try:
+                        fti_result = f_fti.result(timeout=60)
+                    except Exception:
+                        log.error("FTI/financial thread failed or timed out", exc_info=True)
+                        fti_result = {
+                            "events": [
+                                {"event": "fti:complete", "data": _dumps({"total_names_screened": 0, "crimedata_matches": 0, "worldcheck_matches": 0, "total_time_ms": 0, "variants_screened": [], "dob_enforced": False})},
+                                {"event": "financial:complete", "data": _dumps({"total_phones_screened": 0, "total_upi_hits": 0, "total_time_ms": 0})},
+                            ],
+                            "names_screened": 0, "cd_matches": 0, "wc_matches": 0, "fti_ms": 0,
+                            "phones_screened": 0, "upi_hits": 0, "fin_ms": 0,
+                        }
 
-        for evt in fti_result["events"]:
-            yield evt
-        for evt in dm_result["events"]:
-            yield evt
+                    try:
+                        dm_result = f_dm.result(timeout=60)
+                    except Exception:
+                        log.error("DARKMON thread failed or timed out", exc_info=True)
+                        dm_result = {
+                            "events": [{"event": "darkmon:complete", "data": _dumps({"total_usernames_searched": 0, "total_matches": 0, "total_time_ms": 0})}],
+                            "unames_searched": 0, "dm_matches": 0, "dm_ms": 0,
+                        }
 
-        total_names_screened = fti_result["names_screened"]
-        crimedata_matches = fti_result["cd_matches"]
-        worldcheck_matches = fti_result["wc_matches"]
-        fti_total_time_ms = fti_result["fti_ms"]
-        total_phones_screened = fti_result["phones_screened"]
-        total_upi_hits = fti_result["upi_hits"]
-        fin_total_time_ms = fti_result["fin_ms"]
-        total_usernames_searched = dm_result["unames_searched"]
-        total_darkmon_matches = dm_result["dm_matches"]
-        darkmon_total_time_ms = dm_result["dm_ms"]
+                    return fti_result, dm_result
 
-        # 8. AI summary
-        profile = _extract_profile_for_summary(all_results)
+            fti_result, dm_result = await asyncio.to_thread(_run_parallel)
+
+            for evt in fti_result["events"]:
+                yield evt
+            for evt in dm_result["events"]:
+                yield evt
+
+            total_names_screened = fti_result["names_screened"]
+            crimedata_matches = fti_result["cd_matches"]
+            worldcheck_matches = fti_result["wc_matches"]
+            fti_total_time_ms = fti_result["fti_ms"]
+            total_phones_screened = fti_result["phones_screened"]
+            total_upi_hits = fti_result["upi_hits"]
+            fin_total_time_ms = fti_result["fin_ms"]
+            total_usernames_searched = dm_result["unames_searched"]
+            total_darkmon_matches = dm_result["dm_matches"]
+            darkmon_total_time_ms = dm_result["dm_ms"]
+            collected_fti_results = fti_result.get("parsed_fti", [])
+            collected_darkmon_results = dm_result.get("parsed_darkmon", [])
+            collected_financial_results = fti_result.get("parsed_financial", [])
+            collected_telegram_results = fti_result.get("parsed_telegram", [])
+            collected_phone_intel_results = fti_result.get("parsed_phone_intel", [])
+
+        elif seed_type == "username":
+            # === TIER 2a: Shallow CREDMON + DARKMON ===
+
+            bfs_results = await asyncio.to_thread(_run_credmon_shallow, "username", seeds_dicts[0]["value"])
+
+            for result in bfs_results:
+                all_results.append(result)
+                if result.get("found"):
+                    total_found += 1
+                total_entities_searched += 1
+                yield {"event": "entity:result", "data": _dumps(result)}
+
+            # Early profile emit — see phone/email tier above.
+            yield {"event": "profile:ready", "data": _dumps(_build_profile_payload(all_results, req.subject))}
+
+            if "darkweb" in engines:
+                dm_result = await asyncio.to_thread(_run_darkmon_direct, seeds_dicts[0]["value"])
+                for evt in dm_result["events"]:
+                    yield evt
+                total_usernames_searched = dm_result["unames_searched"]
+                total_darkmon_matches = dm_result["dm_matches"]
+                darkmon_total_time_ms = dm_result["dm_ms"]
+                collected_darkmon_results = dm_result.get("parsed_darkmon", [])
+            else:
+                yield {"event": "darkmon:complete", "data": _dumps({"total_usernames_searched": 0, "total_matches": 0, "total_time_ms": 0})}
+
+            yield {"event": "fti:complete", "data": _dumps({"total_names_screened": 0, "crimedata_matches": 0, "worldcheck_matches": 0, "total_time_ms": 0, "skipped": True, "reason": "username_search"})}
+            yield {"event": "financial:complete", "data": _dumps({"total_phones_screened": 0, "total_upi_hits": 0, "total_time_ms": 0, "skipped": True, "reason": "username_search"})}
+
+        elif seed_type == "fullname":
+            # === TIER 2b: FTI screening only ===
+
+            yield {"event": "entity:result", "data": _dumps({"depth": 0, "entity_type": "fullname", "entity_value": seeds_dicts[0]["value"], "found": False, "search_time_ms": 0, "skipped": True, "reason": "fullname_screening_only"})}
+
+            if "threat_intel" in engines:
+                fti_result = await asyncio.to_thread(_run_fti_direct, seeds_dicts[0]["value"])
+                for evt in fti_result["events"]:
+                    yield evt
+                total_names_screened = fti_result["names_screened"]
+                crimedata_matches = fti_result["cd_matches"]
+                worldcheck_matches = fti_result["wc_matches"]
+                fti_total_time_ms = fti_result["fti_ms"]
+                collected_fti_results = fti_result.get("parsed_fti", [])
+            else:
+                yield {"event": "fti:complete", "data": _dumps({"total_names_screened": 0, "crimedata_matches": 0, "worldcheck_matches": 0, "total_time_ms": 0})}
+
+            yield {"event": "darkmon:complete", "data": _dumps({"total_usernames_searched": 0, "total_matches": 0, "total_time_ms": 0, "skipped": True, "reason": "fullname_search"})}
+            yield {"event": "financial:complete", "data": _dumps({"total_phones_screened": 0, "total_upi_hits": 0, "total_time_ms": 0, "skipped": True, "reason": "fullname_search"})}
+
+        # 8. Programmatic summary — reuse the same helper that built the
+        # early profile:ready event so frontend sees a consistent payload.
+        _profile_payload = _build_profile_payload(all_results, req.subject)
+        profile = _profile_payload["profile"]                # rich (with sources)
+        profile_flat = _profile_payload["profile_flat"]      # legacy strings
+        canonical_location = _profile_payload["canonical_location"]
+
+        # Apply the canonical-name token filter to FTI hits before counting, so
+        # the programmatic summary agrees with FtiScreening + deriveAlerts on
+        # what a "watchlist match" is (namesake screening hits are excluded).
+        explicit_name = _explicit_canonical_name(req.subject)
+        if explicit_name:
+            canonical_name = explicit_name
+            canonical_tokens_for_summary = _explicit_canonical_tokens(req.subject)
+        else:
+            # Internal canonical-name derivation reads the legacy flat shape.
+            # Anchor-based pick (overlaps with email local-parts / usernames)
+            # avoids namesakes that happen to be ordering-first in names[].
+            names_flat = profile_flat.get("names") or []
+            emails_flat = profile_flat.get("emails") or []
+            usernames_flat = profile_flat.get("usernames") or []
+            canonical_name = (
+                infer_canonical_name(names_flat, emails_flat, usernames_flat)
+                or (names_flat[0] if names_flat else None)
+            )
+            canonical_tokens_for_summary = [
+                t for t in (canonical_name or "").lower().split() if len(t) >= 2
+            ]
+
+        # Recompute variants here so the canonical-match filter can accept
+        # entries matching the canonical OR any spelling variant. We
+        # intentionally don't pipe them through from the FTI thread —
+        # _extract_fullnames is cheap and the BFS results in scope are the
+        # source of truth.
+        _summary_variants: list[dict] = []
+        if req.subject and explicit_name:
+            _summary_variants = find_variants(
+                req.subject.model_dump(), _extract_fullnames(all_results)
+            )
+        _subject_dob = req.subject.dob if req.subject else None
+
+        def _hit_dob(entry: dict):
+            """Best-effort DOB extraction from a screening hit's record.
+
+            Tries common field names on the entry itself, on entry['record'],
+            and on the typical EXTRA_DATA blob. Returns the raw string (or
+            None) for ``name_match.dob_compatible`` to parse — that helper
+            no-ops on unparseable input, so we don't need to be clever here.
+            """
+            for key in ("dob", "date_of_birth", "DOB", "DateOfBirth", "birth_date"):
+                v = entry.get(key)
+                if isinstance(v, str) and v.strip():
+                    return v
+            for nested_key in ("record", "EXTRA_DATA", "extra_data", "details", "fields"):
+                blob = entry.get(nested_key)
+                if isinstance(blob, dict):
+                    for key in ("dob", "date_of_birth", "DOB", "DateOfBirth", "birth_date"):
+                        v = blob.get(key)
+                        if isinstance(v, str) and v.strip():
+                            return v
+            # Some FTI hits wrap the matched record inside results[i].fields.
+            for nested_key in ("results", "records"):
+                blob = entry.get(nested_key)
+                if isinstance(blob, list) and blob:
+                    for item in blob[:5]:
+                        if isinstance(item, dict):
+                            for key in ("dob", "date_of_birth", "DOB", "DateOfBirth", "birth_date"):
+                                v = item.get(key)
+                                if isinstance(v, str) and v.strip():
+                                    return v
+            return None
+
+        # Pre-compute per-name token sets so we can accept an entry that
+        # matches the canonical OR any variant.
+        def _name_to_token_sets(name: str) -> tuple[list[str], list[str]]:
+            toks = [t for t in (name or "").lower().split() if t]
+            multi_tokens = [t for t in toks if len(t) >= 2]
+            initial_tokens = [t for t in toks if len(t) == 1]
+            return multi_tokens, initial_tokens
+
+        if req.subject and _explicit_canonical_name(req.subject):
+            # Build a list of (multi_tokens, initial_patterns) — one per
+            # name we'll accept (canonical + each spelling variant).
+            _accepted_specs: list[tuple[list[str], list[re.Pattern]]] = []
+            multi    = [t for t in canonical_tokens_for_summary if len(t) >= 2]
+            initials = [t for t in canonical_tokens_for_summary if len(t) == 1]
+            _initial_patterns = [re.compile(rf"\b{re.escape(c)}", re.IGNORECASE) for c in initials]
+            _accepted_specs.append((multi, _initial_patterns))
+            for v in _summary_variants:
+                v_multi, v_inits = _name_to_token_sets(v.get("name", ""))
+                v_patterns = [re.compile(rf"\b{re.escape(c)}", re.IGNORECASE) for c in v_inits]
+                _accepted_specs.append((v_multi, v_patterns))
+
+            def _matches_one_spec(ev: str, spec_multi: list[str], spec_patterns: list[re.Pattern]) -> bool:
+                if not spec_multi and not spec_patterns:
+                    return True
+                if spec_multi and not all(t in ev for t in spec_multi):
+                    return False
+                if spec_patterns and not any(p.search(ev) for p in spec_patterns):
+                    return False
+                return True
+
+            def _entry_matches_canonical(entry: dict) -> bool:
+                ev = (entry.get("entity_value") or "").lower()
+                name_ok = any(
+                    _matches_one_spec(ev, spec_multi, spec_patterns)
+                    for spec_multi, spec_patterns in _accepted_specs
+                )
+                if not name_ok:
+                    return False
+                # DOB filter — only when investigator supplied a DOB.
+                if _subject_dob:
+                    if not dob_compatible(_subject_dob, _hit_dob(entry)):
+                        return False
+                return True
+        else:
+            def _entry_matches_canonical(entry: dict) -> bool:
+                if not canonical_tokens_for_summary:
+                    return True
+                ev = (entry.get("entity_value") or "").lower()
+                return all(t in ev for t in canonical_tokens_for_summary)
+
+        filtered_cd = sum(
+            1 for r in collected_fti_results
+            if r.get("query_type") == "crimedata" and r.get("found") and _entry_matches_canonical(r)
+        )
+        filtered_wc = sum(
+            1 for r in collected_fti_results
+            if r.get("query_type") == "worldcheck" and r.get("found") and _entry_matches_canonical(r)
+        )
+
         fti_summary = {
-            "crimedata_matches": crimedata_matches,
-            "worldcheck_matches": worldcheck_matches,
+            "crimedata_matches": filtered_cd,
+            "worldcheck_matches": filtered_wc,
             "total_names_screened": total_names_screened,
         }
         darkmon_summary = {
@@ -551,11 +1099,44 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
             "total_phones_screened": total_phones_screened,
         }
 
-        summary_text = _generate_programmatic_summary(profile, fti_summary, darkmon_summary, financial_summary)
-        if summary_text:
+        summary_text = _generate_programmatic_summary(
+            profile_flat, fti_summary, darkmon_summary, financial_summary,
+            canonical_location=canonical_location,
+            canonical_name=canonical_name,
+        )
+        # Always emit the summary event so profile + canonical_location reach
+        # the frontend even when no prose summary is generated. Ship BOTH the
+        # rich (provenance-bearing) shape and the legacy flat shape so any
+        # consumer that hasn't migrated yet keeps working.
+        yield {
+            "event": "summary",
+            "data": _dumps({
+                "text": summary_text or None,
+                "profile": profile,
+                "profile_flat": profile_flat,
+                "canonical_location": canonical_location,
+                "canonical_name": canonical_name,
+                "canonical_source": _profile_payload.get("canonical_source"),
+            }),
+        }
+
+        # 8.5 Risk scoring
+        risk_factors = risk_ingestor.derive_factors(
+            search_results=all_results,
+            fti_results=collected_fti_results,
+            darkmon_results=collected_darkmon_results,
+            canonical_name=canonical_name,
+            financial_results=collected_financial_results or None,
+            telegram_results=collected_telegram_results or None,
+            phone_intel_results=collected_phone_intel_results or None,
+            ecourts_results=collected_ecourts_results or None,
+            mca_results=collected_mca_results or None,
+        )
+        risk_output = risk_scorer.score(risk_factors) if risk_factors else None
+        if risk_output:
             yield {
-                "event": "summary",
-                "data": _dumps({"text": summary_text}),
+                "event": "risk:score",
+                "data": _dumps(risk_output),
             }
 
         # 9. search:complete
@@ -593,6 +1174,7 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
             endpoint="/api/v2/search",
             response_time_ms=total_time_ms,
             result_summary={
+                "search_tier": "tier1" if seed_type in ("phone", "email") else "tier2",
                 "credmon_entities_searched": total_entities_searched,
                 "credmon_entities_found": total_found,
                 "fti_names_screened": total_names_screened,
@@ -604,6 +1186,10 @@ async def search_v2(req: SearchRequestV2, request: Request, _credits: dict = Dep
                 "fti_time_ms": fti_total_time_ms,
                 "darkmon_time_ms": darkmon_total_time_ms,
                 "total_time_ms": total_time_ms,
+                "canonical_source": _profile_payload.get("canonical_source"),
+                "variants_screened": variants_screened,
+                "dob_enforced": dob_enforced,
+                "noise_dropped": max(0, raw_names_extracted - total_names_screened),
             },
         )
 

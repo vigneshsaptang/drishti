@@ -62,3 +62,9 @@ def list_bank_accounts(limit: int = Query(50, le=200)):
         None,
         limit=limit,
     )
+
+
+@router.get("/financial/crypto-wallets")
+def list_crypto_wallets(limit: int = Query(50, le=200), search: str = Query("")):
+    """List known crypto wallets from the dark-web wallet_info collection."""
+    return darkmon.list_wallets(limit=limit, search=search.strip())

@@ -25,9 +25,32 @@ from app.error_handler import (
     http_exception_handler,
     unhandled_exception_handler,
 )
-from app.routes import search, stream, search_v2, darkweb, drugs, telegram, financial, graph, report, auth, admin, dashboard, stats, ecourts, ecourts_search, mca, audit_admin, credits, support, errors, health
+from app.routes import search, stream, search_v2, darkweb, drugs, telegram, financial, graph, report, auth, admin, dashboard, stats, ecourts, ecourts_search, mca, audit_admin, credits, support, errors, health, geo
 
 logger = logging.getLogger("auracle")
+
+
+def _read_version() -> str:
+    """Read the canonical version string from sigint/VERSION.
+
+    Falls back to '0.0.0' if the file is unreachable. Mirrors the parent-walking
+    .env discovery in app/config.py so the same lookup works in dev (sigint/VERSION)
+    and Docker (/app/VERSION via Dockerfile COPY).
+    """
+    here = Path(__file__).resolve()
+    candidates = [Path("VERSION")]
+    for i in range(min(len(here.parents), 4)):
+        candidates.append(here.parents[i] / "VERSION")
+    for p in candidates:
+        try:
+            if p.exists():
+                return p.read_text(encoding="utf-8").strip() or "0.0.0"
+        except OSError:
+            continue
+    return "0.0.0"
+
+
+APP_VERSION = _read_version()
 
 # In dev: sigint/frontend/dist (built by Vite)
 # In Docker: /app/frontend/dist (copied by Dockerfile)
@@ -103,7 +126,7 @@ _is_dev = settings.domain.strip() in ("localhost", "127.0.0.1")
 app = FastAPI(
     title="Auracle",
     description="Auracle Intelligence Platform by Saptang Labs",
-    version="1.0.0",
+    version=APP_VERSION,
     lifespan=lifespan,
     default_response_class=MongoJSONResponse,
     docs_url="/api/docs" if _is_dev else None,
@@ -156,11 +179,16 @@ app.include_router(credits.router, prefix="/api")
 app.include_router(support.router, prefix="/api")
 app.include_router(errors.router, prefix="/api")
 app.include_router(health.router, prefix="/api")
+app.include_router(geo.router, prefix="/api")
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "operational", "platform": "Auracle by Saptang Labs"}
+    return {
+        "status": "operational",
+        "platform": "Auracle by Saptang Labs",
+        "version": APP_VERSION,
+    }
 
 
 # Serve frontend build output (prod mode — Caddy also handles this in prod)

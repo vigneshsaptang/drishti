@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { listFraudUpis, listBankAccounts, getCryptoTrace } from '../lib/api';
+import { listFraudUpis, listBankAccounts, listCryptoWallets, getCryptoTrace } from '../lib/api';
 import { EvidenceImage } from '../components/Lightbox';
 import Shimmer from '../components/Shimmer';
 import L from 'leaflet';
@@ -184,6 +184,8 @@ const SUB_TABS = [
 export default function FinancialTab({ financialResults = [], financialMeta = null }) {
   const [upis, setUpis] = useState(null);
   const [banks, setBanks] = useState(null);
+  const [wallets, setWallets] = useState(null);
+  const [walletFilter, setWalletFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [upiFilter, setUpiFilter] = useState('');
   const [walletQuery, setWalletQuery] = useState('');
@@ -205,9 +207,14 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
         setError(err.message || 'Failed to load bank account data');
         return [];
       }),
-    ]).then(([u, b]) => {
+      listCryptoWallets(100).catch(err => {
+        setError(err.message || 'Failed to load crypto wallet data');
+        return [];
+      }),
+    ]).then(([u, b, w]) => {
       setUpis(u);
       setBanks(b);
+      setWallets(w);
       setLoading(false);
     });
   }, []);
@@ -262,12 +269,12 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
   return (
     <div className="space-y-5 animate-fade-in">
       {error && (
-        <div className="rounded-lg border border-entity-drug/30 bg-entity-drug/5 p-4">
-          <p className="text-entity-drug font-mono text-sm">{error}</p>
+        <div className="rounded-lg border border-sap-danger/30 bg-sap-danger-soft p-4">
+          <p className="text-sap-danger text-13">{error}</p>
           <button
             type="button"
             onClick={() => { setError(null); loadInitialData(); }}
-            className="mt-2 text-xs font-mono text-sap-accent hover:underline"
+            className="mt-2 text-12 text-sap-accent hover:underline"
           >
             Retry
           </button>
@@ -275,22 +282,19 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
       )}
 
       {/* ── Sub-tab navigation ── */}
-      <div className="flex items-center gap-1 border-b border-sap-border">
+      <div className="flex items-stretch h-8 border-b border-sap-border overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
         {SUB_TABS.map(tab => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setSubTab(tab.id)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors relative ${
+            className={`px-3 text-12 font-medium whitespace-nowrap outline-none transition-colors -mb-px border-b-2 ${
               subTab === tab.id
-                ? 'text-sap-accent'
-                : 'text-sap-dim hover:text-sap-text'
+                ? 'border-sap-accent text-sap-accent'
+                : 'border-transparent text-sap-dim hover:text-sap-text cursor-pointer'
             }`}
           >
             {tab.label}
-            {subTab === tab.id && (
-              <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-sap-accent rounded-t" />
-            )}
           </button>
         ))}
       </div>
@@ -300,42 +304,40 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
         const upiHits = financialResults.filter(r => r.found);
         if (upiHits.length === 0 && !financialMeta && financialResults.length === 0) return null;
         return (
-          <div className="rounded-lg border border-entity-drug/30 overflow-hidden">
-            <div className="bg-entity-drug/5 border-b border-entity-drug/15 px-5 py-3 flex items-center gap-3">
-              <h3 className="text-sm font-bold text-entity-drug">Subject-Linked Fraud UPIs</h3>
-              {financialMeta && (
-                <span className="text-xs text-sap-muted font-mono">
-                  {financialMeta.total_upi_hits} hit{financialMeta.total_upi_hits !== 1 ? 's' : ''} from {financialMeta.total_phones_screened} phone{financialMeta.total_phones_screened !== 1 ? 's' : ''} in {financialMeta.total_time_ms}ms
-                </span>
-              )}
-              {!financialMeta && financialResults.length > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-entity-drug animate-pulse" />
-                  <span className="text-xs text-entity-drug font-mono">Screening phones against fraud UPIs...</span>
-                </div>
-              )}
+          <div className="rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-sap-border-light flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <h3 className="text-12 font-semibold tracking-tight text-sap-text">Subject-linked fraud UPIs</h3>
+                {financialMeta && (
+                  <span className="text-11 text-sap-muted">
+                    {financialMeta.total_upi_hits} hit{financialMeta.total_upi_hits !== 1 ? 's' : ''} from {financialMeta.total_phones_screened} phone{financialMeta.total_phones_screened !== 1 ? 's' : ''} in {financialMeta.total_time_ms}ms
+                  </span>
+                )}
+                {!financialMeta && financialResults.length > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-sap-danger-filled animate-pulse" />
+                    <span className="text-11 text-sap-danger">Screening phones against fraud UPIs…</span>
+                  </div>
+                )}
+              </div>
             </div>
             {upiHits.length > 0 ? (
-              <div className="p-4 space-y-3">
+              <div className="px-4 py-3 space-y-3">
                 {upiHits.map((hit, hi) => (
                   <div key={hi}>
-                    <p className="text-xs text-sap-muted font-mono mb-2">Phone: <span className="text-sap-text font-semibold">{hit.phone}</span></p>
+                    <p className="text-11 text-sap-muted mb-2">Phone: <span className="text-sap-text font-semibold font-mono">{hit.phone}</span></p>
                     {hit.upi_records.map((u, ui) => {
                       const pa = u.upi_details?.pa || '—';
                       return (
-                        <div key={ui} className="bg-sap-panel border border-sap-border rounded-lg px-4 py-3 mb-2 flex items-start gap-4">
+                        <div key={ui} className="bg-sap-bg border border-sap-border-light rounded-lg px-4 py-3 mb-2 flex items-start gap-4">
                           <div className="min-w-0 flex-1">
-                            <span className="font-mono text-sm font-bold text-entity-drug">{pa}</span>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-sap-dim">
+                            <span className="font-mono text-13 font-semibold text-sap-text">{pa}</span>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-11 text-sap-dim">
                               {u.clasification && (
-                                <span className={`px-2 py-0.5 rounded-md font-semibold border ${
-                                  u.clasification === 'BETTING_SITE' ? 'bg-entity-drug/10 text-entity-drug border-entity-drug/20' :
-                                  u.clasification === 'CRYPTO_EXCHANGE' ? 'bg-entity-crypto/10 text-entity-crypto border-entity-crypto/20' :
-                                  'bg-entity-breach/10 text-entity-breach border-entity-breach/20'
-                                }`}>{u.clasification}</span>
+                                <span className="px-2 py-0.5 rounded-md font-medium border bg-sap-bg border-sap-border-light text-sap-text">{u.clasification}</span>
                               )}
                               {u.site && <a href={u.site} target="_blank" rel="noopener" className="text-sap-accent hover:underline truncate max-w-[250px]">{u.site}</a>}
-                              {u.payment_gateway && <span className="text-entity-crypto font-mono">{u.payment_gateway}</span>}
+                              {u.payment_gateway && <span className="text-sap-dim">{u.payment_gateway}</span>}
                             </div>
                           </div>
                           <div className="flex gap-1.5 flex-shrink-0">
@@ -349,7 +351,7 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
                 ))}
               </div>
             ) : financialMeta ? (
-              <p className="text-sm text-sap-muted px-5 py-4">No fraud UPI links found for discovered phone numbers.</p>
+              <p className="text-13 text-sap-muted px-4 py-3">No fraud UPI links found for discovered phone numbers.</p>
             ) : null}
           </div>
         );
@@ -357,65 +359,61 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
 
       {/* ── Fraud UPI Table ── */}
       {subTab === 'upi' && (
-        <div className="bg-sap-surface rounded-lg border border-entity-drug/20 p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div className="rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-sap-border-light flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <h3 className="text-base font-bold text-entity-drug">Fraud UPI Identifiers</h3>
-              <p className="text-sm text-sap-dim mt-0.5">{(upis || []).length} tracked payment accounts linked to betting, gambling, and fraud sites</p>
+              <h3 className="text-12 font-semibold tracking-tight text-sap-text">Fraud UPI identifiers</h3>
+              <p className="text-11 text-sap-muted mt-0.5">{(upis || []).length} tracked payment accounts linked to betting, gambling, and fraud sites</p>
             </div>
             <input
               type="text"
               value={upiFilter}
               onChange={e => { setUpiFilter(e.target.value); setUpiPage(1); }}
               placeholder="Filter UPI, site, gateway..."
-              className="bg-sap-panel border border-sap-border rounded-lg px-3 py-2 text-sm font-mono text-sap-text outline-none focus:border-sap-accent w-64 placeholder:text-sap-muted"
+              className="bg-sap-bg border border-sap-border-light rounded-lg px-3 py-2 text-13 text-sap-text outline-none focus:border-sap-accent w-64 placeholder:text-sap-muted"
             />
           </div>
           {upis && upis.length > 0 ? (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-13">
                   <thead>
-                    <tr className="border-b-2 border-sap-border text-left">
-                      <th className="px-3 py-2.5 text-xs font-semibold text-sap-dim uppercase tracking-wider">#</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold text-sap-dim uppercase tracking-wider">UPI ID</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold text-sap-dim uppercase tracking-wider">Classification</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold text-sap-dim uppercase tracking-wider">Linked Site</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold text-sap-dim uppercase tracking-wider">Payment Gateway</th>
-                      <th className="px-3 py-2.5 text-xs font-semibold text-sap-dim uppercase tracking-wider">Evidence</th>
+                    <tr className="bg-sap-bg/60 border-b border-sap-border-light text-left">
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted">#</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted">UPI ID</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted">Classification</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted">Linked site</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted">Payment gateway</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted">Evidence</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-sap-border-light">
                     {pagedUpis.map((u, i) => {
                       const pa = u.upi_details?.pa || '—';
                       const phoneMatch = pa.match(/(\d{10})/);
                       const rowNum = (upiPage - 1) * PAGE_SIZE + i + 1;
                       return (
-                        <tr key={i} className="border-b border-sap-border/50 hover:bg-sap-panel/50">
-                          <td className="px-3 py-3 text-xs text-sap-muted font-mono">{rowNum}</td>
+                        <tr key={i} className="hover:bg-sap-bg/60">
+                          <td className="px-3 py-3 text-11 text-sap-muted font-mono">{rowNum}</td>
                           <td className="px-3 py-3">
-                            <span className="font-mono text-sm font-medium text-sap-text">{pa}</span>
+                            <span className="font-mono text-13 font-medium text-sap-text">{pa}</span>
                             {phoneMatch && (
-                              <span className="ml-2 text-xs text-entity-phone font-mono bg-entity-phone/10 px-1.5 py-0.5 rounded">
+                              <span className="ml-2 text-11 font-mono text-sap-text bg-sap-bg border border-sap-border-light px-1.5 py-0.5 rounded">
                                 Phone: {phoneMatch[1]}
                               </span>
                             )}
                           </td>
                           <td className="px-3 py-3">
-                            <span className={`px-2 py-1 rounded-md text-xs font-semibold border ${
-                              u.clasification === 'BETTING_SITE' ? 'bg-entity-drug/10 text-entity-drug border-entity-drug/20' :
-                              u.clasification === 'CRYPTO_EXCHANGE' ? 'bg-entity-crypto/10 text-entity-crypto border-entity-crypto/20' :
-                              'bg-entity-breach/10 text-entity-breach border-entity-breach/20'
-                            }`}>
+                            <span className="px-2 py-0.5 rounded-md text-11 font-medium border bg-sap-bg border-sap-border-light text-sap-text">
                               {u.clasification || 'UNKNOWN'}
                             </span>
                           </td>
                           <td className="px-3 py-3 max-w-[200px]">
                             {u.site ? (
-                              <a href={u.site} target="_blank" rel="noopener" className="text-sap-accent hover:underline text-sm truncate block">{u.site}</a>
+                              <a href={u.site} target="_blank" rel="noopener" className="text-sap-accent hover:underline text-13 truncate block">{u.site}</a>
                             ) : '—'}
                           </td>
-                          <td className="px-3 py-3 font-mono text-xs text-entity-crypto">{u.payment_gateway || '—'}</td>
+                          <td className="px-3 py-3 text-12 text-sap-dim">{u.payment_gateway || '—'}</td>
                           <td className="px-3 py-3">
                             <div className="flex gap-1.5">
                               <EvidenceImage src={u.home_page_screenshot} alt="Site" className="h-8 w-auto rounded" />
@@ -429,25 +427,25 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
                 </table>
               </div>
               {upiTotalPages > 1 && (
-                <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-sap-border/50">
-                  <span className="text-xs font-mono text-sap-muted">Page {upiPage} of {upiTotalPages}</span>
+                <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-sap-border-light">
+                  <span className="text-11 text-sap-muted">Page {upiPage} of {upiTotalPages}</span>
                   <button
                     type="button"
                     onClick={() => setUpiPage(p => Math.max(1, p - 1))}
                     disabled={upiPage <= 1}
-                    className="px-3 py-1.5 text-xs font-mono rounded-lg border border-sap-border text-sap-dim hover:text-sap-text hover:bg-sap-panel transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 text-12 rounded-lg border border-sap-border-light text-sap-dim hover:text-sap-text hover:bg-sap-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   >Previous</button>
                   <button
                     type="button"
                     onClick={() => setUpiPage(p => Math.min(upiTotalPages, p + 1))}
                     disabled={upiPage >= upiTotalPages}
-                    className="px-3 py-1.5 text-xs font-mono rounded-lg border border-sap-border text-sap-dim hover:text-sap-text hover:bg-sap-panel transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 text-12 rounded-lg border border-sap-border-light text-sap-dim hover:text-sap-text hover:bg-sap-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   >Next</button>
                 </div>
               )}
             </>
           ) : (
-            <p className="text-sm text-sap-muted font-mono py-4">No fraud UPI records found.</p>
+            <p className="text-13 text-sap-muted px-4 py-3">No fraud UPI records found.</p>
           )}
         </div>
       )}
@@ -455,38 +453,40 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
       {/* ── Bank Accounts + India Map ── */}
       {subTab === 'banks' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 bg-sap-surface rounded-lg border border-entity-breach/20 p-5 shadow-sm">
-            <h3 className="text-base font-bold text-entity-breach mb-1">Flagged Bank Accounts</h3>
-            <p className="text-sm text-sap-dim mb-4">{(banks || []).length} accounts linked to fraud / betting sites with IFSC resolution</p>
+          <div className="lg:col-span-2 rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-sap-border-light">
+              <h3 className="text-12 font-semibold tracking-tight text-sap-text">Flagged bank accounts</h3>
+              <p className="text-11 text-sap-muted mt-0.5">{(banks || []).length} accounts linked to fraud / betting sites with IFSC resolution</p>
+            </div>
             {banks && banks.length > 0 ? (
               <>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-13">
                     <thead>
-                      <tr className="border-b-2 border-sap-border text-left">
-                        <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Account Holder</th>
-                        <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Account Number</th>
-                        <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Bank (IFSC)</th>
-                        <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Source</th>
-                        <th className="px-3 py-2 text-xs font-semibold text-sap-dim uppercase tracking-wider">Evidence</th>
+                      <tr className="bg-sap-bg/60 border-b border-sap-border-light text-left">
+                        <th className="px-3 py-2 text-11 font-medium text-sap-muted">Account holder</th>
+                        <th className="px-3 py-2 text-11 font-medium text-sap-muted">Account number</th>
+                        <th className="px-3 py-2 text-11 font-medium text-sap-muted">Bank (IFSC)</th>
+                        <th className="px-3 py-2 text-11 font-medium text-sap-muted">Source</th>
+                        <th className="px-3 py-2 text-11 font-medium text-sap-muted">Evidence</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-sap-border-light">
                       {pagedBanks.map((b, i) => {
                         const ifsc = b.ifsc_code || b.IFSC || '';
                         const bankName = resolveIFSC(ifsc);
                         return (
-                          <tr key={i} className="border-b border-sap-border/50 hover:bg-sap-panel/50">
+                          <tr key={i} className="hover:bg-sap-bg/60">
                             <td className="px-3 py-2.5 font-medium text-sap-text">{b.account_holder || b.ACCOUNT_HOLDER || '—'}</td>
-                            <td className="px-3 py-2.5 font-mono text-xs text-sap-text">{b.account_number || b.ACCOUNT_NUMBER || '—'}</td>
+                            <td className="px-3 py-2.5 font-mono text-12 text-sap-text">{b.account_number || b.ACCOUNT_NUMBER || '—'}</td>
                             <td className="px-3 py-2.5">
                               <div>
-                                <span className="text-sm font-medium text-sap-text">{bankName || '—'}</span>
-                                {ifsc && <span className="ml-2 text-xs font-mono text-sap-muted bg-sap-panel px-1.5 py-0.5 rounded">{ifsc}</span>}
+                                <span className="text-13 font-medium text-sap-text">{bankName || '—'}</span>
+                                {ifsc && <span className="ml-2 text-11 font-mono text-sap-text bg-sap-bg border border-sap-border-light px-1.5 py-0.5 rounded">{ifsc}</span>}
                               </div>
                             </td>
                             <td className="px-3 py-2.5">
-                              <span className="px-2 py-0.5 rounded text-xs font-semibold bg-entity-drug/10 text-entity-drug">{b.source || b.SOURCE || 'FRAUD'}</span>
+                              <span className="px-2 py-0.5 rounded text-11 font-medium bg-sap-danger-soft text-sap-danger">{b.source || b.SOURCE || 'FRAUD'}</span>
                             </td>
                             <td className="px-3 py-2.5">
                               <EvidenceImage src={b.account_number_screenshot} alt="Account" className="h-7 w-auto rounded" />
@@ -498,116 +498,201 @@ export default function FinancialTab({ financialResults = [], financialMeta = nu
                   </table>
                 </div>
                 {bankTotalPages > 1 && (
-                  <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-sap-border/50">
-                    <span className="text-xs font-mono text-sap-muted">Page {bankPage} of {bankTotalPages}</span>
+                  <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-sap-border-light">
+                    <span className="text-11 text-sap-muted">Page {bankPage} of {bankTotalPages}</span>
                     <button
                       type="button"
                       onClick={() => setBankPage(p => Math.max(1, p - 1))}
                       disabled={bankPage <= 1}
-                      className="px-3 py-1.5 text-xs font-mono rounded-lg border border-sap-border text-sap-dim hover:text-sap-text hover:bg-sap-panel transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="px-3 py-1.5 text-12 rounded-lg border border-sap-border-light text-sap-dim hover:text-sap-text hover:bg-sap-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                     >Previous</button>
                     <button
                       type="button"
                       onClick={() => setBankPage(p => Math.min(bankTotalPages, p + 1))}
                       disabled={bankPage >= bankTotalPages}
-                      className="px-3 py-1.5 text-xs font-mono rounded-lg border border-sap-border text-sap-dim hover:text-sap-text hover:bg-sap-panel transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="px-3 py-1.5 text-12 rounded-lg border border-sap-border-light text-sap-dim hover:text-sap-text hover:bg-sap-bg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                     >Next</button>
                   </div>
                 )}
               </>
             ) : (
-              <p className="text-sm text-sap-muted font-mono py-4">No flagged bank accounts found.</p>
+              <p className="text-13 text-sap-muted px-4 py-3">No flagged bank accounts found.</p>
             )}
           </div>
 
           {/* India map */}
-          <div className="bg-sap-surface rounded-lg border border-sap-border p-5 shadow-sm">
-            <h3 className="text-sm font-bold text-sap-text mb-3">Fraud Hotspot Map</h3>
-            <div className="h-[320px] rounded-lg overflow-hidden border border-sap-border">
-              <BankMap accounts={banks || []} />
+          <div className="rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-sap-border-light">
+              <h3 className="text-12 font-semibold tracking-tight text-sap-text">Fraud hotspot map</h3>
             </div>
-            <p className="text-xs text-sap-muted mt-2">Pins show cities with flagged bank accounts. Size = number of accounts.</p>
+            <div className="px-4 py-3">
+              <div className="h-[320px] rounded-lg overflow-hidden border border-sap-border-light">
+                <BankMap accounts={banks || []} />
+              </div>
+              <p className="text-11 text-sap-muted mt-2">Pins show cities with flagged bank accounts. Size = number of accounts.</p>
+            </div>
           </div>
         </div>
       )}
 
       {/* ── Crypto Wallet Trace ── */}
       {subTab === 'crypto' && (
-        <div className="bg-sap-surface rounded-lg border border-entity-crypto/20 p-5 shadow-sm">
-          <h3 className="text-base font-bold text-entity-crypto mb-1">Crypto Wallet Trace</h3>
-          <p className="text-sm text-sap-dim mb-4">Enter a BTC or ETH wallet address to trace transaction history</p>
-          <form onSubmit={handleWalletSearch} className="flex gap-3 items-center mb-4">
-            <input type="text" value={walletQuery} onChange={e => setWalletQuery(e.target.value)}
-              placeholder="Enter BTC/ETH wallet address..."
-              className="flex-1 bg-sap-panel border border-sap-border rounded-lg px-4 py-3 text-base font-mono text-sap-text outline-none focus:border-entity-crypto placeholder:text-sap-muted" />
-            <button type="submit" disabled={walletLoading}
-              className="bg-entity-crypto/10 hover:bg-entity-crypto/20 text-entity-crypto border border-entity-crypto/30 px-5 py-3 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40">
-              {walletLoading ? 'Tracing...' : 'Trace Wallet'}
-            </button>
-          </form>
-
-          {walletData?.wallet && (
-            <div className="rounded-lg border border-entity-crypto/20 bg-sap-panel p-5 mb-4">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="px-2.5 py-1 bg-entity-crypto/15 text-entity-crypto text-xs font-bold rounded-md">
-                  {walletData.wallet.blockchain_type || 'BTC'}
-                </span>
-                <span className="font-mono text-sm truncate text-sap-text">{walletData.wallet.wallet_address}</span>
+        <div className="space-y-3">
+          {/* Known wallets — clickable list */}
+          <div className="rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-sap-border-light flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="text-12 font-semibold tracking-tight text-sap-text">Known wallets</h3>
+                <p className="text-11 text-sap-muted mt-0.5">
+                  {(wallets || []).length} tracked crypto wallets — click any row to trace
+                </p>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <p className="text-xs text-sap-muted mb-0.5">Balance</p>
-                  <p className="font-mono font-bold text-sap-text">{walletData.wallet.balance?.crypto?.amount} {walletData.wallet.balance?.crypto?.currency_type}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-sap-muted mb-0.5">Total Received</p>
-                  <p className="font-mono font-bold text-entity-crypto">{walletData.wallet.total_received?.fiat?.amount} {walletData.wallet.total_received?.fiat?.currency_type}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-sap-muted mb-0.5">Total Sent</p>
-                  <p className="font-mono font-bold text-entity-drug">{walletData.wallet.total_sent?.fiat?.amount} {walletData.wallet.total_sent?.fiat?.currency_type}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-sap-muted mb-0.5">Transactions</p>
-                  <p className="font-mono font-bold text-sap-text">{walletData.wallet.transactions_count?.total}</p>
-                </div>
-              </div>
-              {walletData.wallet.wallet_explorer_info?.wallet_link && (
-                <a href={walletData.wallet.wallet_explorer_info.wallet_link} target="_blank" rel="noopener" className="text-sm text-sap-accent hover:underline mt-3 inline-block">
-                  View on WalletExplorer →
-                </a>
-              )}
-              <EvidenceImage src={walletData.wallet.screenshot} alt="Wallet" className="h-28 w-auto mt-3 rounded-lg" />
+              <input
+                type="text"
+                value={walletFilter}
+                onChange={e => setWalletFilter(e.target.value)}
+                placeholder="Filter by address…"
+                className="w-56 h-7 rounded-md border border-sap-border-light bg-sap-bg px-2.5 text-12 font-mono text-sap-text placeholder:text-sap-muted outline-none focus:border-sap-accent"
+              />
             </div>
-          )}
-
-          {walletData?.transactions_darkweb?.length > 0 && (
-            <div className="rounded-lg border border-sap-border bg-sap-panel p-4">
-              <h4 className="text-sm font-semibold text-sap-dim mb-3">Transactions ({walletData.transactions_darkweb.length})</h4>
-              <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
-                <table className="w-full text-xs font-mono">
-                  <thead>
-                    <tr className="border-b border-sap-border text-left">
-                      <th className="px-2 py-2 text-sap-muted">Date</th>
-                      <th className="px-2 py-2 text-sap-muted">From</th>
-                      <th className="px-2 py-2 text-sap-muted">To</th>
-                      <th className="px-2 py-2 text-sap-muted text-right">Amount</th>
+            {wallets && wallets.length > 0 ? (
+              <div className="overflow-x-auto max-h-[260px] overflow-y-auto">
+                <table className="w-full text-12">
+                  <thead className="sticky top-0 bg-sap-bg/80 backdrop-blur">
+                    <tr className="border-b border-sap-border-light text-left">
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted">Address</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted">Chain</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted text-right">Balance</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted text-right">Received</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted text-right">Sent</th>
+                      <th className="px-3 py-2 text-11 font-medium text-sap-muted text-right">Txns</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {walletData.transactions_darkweb.map((tx, i) => (
-                      <tr key={i} className="border-b border-sap-border/30 hover:bg-sap-surface/50">
-                        <td className="px-2 py-1.5 text-sap-dim">{String(tx.date || '').slice(0, 10)}</td>
-                        <td className="px-2 py-1.5 text-entity-crypto truncate max-w-[150px]">{tx.from_address || '?'}</td>
-                        <td className="px-2 py-1.5 text-entity-email truncate max-w-[150px]">{tx.to_address || '?'}</td>
-                        <td className="px-2 py-1.5 text-right text-sap-text">{tx.amount_crypto || '?'}</td>
-                      </tr>
-                    ))}
+                  <tbody className="divide-y divide-sap-border-light">
+                    {(wallets || [])
+                      .filter(w => !walletFilter || (w.wallet_address || '').toLowerCase().includes(walletFilter.toLowerCase()))
+                      .slice(0, 100)
+                      .map((w, i) => (
+                        <tr
+                          key={w.wallet_address || i}
+                          onClick={() => {
+                            if (!w.wallet_address) return;
+                            setWalletQuery(w.wallet_address);
+                            handleWalletSearch(null, w.wallet_address);
+                          }}
+                          className="cursor-pointer hover:bg-sap-bg/60 transition-colors"
+                        >
+                          <td className="px-3 py-1.5 font-mono text-sap-text truncate max-w-[280px]">{w.wallet_address || '?'}</td>
+                          <td className="px-3 py-1.5">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-11 font-medium tracking-tight border border-sap-border-light bg-sap-bg text-sap-dim">
+                              {w.blockchain_type || 'BTC'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-1.5 font-mono tabular-nums text-sap-text text-right">
+                            {w.balance?.crypto?.amount ?? '—'}
+                          </td>
+                          <td className="px-3 py-1.5 font-mono tabular-nums text-sap-success text-right">
+                            {w.total_received?.fiat?.amount ?? '—'}
+                          </td>
+                          <td className="px-3 py-1.5 font-mono tabular-nums text-sap-danger text-right">
+                            {w.total_sent?.fiat?.amount ?? '—'}
+                          </td>
+                          <td className="px-3 py-1.5 font-mono tabular-nums text-sap-dim text-right">
+                            {w.transactions_count?.total ?? '—'}
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
+            ) : (
+              <div className="px-4 py-6 text-12 text-sap-muted">
+                {loading ? 'Loading wallets…' : 'No wallets available.'}
+              </div>
+            )}
+          </div>
+
+          {/* Trace specific address */}
+          <div className="rounded-lg border border-sap-border-light bg-sap-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-sap-border-light">
+              <h3 className="text-12 font-semibold tracking-tight text-sap-text">Trace any address</h3>
+              <p className="text-11 text-sap-muted mt-0.5">Enter a BTC or ETH wallet address to trace transaction history</p>
             </div>
-          )}
+          <div className="px-4 py-3">
+            <form onSubmit={handleWalletSearch} className="flex gap-3 items-center max-w-2xl mb-4">
+              <input type="text" value={walletQuery} onChange={e => setWalletQuery(e.target.value)}
+                placeholder="Enter BTC/ETH wallet address…"
+                className="flex-1 bg-sap-bg border border-sap-border-light rounded-lg px-4 py-2.5 text-13 font-mono text-sap-text outline-none focus:border-sap-accent placeholder:text-sap-muted" />
+              <button type="submit" disabled={walletLoading}
+                className="bg-sap-accent-glow hover:bg-sap-accent text-sap-text hover:text-sap-bg border border-sap-accent px-5 py-2.5 rounded-lg text-13 font-semibold transition-colors disabled:opacity-40">
+                {walletLoading ? 'Tracing…' : 'Trace wallet'}
+              </button>
+            </form>
+
+            {walletData?.wallet && (
+              <div className="rounded-lg border border-sap-border-light bg-sap-bg p-4 mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="px-2 py-0.5 bg-sap-bg border border-sap-border-light text-sap-text text-11 font-semibold rounded-md">
+                    {walletData.wallet.blockchain_type || 'BTC'}
+                  </span>
+                  <span className="font-mono text-13 truncate text-sap-text">{walletData.wallet.wallet_address}</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-13">
+                  <div>
+                    <p className="text-11 text-sap-muted mb-0.5">Balance</p>
+                    <p className="font-mono font-semibold text-sap-text">{walletData.wallet.balance?.crypto?.amount} {walletData.wallet.balance?.crypto?.currency_type}</p>
+                  </div>
+                  <div>
+                    <p className="text-11 text-sap-muted mb-0.5">Total received</p>
+                    <p className="font-mono font-semibold text-sap-success">{walletData.wallet.total_received?.fiat?.amount} {walletData.wallet.total_received?.fiat?.currency_type}</p>
+                  </div>
+                  <div>
+                    <p className="text-11 text-sap-muted mb-0.5">Total sent</p>
+                    <p className="font-mono font-semibold text-sap-danger">{walletData.wallet.total_sent?.fiat?.amount} {walletData.wallet.total_sent?.fiat?.currency_type}</p>
+                  </div>
+                  <div>
+                    <p className="text-11 text-sap-muted mb-0.5">Transactions</p>
+                    <p className="font-mono font-semibold text-sap-text">{walletData.wallet.transactions_count?.total}</p>
+                  </div>
+                </div>
+                {walletData.wallet.wallet_explorer_info?.wallet_link && (
+                  <a href={walletData.wallet.wallet_explorer_info.wallet_link} target="_blank" rel="noopener" className="text-13 text-sap-accent hover:underline mt-3 inline-block">
+                    View on WalletExplorer →
+                  </a>
+                )}
+                <EvidenceImage src={walletData.wallet.screenshot} alt="Wallet" className="h-28 w-auto mt-3 rounded-lg" />
+              </div>
+            )}
+
+            {walletData?.transactions_darkweb?.length > 0 && (
+              <div className="rounded-lg border border-sap-border-light bg-sap-bg p-4">
+                <h4 className="text-12 font-semibold text-sap-text mb-3">Transactions ({walletData.transactions_darkweb.length})</h4>
+                <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+                  <table className="w-full text-12">
+                    <thead>
+                      <tr className="bg-sap-bg/60 border-b border-sap-border-light text-left">
+                        <th className="px-2 py-2 text-11 font-medium text-sap-muted">Date</th>
+                        <th className="px-2 py-2 text-11 font-medium text-sap-muted">From</th>
+                        <th className="px-2 py-2 text-11 font-medium text-sap-muted">To</th>
+                        <th className="px-2 py-2 text-11 font-medium text-sap-muted text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-sap-border-light">
+                      {walletData.transactions_darkweb.map((tx, i) => (
+                        <tr key={i} className="hover:bg-sap-surface/50">
+                          <td className="px-2 py-1.5 text-sap-dim">{String(tx.date || '').slice(0, 10)}</td>
+                          <td className="px-2 py-1.5 font-mono text-sap-text truncate max-w-[150px]">{tx.from_address || '?'}</td>
+                          <td className="px-2 py-1.5 font-mono text-sap-text truncate max-w-[150px]">{tx.to_address || '?'}</td>
+                          <td className="px-2 py-1.5 text-right font-mono text-sap-text">{tx.amount_crypto || '?'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+          </div>
         </div>
       )}
 

@@ -4,11 +4,14 @@ import CreditBar from './CreditBar';
 import NotificationBell from './NotificationBell';
 import NotificationDropdown from './NotificationDropdown';
 
+/* global __APP_VERSION__ */
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
+
 function formatTime(d) {
   return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 }
 
-export default function Header({ data, onExportPDF, onShowProfile, onShowSessions, onShowApiKeys, onShowAdmin, onShowCredits, notifications }) {
+export default function Header({ data, onExportPDF, onShowProfile, onShowSessions, onShowApiKeys, onShowAdmin, onShowCredits, onShowWhatsNew, whatsNewUnseen, notifications }) {
   const { unreadCount = 0, notifList = [], notifLoading = false, fetchNotifications, markRead, markAllRead, onNotificationClick, onViewAllTickets } = notifications || {};
   const [now, setNow] = useState(() => new Date());
   const [notifOpen, setNotifOpen] = useState(false);
@@ -37,7 +40,23 @@ export default function Header({ data, onExportPDF, onShowProfile, onShowSession
       <div className="flex items-center gap-3 min-w-0">
         <img src="/saptang-logo.svg" alt="" className="h-6 w-auto opacity-80" onError={e => e.target.style.display='none'} />
         <div className="h-4 w-px bg-sap-border" />
-        <h1 className="text-sm font-bold tracking-tight text-sap-text">Auracle</h1>
+        <h1 className="flex items-baseline gap-1.5">
+          <span className="text-13 font-semibold tracking-tight text-sap-text">Auracle</span>
+          <span className="text-11 text-sap-muted hidden sm:inline">by Saptang Labs</span>
+        </h1>
+        {onShowWhatsNew && (
+          <button
+            type="button"
+            onClick={onShowWhatsNew}
+            title={whatsNewUnseen ? `What's new in v${APP_VERSION}` : `Auracle v${APP_VERSION}`}
+            className="relative inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-sap-border bg-sap-panel hover:border-sap-accent hover:text-sap-accent text-11 text-sap-dim tabular-nums transition-colors"
+          >
+            <span>v{APP_VERSION}</span>
+            {whatsNewUnseen && (
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-sap-accent" aria-label="Unread release notes" />
+            )}
+          </button>
+        )}
 
         {hasTarget && (
           <>
@@ -90,7 +109,7 @@ export default function Header({ data, onExportPDF, onShowProfile, onShowSession
           </div>
         )}
         <div className="flex items-center gap-1.5 text-sap-muted font-mono">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <div className="w-1.5 h-1.5 rounded-full bg-sap-success-filled" />
           <span className="tabular-nums">{formatTime(now)}</span>
         </div>
         <div className="h-4 w-px bg-sap-border" />

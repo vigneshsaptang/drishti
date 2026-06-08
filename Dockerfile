@@ -9,6 +9,7 @@ WORKDIR /build
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ .
+COPY VERSION /VERSION
 RUN npm run build
 
 # ── Stage 2: Python Backend + Built Frontend ──
@@ -25,6 +26,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN useradd -m -u 1000 appuser
 
 COPY --chown=appuser:appuser backend/app/ ./app/
+COPY --chown=appuser:appuser VERSION ./VERSION
 COPY --from=frontend --chown=appuser:appuser /build/dist ./frontend/dist
 
 USER appuser

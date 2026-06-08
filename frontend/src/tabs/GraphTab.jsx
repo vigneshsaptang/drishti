@@ -3,7 +3,11 @@ import * as d3 from 'd3';
 import { buildGraph } from '../lib/api';
 import { EDGE_TYPES } from '../lib/ontology';
 import { classifyBreach, getRecency } from '../lib/breach';
+import { CAPABILITY_LABELS } from '../components/Provenance';
 
+// Legacy per-type palette — kept as a fallback for nodes that haven't received
+// the new origin.capability metadata yet (and as the colour used in the
+// per-type neighbour breakdown inside NodeDetailPanel).
 const NODE_COLORS = {
   phone: '#2563eb', email: '#059669', breach: '#ea580c', darkweb_account: '#7c3aed',
   telegram_group: '#0891b2', upi: '#16a34a', person: '#475569', url: '#6b7280',
@@ -11,6 +15,34 @@ const NODE_COLORS = {
 };
 
 const NODE_RADIUS = { phone: 16, email: 14, breach: 12, upi: 12, bank: 12, crypto: 12, watchlist: 14, default: 11 };
+
+// Capability → sap-* CSS variable for the graph node fill / legend dot.
+// Per spec C Phase FE: nodes are coloured by the capability that surfaced them
+// (carried on node.origin.capability from the backend). Falls back through
+// NODE_COLORS for legacy/unknown shapes.
+const CAPABILITY_COLORS = {
+  seed:      'var(--color-sap-accent)',
+  breach:    'var(--color-sap-warning)',
+  darkweb:   'var(--color-sap-danger)',
+  watchlist: 'var(--color-sap-danger-filled)',
+  court:     'var(--color-sap-dim)',
+  financial: 'var(--color-sap-success)',
+};
+const DEFAULT_CAPABILITY_COLOR = 'var(--color-sap-muted)';
+
+// Capability codes shown in the legend, in display order. Drawn from the
+// CAPABILITY_COLORS keys but with `seed` first so the subject reads as the
+// anchor of the graph.
+const LEGEND_CAPABILITIES = ['seed', 'breach', 'darkweb', 'watchlist', 'court', 'financial'];
+
+// Pick the fill colour for a node — capability takes precedence, fall back to
+// the legacy per-type palette so nodes without origin metadata still render.
+function nodeFill(d) {
+  const cap = d?.origin?.capability;
+  if (cap && CAPABILITY_COLORS[cap]) return CAPABILITY_COLORS[cap];
+  if (cap) return DEFAULT_CAPABILITY_COLOR;
+  return NODE_COLORS[d?.type] || DEFAULT_CAPABILITY_COLOR;
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Depth derivation — BFS from the seed (the node we kicked the search off with)
@@ -170,21 +202,21 @@ export default function GraphTab({ data, onPivot, focusedEntity, onClearFocus })
     // Re-render on fullscreen toggle so the SVG picks up the new container dims
   }, [activeGraph, effectiveLayout, revealedDepth, depths, maxDepth, replayKey, isFullscreen]);
 
-  if (error) return <p className="text-entity-drug text-sm py-8 text-center font-mono">Graph error: {error}</p>;
-  if (!graph) return <p className="text-sap-dim text-sm py-8 text-center font-mono animate-scan">Building connection graph...</p>;
-  if (!graph.nodes?.length) return <p className="text-sap-dim text-sm py-8 text-center font-mono">No connections to visualize</p>;
+  if (error) return <p className="text-sap-danger text-13 py-8 text-center">Graph error: {error}</p>;
+  if (!graph) return <p className="text-sap-dim text-13 py-8 text-center animate-scan">Building connection graph…</p>;
+  if (!graph.nodes?.length) return <p className="text-sap-dim text-13 py-8 text-center">No connections to visualize</p>;
 
   // focusedEntity set but not found in graph (e.g., graph not loaded yet or entity has no node)
   if (focusedEntity && scopedGraph === null) {
     return (
-      <div className="bg-sap-surface border border-sap-border rounded-lg p-8 text-center animate-fade-in">
-        <p className="text-sm font-mono text-sap-dim mb-4">
-          <span className="text-sap-accent font-semibold">{focusedEntity.type}:{focusedEntity.value}</span> has no node in the current graph.
+      <div className="bg-sap-surface border border-sap-border-light rounded-lg shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-8 text-center animate-fade-in">
+        <p className="text-13 text-sap-dim mb-4">
+          <span className="text-sap-text font-medium font-mono">{focusedEntity.type}:{focusedEntity.value}</span> has no node in the current graph.
         </p>
         <button
           type="button"
           onClick={onClearFocus}
-          className="px-3 py-1.5 rounded-sm border border-sap-border text-[11px] font-mono uppercase tracking-[0.16em] text-sap-dim hover:text-sap-text"
+          className="px-3 py-1.5 rounded border border-sap-border-light bg-sap-bg text-12 text-sap-dim hover:text-sap-text hover:border-sap-border transition-colors duration-150"
         >Show full graph</button>
       </div>
     );
@@ -196,27 +228,27 @@ export default function GraphTab({ data, onPivot, focusedEntity, onClearFocus })
 
   const wrapperClass = isFullscreen
     ? 'fixed inset-0 z-50 bg-sap-bg p-4 sm:p-5 flex flex-col animate-fade-in'
-    : 'bg-sap-surface border border-sap-border rounded-lg p-4 animate-fade-in';
+    : 'bg-sap-surface border border-sap-border-light rounded-lg shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-4 animate-fade-in';
 
   return (
     <div className={wrapperClass}>
       <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <h3 className="text-xs font-mono tracking-[3px] uppercase text-sap-accent">Connection Graph</h3>
+          <h3 className="text-12 font-semibold tracking-tight text-sap-text">Connection graph</h3>
           {!isFullscreen && (
-            <span className="hidden sm:inline text-[10px] font-mono text-sap-muted italic">
-              tip · use fullscreen for the best view
+            <span className="hidden sm:inline text-11 text-sap-muted">
+              Tip · use fullscreen for the best view
             </span>
           )}
           {isFullscreen && (
-            <span className="text-[10px] font-mono text-sap-muted">
-              fullscreen · press <kbd className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-mono text-sap-dim border border-sap-border bg-sap-bg">Esc</kbd> to exit
+            <span className="text-11 text-sap-muted">
+              Fullscreen · press <kbd className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-11 font-mono text-sap-dim border border-sap-border-light bg-sap-bg">Esc</kbd> to exit
             </span>
           )}
         </div>
 
         {/* Layout switcher — disabled when scoped (force layout is forced for neighbourhood view) */}
-        <div className="inline-flex items-center rounded-md border border-sap-border overflow-hidden">
+        <div className="inline-flex items-center rounded-md border border-sap-border-light overflow-hidden">
           {[
             { id: 'force',    label: 'Force',    hint: 'Organic clustering' },
             { id: 'sequence', label: 'Sequence', hint: 'Auto-reveal in discovery order' },
@@ -228,17 +260,17 @@ export default function GraphTab({ data, onPivot, focusedEntity, onClearFocus })
               onClick={() => { if (!focusedEntity) { setLayout(o.id); if (o.id === 'sequence') setReplayKey(k => k + 1); } }}
               title={focusedEntity ? 'Layout locked to Force while scoped' : o.hint}
               disabled={!!focusedEntity && o.id !== 'force'}
-              className={`px-3 py-1.5 text-[11px] font-mono uppercase tracking-[0.16em] transition-colors ${
+              className={`px-3 py-1.5 text-11 font-medium transition-colors duration-150 ${
                 effectiveLayout === o.id
                   ? 'bg-sap-accent text-white'
-                  : 'bg-sap-surface text-sap-dim hover:text-sap-text hover:bg-sap-panel'
-              } ${i > 0 ? 'border-l border-sap-border' : ''} disabled:opacity-40 disabled:cursor-not-allowed`}
+                  : 'bg-sap-surface text-sap-dim hover:text-sap-text hover:bg-sap-bg'
+              } ${i > 0 ? 'border-l border-sap-border-light' : ''} disabled:opacity-40 disabled:cursor-not-allowed`}
             >{o.label}</button>
           ))}
         </div>
 
         <div className="flex items-center gap-3 ml-auto">
-          <div className="flex gap-3 text-[10px] font-mono text-sap-dim">
+          <div className="flex gap-3 text-11 text-sap-muted tabular-nums">
             <span>{visibleNodeCount}/{activeGraph.nodes.length} nodes</span>
             <span>{activeGraph.edges.length} edges</span>
             <span>depth {maxDepth}</span>
@@ -247,16 +279,16 @@ export default function GraphTab({ data, onPivot, focusedEntity, onClearFocus })
             type="button"
             onClick={() => setIsFullscreen(f => !f)}
             title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen for best view'}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-sap-border text-[11px] font-mono uppercase tracking-[0.16em] text-sap-dim hover:text-sap-text hover:bg-sap-panel transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-sap-border-light bg-sap-bg text-11 font-medium text-sap-dim hover:text-sap-text hover:border-sap-border transition-colors duration-150"
           >
             {isFullscreen ? (
               <>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 9H4M9 9V4M15 9h5M15 9V4M15 15h5M15 15v5M9 15H4M9 15v5"/></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 9H4M9 9V4M15 9h5M15 9V4M15 15h5M15 15v5M9 15H4M9 15v5"/></svg>
                 Exit
               </>
             ) : (
               <>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
                 Fullscreen
               </>
             )}
@@ -270,9 +302,9 @@ export default function GraphTab({ data, onPivot, focusedEntity, onClearFocus })
           <button
             type="button"
             onClick={() => setReplayKey(k => k + 1)}
-            className="px-3 py-1 rounded-sm text-[10px] font-mono uppercase tracking-[0.16em] border border-sap-border text-sap-dim hover:text-sap-text"
+            className="px-3 py-1 rounded text-11 font-medium border border-sap-border-light bg-sap-bg text-sap-dim hover:text-sap-text hover:border-sap-border transition-colors duration-150"
           >↻ Replay reveal</button>
-          <span className="text-[10px] font-mono text-sap-muted">Layers fade in by discovery depth (depth 0 → depth {maxDepth}).</span>
+          <span className="text-11 text-sap-muted">Layers fade in by discovery depth (depth 0 → depth {maxDepth}).</span>
         </div>
       )}
       {effectiveLayout === 'step' && (
@@ -280,51 +312,53 @@ export default function GraphTab({ data, onPivot, focusedEntity, onClearFocus })
           <button
             type="button"
             onClick={() => setRevealedDepth(0)}
-            className="px-3 py-1 rounded-sm text-[10px] font-mono uppercase tracking-[0.16em] border border-sap-border text-sap-dim hover:text-sap-text"
+            className="px-3 py-1 rounded text-11 font-medium border border-sap-border-light bg-sap-bg text-sap-dim hover:text-sap-text hover:border-sap-border transition-colors duration-150"
           >Reset</button>
           <button
             type="button"
             disabled={revealedDepth >= maxDepth}
             onClick={() => setRevealedDepth(d => Math.min(maxDepth, d + 1))}
-            className="px-3 py-1 rounded-sm text-[10px] font-mono uppercase tracking-[0.16em] bg-sap-accent text-white border border-sap-accent disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3 py-1 rounded text-11 font-medium bg-sap-accent text-white border border-sap-accent hover:bg-sap-accent-glow transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
           >▶ Reveal next layer</button>
           <button
             type="button"
             disabled={revealedDepth >= maxDepth}
             onClick={() => setRevealedDepth(maxDepth)}
-            className="px-3 py-1 rounded-sm text-[10px] font-mono uppercase tracking-[0.16em] border border-sap-border text-sap-dim hover:text-sap-text disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3 py-1 rounded text-11 font-medium border border-sap-border-light bg-sap-bg text-sap-dim hover:text-sap-text hover:border-sap-border transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
           >▶▶ Reveal all</button>
-          <span className="text-[10px] font-mono text-sap-muted ml-2">
-            Layer <span className="text-sap-text font-bold tabular-nums">{revealedDepth}</span> of <span className="tabular-nums">{maxDepth}</span>
+          <span className="text-11 text-sap-muted ml-2">
+            Layer <span className="text-sap-text font-semibold tabular-nums">{revealedDepth}</span> of <span className="tabular-nums">{maxDepth}</span>
             {' · '}
-            <span className="text-sap-text font-bold tabular-nums">{visibleNodeCount}</span> visible
+            <span className="text-sap-text font-semibold tabular-nums">{visibleNodeCount}</span> visible
           </span>
         </div>
       )}
 
       {/* Scope banner — shown when a focal entity has been selected */}
       {focusedEntity && scopedGraph && (
-        <div className="mb-3 px-3 py-2 rounded-md border border-sap-accent/40 bg-sap-accent/5 flex items-center justify-between gap-3">
-          <div className="text-xs font-mono">
-            <span className="text-sap-accent font-semibold uppercase tracking-[0.16em]">Scoped</span>
+        <div className="mb-3 px-3 py-2 rounded-md border border-sap-accent/30 bg-sap-accent/5 flex items-center justify-between gap-3">
+          <div className="text-12">
+            <span className="text-sap-accent font-semibold">Scoped</span>
             <span className="text-sap-muted mx-2">&#x2192;</span>
-            <span className="text-sap-text font-semibold">{focusedEntity.type}: {focusedEntity.value}</span>
-            <span className="text-sap-muted ml-3">{scopedGraph.nodes.length} nodes within 2 hops</span>
+            <span className="text-sap-text font-medium font-mono">{focusedEntity.type}: {focusedEntity.value}</span>
+            <span className="text-sap-muted ml-3 tabular-nums">{scopedGraph.nodes.length} nodes within 2 hops</span>
           </div>
           <button
             type="button"
             onClick={onClearFocus}
-            className="text-[10px] font-mono uppercase tracking-[0.16em] px-2 py-1 rounded-sm border border-sap-border text-sap-dim hover:text-sap-text"
+            className="text-11 font-medium px-2 py-1 rounded border border-sap-border-light bg-sap-bg text-sap-dim hover:text-sap-text hover:border-sap-border transition-colors duration-150"
           >Show full graph</button>
         </div>
       )}
 
-      {/* Legend */}
+      {/* Legend — keyed on capability, not the legacy per-type palette. Labels
+          come from CAPABILITY_LABELS (Provenance.jsx) so the same wording is
+          used wherever provenance surfaces. */}
       <div className="flex flex-wrap gap-3 mb-3">
-        {Object.entries(NODE_COLORS).map(([type, color]) => (
-          <div key={type} className="flex items-center gap-1.5 text-[10px] font-mono text-sap-dim">
-            <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-            {type.replace('_', ' ')}
+        {LEGEND_CAPABILITIES.map(cap => (
+          <div key={cap} className="flex items-center gap-1.5 text-11 text-sap-muted">
+            <div className="w-2.5 h-2.5 rounded-full" style={{ background: CAPABILITY_COLORS[cap] }} />
+            {CAPABILITY_LABELS[cap] || cap}
           </div>
         ))}
       </div>
@@ -332,7 +366,7 @@ export default function GraphTab({ data, onPivot, focusedEntity, onClearFocus })
       <div
         ref={containerRef}
         onClick={() => setSelectedNode(null)}
-        className={`w-full bg-sap-bg rounded border border-sap-border relative overflow-hidden ${
+        className={`w-full bg-sap-bg rounded border border-sap-border-light relative overflow-hidden ${
           isFullscreen ? 'flex-1 min-h-0' : 'h-[550px]'
         }`}
       >
@@ -462,7 +496,23 @@ function NodeDetailPanel({ node, graph, data, depth, onClose, onPivot }) {
 
   const ndata = node.data || {};
   const canPivot = (node.type === 'phone' || node.type === 'email') && typeof onPivot === 'function';
-  const accent = NODE_COLORS[node.type] || '#64748b';
+  // Header dot prefers the capability colour (matches the graph node fill) and
+  // falls back to the legacy per-type palette for nodes without origin metadata.
+  const accent = nodeFill(node);
+
+  // Provenance metadata from the backend (spec C Phase BE). May be absent on
+  // older payloads — the block only renders when an origin object is present.
+  const origin = node.origin || null;
+  const capLabel = origin?.capability ? CAPABILITY_LABELS[origin.capability] : null;
+  const originDepth = typeof origin?.depth === 'number' ? origin.depth : depth;
+  const metaParts = [];
+  if (capLabel) metaParts.push(capLabel);
+  if (typeof originDepth === 'number') metaParts.push(`reached at depth ${originDepth}`);
+  const metaLine = metaParts.join(' · ');
+  const evidenceCount = typeof origin?.evidence_count === 'number' ? origin.evidence_count : null;
+  const datasets = Array.isArray(origin?.datasets) ? origin.datasets.filter(d => typeof d === 'string' && d.trim()) : [];
+  const visibleDatasets = datasets.slice(0, 3);
+  const extraDatasets = datasets.length - visibleDatasets.length;
 
   // Type-specific enrichment — surfaces fields beyond the bare graph node
   const detailRows = [];
@@ -531,8 +581,8 @@ function NodeDetailPanel({ node, graph, data, depth, onClose, onPivot }) {
 
       if (_hasCredential(recs)) {
         chips.push({
-          key: 'cred', icon: '🔓', label: 'CREDENTIAL LEAK',
-          color: 'bg-entity-drug/15 text-entity-drug border-entity-drug/40',
+          key: 'cred', icon: '🔓', label: 'Credential leak',
+          color: 'bg-sap-danger-soft text-sap-danger border-sap-danger/30',
           title: 'A password or hash field was found in at least one breach record',
         });
       }
@@ -573,96 +623,154 @@ function NodeDetailPanel({ node, graph, data, depth, onClose, onPivot }) {
   return (
     <aside
       onClick={(e) => e.stopPropagation()}
-      className="absolute top-3 right-3 w-72 max-w-[calc(100%-1.5rem)] max-h-[calc(100%-1.5rem)] overflow-y-auto bg-sap-surface border border-sap-border rounded-md shadow-lg p-3.5 animate-slide-up"
+      className="absolute top-3 right-3 w-72 max-w-[calc(100%-1.5rem)] max-h-[calc(100%-1.5rem)] overflow-y-auto bg-sap-surface border border-sap-border-light rounded-lg shadow-[0_4px_12px_rgba(15,23,42,0.08)] animate-slide-up"
     >
       {/* Header — type pill + close */}
-      <div className="flex items-center justify-between mb-2.5 gap-2">
+      <div className="px-4 py-2.5 border-b border-sap-border-light flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span aria-hidden className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: accent }} />
-          <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-sap-muted truncate">
+          <span className="text-11 font-medium text-sap-muted truncate">
             {node.type.replace('_', ' ')}
           </span>
           {depth != null && (
-            <span className="text-[10px] font-mono text-sap-muted shrink-0">· depth {depth}</span>
+            <span className="text-11 text-sap-muted shrink-0 tabular-nums">· depth {depth}</span>
           )}
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="shrink-0 w-6 h-6 inline-flex items-center justify-center rounded text-sap-muted hover:text-sap-text hover:bg-sap-panel transition-colors"
+          className="shrink-0 w-6 h-6 inline-flex items-center justify-center rounded text-sap-muted hover:text-sap-text hover:bg-sap-bg transition-colors duration-150"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6l-6 12" /></svg>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6l-6 12" /></svg>
         </button>
       </div>
 
-      {/* Headline label */}
-      <p className="font-mono text-sm font-semibold text-sap-text leading-snug break-words mb-3">
-        {node.label}
-      </p>
+      <div className="px-4 py-3">
+        {/* Provenance — branded Saptang Labs Intelligence block. Renders only
+            when the backend supplied origin metadata. Per PROVENANCE_BRANDING.md
+            the top line is literally "Saptang Labs Intelligence"; internal
+            engine names never appear. Capability label comes from the
+            CAPABILITY_LABELS map imported from components/Provenance. */}
+        {origin && (
+          <div className="mb-3 pb-3 border-b border-sap-border-light">
+            <div className="text-12 font-semibold text-sap-text leading-tight">
+              Saptang Labs Intelligence
+            </div>
+            {metaLine && (
+              <div className="text-11 text-sap-dim leading-tight mt-0.5">
+                {metaLine}
+              </div>
+            )}
 
-      {/* Classification / status chips */}
-      {chips.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {chips.map(c => (
-            <span
-              key={c.key}
-              title={c.title || ''}
-              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-mono uppercase tracking-wider border ${c.color}`}
-            >
-              {c.icon && <span aria-hidden>{c.icon}</span>}
-              {c.label}
-            </span>
-          ))}
-        </div>
-      )}
+            {origin.via_seed && (
+              <div className="mt-2.5">
+                <div className="text-11 text-sap-muted mb-0.5">Found via seed</div>
+                <div className="text-12 font-mono text-sap-text break-all leading-snug">
+                  {origin.via_seed}
+                  {origin.via_seed_type && (
+                    <span className="ml-1 font-sans text-11 text-sap-muted">
+                      ({origin.via_seed_type})
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
-      {/* Connections summary */}
-      {neighbourIds.length > 0 && (
-        <div className="mb-3 pb-3 border-b border-sap-border/60">
-          <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-sap-muted mb-1.5">
-            connections · {neighbourIds.length}
+            {evidenceCount != null && (
+              <div className="mt-2.5 text-12 text-sap-dim tabular-nums">
+                Mentioned in {evidenceCount} record{evidenceCount === 1 ? '' : 's'}
+              </div>
+            )}
+
+            {visibleDatasets.length > 0 && (
+              <div className="mt-2.5">
+                <div className="text-11 text-sap-muted mb-0.5">Datasets</div>
+                <div className="space-y-0.5">
+                  {visibleDatasets.map(d => (
+                    <div key={d} className="text-12 text-sap-text leading-snug truncate">
+                      {d}
+                    </div>
+                  ))}
+                  {extraDatasets > 0 && (
+                    <div className="text-11 text-sap-dim leading-snug">
+                      +{extraDatasets} more
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {Object.entries(neighbourTypeCounts).sort((a, b) => b[1] - a[1]).map(([t, n]) => (
+        )}
+
+        {/* Headline label */}
+        <p className="font-mono text-13 font-medium text-sap-text leading-snug break-words mb-3">
+          {node.label}
+        </p>
+
+        {/* Classification / status chips */}
+        {chips.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {chips.map(c => (
               <span
-                key={t}
-                className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-sm border border-sap-border bg-sap-panel/40 text-[10px] font-mono text-sap-text"
+                key={c.key}
+                title={c.title || ''}
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-11 font-medium border ${c.color}`}
               >
-                <span aria-hidden className="w-1.5 h-1.5 rounded-full" style={{ background: NODE_COLORS[t] || '#64748b' }} />
-                {n} {t.replace('_', ' ')}
+                {c.icon && <span aria-hidden>{c.icon}</span>}
+                {c.label}
               </span>
             ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Type-specific data */}
-      {detailRows.length > 0 && (
-        <dl className="mb-3 space-y-1">
-          {detailRows.map(([k, v]) => (
-            <div key={k}>
-              <dt className="text-[9px] font-mono uppercase tracking-[0.18em] text-sap-muted">{k.replace(/_/g, ' ')}</dt>
-              <dd className="text-[12px] font-mono text-sap-text break-words leading-snug">{v}</dd>
+        {/* Connections summary */}
+        {neighbourIds.length > 0 && (
+          <div className="mb-3 pb-3 border-b border-sap-border-light">
+            <div className="text-11 text-sap-muted font-medium mb-1.5 tabular-nums">
+              Connections · {neighbourIds.length}
             </div>
-          ))}
-        </dl>
-      )}
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(neighbourTypeCounts).sort((a, b) => b[1] - a[1]).map(([t, n]) => (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded border border-sap-border-light bg-sap-bg text-11 text-sap-text"
+                >
+                  <span aria-hidden className="w-1.5 h-1.5 rounded-full" style={{ background: NODE_COLORS[t] || '#64748b' }} />
+                  <span className="tabular-nums">{n}</span> {t.replace('_', ' ')}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
-      {/* Pivot — only meaningful for entity nodes */}
-      {canPivot && (
-        <button
-          type="button"
-          onClick={() => { onPivot(node.type, node.label); onClose(); }}
-          className="w-full px-3 py-1.5 rounded-sm bg-sap-accent text-white text-[11px] font-mono uppercase tracking-[0.16em] hover:bg-sap-accent-glow transition-colors"
-        >
-          ↻ Pivot search to this {node.type}
-        </button>
-      )}
+        {/* Type-specific data */}
+        {detailRows.length > 0 && (
+          <dl className="mb-3 space-y-1.5">
+            {detailRows.map(([k, v]) => (
+              <div key={k}>
+                <dt className="text-11 text-sap-muted font-medium">{k.replace(/_/g, ' ')}</dt>
+                <dd className="text-12 font-mono text-sap-text break-words leading-snug">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
 
-      {!canPivot && neighbourIds.length === 0 && detailRows.length === 0 && (
-        <p className="text-[11px] font-mono text-sap-muted italic">No additional metadata for this node.</p>
-      )}
+        {/* Pivot — only meaningful for entity nodes */}
+        {canPivot && (
+          <button
+            type="button"
+            onClick={() => { onPivot(node.type, node.label); onClose(); }}
+            className="w-full px-3 py-1.5 rounded bg-sap-accent text-white text-12 font-medium hover:bg-sap-accent-glow transition-colors duration-150"
+          >
+            ↻ Pivot search to this {node.type}
+          </button>
+        )}
+
+        {!canPivot && neighbourIds.length === 0 && detailRows.length === 0 && (
+          <p className="text-12 text-sap-muted italic">No additional metadata for this node.</p>
+        )}
+      </div>
     </aside>
   );
 }
@@ -723,7 +831,7 @@ function renderForceGraph(svgEl, containerEl, graph, onSelectNode) {
     .append('circle')
     .attr('r', d => (NODE_RADIUS[d.type] || NODE_RADIUS.default) + 6)
     .attr('fill', 'none')
-    .attr('stroke', d => NODE_COLORS[d.type] || '#64748b')
+    .attr('stroke', nodeFill)
     .attr('stroke-width', 2)
     .attr('stroke-opacity', 0.5)
     .attr('pointer-events', 'none')
@@ -731,8 +839,8 @@ function renderForceGraph(svgEl, containerEl, graph, onSelectNode) {
 
   node.append('circle')
     .attr('r', d => NODE_RADIUS[d.type] || NODE_RADIUS.default)
-    .attr('fill',   d => NODE_COLORS[d.type] || '#64748b')
-    .attr('stroke', d => NODE_COLORS[d.type] || '#64748b')
+    .attr('fill',   nodeFill)
+    .attr('stroke', nodeFill)
     .attr('stroke-width', d => d._isFocus ? 4 : 2)
     .attr('stroke-opacity', d => d._isFocus ? 0.9 : 0.3)
     .attr('cursor', 'pointer')
@@ -868,8 +976,8 @@ function renderHierarchyGraph(svgEl, containerEl, graph, depths, opts, onSelectN
 
   node.append('circle')
     .attr('r', d => NODE_RADIUS[d.type] || NODE_RADIUS.default)
-    .attr('fill',   d => NODE_COLORS[d.type] || '#64748b')
-    .attr('stroke', d => NODE_COLORS[d.type] || '#64748b')
+    .attr('fill',   nodeFill)
+    .attr('stroke', nodeFill)
     .attr('stroke-width', 2).attr('stroke-opacity', 0.35).attr('cursor', 'pointer')
     .on('click', (event, d) => {
       event.stopPropagation();

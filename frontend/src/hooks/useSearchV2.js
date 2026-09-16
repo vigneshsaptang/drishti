@@ -151,6 +151,10 @@ export function useSearchV2() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      // Must persist across reads: a chunk boundary can fall between an
+      // "event:" line and its "data:" line, which happens routinely for
+      // large entity:result payloads.
+      let eventType = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -160,8 +164,6 @@ export function useSearchV2() {
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop(); // keep incomplete line in buffer
-
-        let eventType = '';
 
         for (const line of lines) {
           if (line.startsWith('event: ')) {
